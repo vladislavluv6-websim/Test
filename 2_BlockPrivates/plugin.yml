@@ -1,0 +1,14 @@
+name: BlockPrivates
+main: PrivateBlocks\BlockPrivates
+version: 1.0.0
+api: 5.0.0
+author: Codex
+description: Block-based private regions for PocketMine-MP 5.x
+commands:
+  rg:
+    description: Управление приватами
+    usage: "/rg help"
+    permission: blockprivates.command.rg
+permissions:
+  blockprivates.command.rg:
+    default: true
