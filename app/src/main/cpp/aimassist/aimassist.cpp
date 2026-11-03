@@ -31,6 +31,10 @@ constexpr const char *kClientInstanceGetLocalPlayerSignature =
     "? ? ? ? E0 03 1F AA ? ? ? F9 ? ? ? F8 1F 01 09 EB ? ? ? 54 ? ? ? A9 ? ? ? F9 "
     "? ? ? 91 C0 03 5F D6 ? ? ? ? C0 03 5F D6";
 
+constexpr const char *kApplyTurnDeltaSignature =
+    "? ? ? D1 ? ? ? FD ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 56 D0 3B D5 "
+    "F3 03 00 AA F4 03 01 AA ? ? ? F9 ? ? ? F8 ? ? ? F9 ? ? ? F9";
+
 constexpr const char *kFetchNearbyActorsSignature =
     "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 "
     "5B D0 3B D5 F3 03 08 AA F5 03 02 2A";
@@ -63,6 +67,11 @@ struct Vec2 {
   float yaw;
 };
 
+struct TurnDelta {
+  float yaw;
+  float pitch;
+};
+
 struct Vec3 {
   float x;
   float y;
@@ -84,12 +93,14 @@ struct ActorVec {
 using NormalTickFn = void (*)(void *);
 using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
+using ApplyTurnDeltaFn = void (*)(void *, const TurnDelta &);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientInstanceUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
+ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 
@@ -163,23 +174,6 @@ bool readRotation(void *actor, Vec2 *out) {
   return true;
 }
 
-bool writeRotation(void *actor, float pitch, float yaw) {
-  if (!actor) {
-    return false;
-  }
-  auto *base = reinterpret_cast<char *>(actor);
-  auto rotation = *reinterpret_cast<uintptr_t *>(base + kActorRotationComponent);
-  if (rotation < 0x1000 || (rotation & 0x7) != 0) {
-    return false;
-  }
-  auto *values = reinterpret_cast<float *>(rotation);
-  values[0] = pitch;
-  values[1] = yaw;
-  values[2] = pitch;
-  values[3] = yaw;
-  return true;
-}
-
 struct AimCandidate {
   void *actor = nullptr;
   float distance = 0.0f;
@@ -190,7 +184,7 @@ struct AimCandidate {
 
 void aimAtLocalPlayer(void *localPlayer) {
   if (!localPlayer || !g_enabled.load(std::memory_order_relaxed) ||
-      !g_fetchNearbyActors || !g_actorIsPlayer) {
+      !g_applyTurnDelta || !g_fetchNearbyActors || !g_actorIsPlayer) {
     return;
   }
 
@@ -328,18 +322,19 @@ void aimAtLocalPlayer(void *localPlayer) {
   const float stepYaw = std::clamp(deltaYaw, -maxStep, maxStep);
   const float stepPitch = std::clamp(deltaPitch, -maxStep, maxStep);
 
-  const float newPitch = std::clamp(current.pitch + stepPitch, -89.9f, 89.9f);
-  const float newYaw = wrapDegrees(current.yaw + stepYaw);
-  writeRotation(localPlayer, newPitch, newYaw);
+  const TurnDelta delta{stepYaw, stepPitch};
+  g_applyTurnDelta(localPlayer, delta);
 
   uint32_t count = g_targetLogCounter.fetch_add(1, std::memory_order_relaxed);
   if (count % 30 == 0) {
+    Vec2 after{};
+    readRotation(localPlayer, &after);
     __android_log_print(
         ANDROID_LOG_INFO, kTag,
-        "target=%p dist=%.2f desired=(%.2f,%.2f) current=(%.2f,%.2f) step=(%.2f,%.2f) "
-        "strength=%.0f",
+        "target=%p dist=%.2f desired=(pitch %.2f, yaw %.2f) current=(pitch %.2f, yaw %.2f) "
+        "step=(yaw %.2f, pitch %.2f) after=(pitch %.2f, yaw %.2f) strength=%.0f",
         target->actor, target->distance, target->desiredPitch, target->desiredYaw,
-        current.pitch, current.yaw, stepPitch, stepYaw,
+        current.pitch, current.yaw, stepYaw, stepPitch, after.pitch, after.yaw,
         g_strength.load(std::memory_order_relaxed));
   }
 }
@@ -365,7 +360,6 @@ void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
       if (previous != localPlayer) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "local player=%p", localPlayer);
       }
-      aimAtLocalPlayer(localPlayer);
     }
   }
 
@@ -391,28 +385,32 @@ bool initialize() {
       pl::memory::resolveSignature(kClientInstanceUpdateSignature, kMinecraftLibrary);
   const uintptr_t localPlayerAddress =
       pl::memory::resolveSignature(kClientInstanceGetLocalPlayerSignature, kMinecraftLibrary);
+  const uintptr_t applyTurnDeltaAddress =
+      pl::memory::resolveSignature(kApplyTurnDeltaSignature, kMinecraftLibrary);
   const uintptr_t fetchNearbyActorsAddress =
       pl::memory::resolveSignature(kFetchNearbyActorsSignature, kMinecraftLibrary);
   const uintptr_t actorIsPlayerAddress =
       pl::memory::resolveSignature(kActorIsPlayerSignature, kMinecraftLibrary);
 
   if (!normalTickAddress || !clientUpdateAddress || !localPlayerAddress ||
-      !fetchNearbyActorsAddress || !actorIsPlayerAddress) {
+      !applyTurnDeltaAddress || !fetchNearbyActorsAddress || !actorIsPlayerAddress) {
     logWarning("Unable to resolve required Minecraft signatures");
     return false;
   }
 
   g_getLocalPlayer = reinterpret_cast<GetLocalPlayerFn>(localPlayerAddress);
+  g_applyTurnDelta = reinterpret_cast<ApplyTurnDeltaFn>(applyTurnDeltaAddress);
   g_fetchNearbyActors = reinterpret_cast<FetchNearbyActorsFn>(fetchNearbyActorsAddress);
   g_actorIsPlayer = reinterpret_cast<ActorIsPlayerFn>(actorIsPlayerAddress);
 
   __android_log_print(
       ANDROID_LOG_INFO, kTag,
       "1.26.60 signatures: normalTick=%p clientUpdate=%p getLocalPlayer=%p "
-      "fetchNearby=%p isPlayer=%p",
+      "applyTurnDelta=%p fetchNearby=%p isPlayer=%p",
       reinterpret_cast<void *>(normalTickAddress),
       reinterpret_cast<void *>(clientUpdateAddress),
       reinterpret_cast<void *>(localPlayerAddress),
+      reinterpret_cast<void *>(applyTurnDeltaAddress),
       reinterpret_cast<void *>(fetchNearbyActorsAddress),
       reinterpret_cast<void *>(actorIsPlayerAddress));
 
