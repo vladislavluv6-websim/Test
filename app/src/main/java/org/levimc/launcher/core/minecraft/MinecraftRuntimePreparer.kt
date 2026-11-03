@@ -57,8 +57,20 @@ object MinecraftRuntimePreparer {
         listener.onLog("Using ${version.directoryName} (${version.versionCode})")
         trace.mark("Minecraft version resolved", "${version.directoryName} ${version.versionCode}")
 
-        if (FeatureSettings.getInstance().isLauncherManagedMcLoginEnabled) {
-            val active = MsftAccountStore.getActive(context.applicationContext)
+        val managedLogin = try {
+            FeatureSettings.getInstance().isLauncherManagedMcLoginEnabled
+        } catch (error: Throwable) {
+            trace.warning("Microsoft login setting unavailable", error.message ?: error.javaClass.simpleName)
+            false
+        }
+
+        if (managedLogin) {
+            val active = try {
+                MsftAccountStore.getActive(context.applicationContext)
+            } catch (error: Throwable) {
+                trace.warning("Microsoft account read failed", error.message ?: error.javaClass.simpleName)
+                null
+            }
             if (active != null && !active.minecraftUsername.isNullOrEmpty()) {
                 listener.onProgress(8, context.getString(R.string.ms_login_auth_xbox_device))
                 listener.onLog("Refreshing Microsoft account")

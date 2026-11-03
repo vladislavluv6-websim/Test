@@ -2,7 +2,6 @@ package org.levimc.launcher.ui.activities;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -10,6 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -32,7 +32,6 @@ import org.levimc.launcher.core.minecraft.MinecraftLauncher;
 import org.levimc.launcher.core.mods.FileHandler;
 import org.levimc.launcher.core.mods.Mod;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
-import org.levimc.launcher.core.news.ChangelogManager;
 import org.levimc.launcher.core.versions.GameVersion;
 import org.levimc.launcher.core.versions.VersionManager;
 import org.levimc.launcher.databinding.ActivityMainBinding;
@@ -44,7 +43,6 @@ import org.levimc.launcher.ui.dialogs.CustomAlertDialog;
 import org.levimc.launcher.ui.views.MainViewModel;
 import org.levimc.launcher.ui.views.MainViewModelFactory;
 import org.levimc.launcher.util.ApkImportManager;
-import org.levimc.launcher.util.GithubReleaseUpdater;
 import org.levimc.launcher.util.LanguageManager;
 import org.levimc.launcher.util.InstanceShortcutManager;
 import org.levimc.launcher.util.LauncherStorage;
@@ -87,6 +85,7 @@ import okhttp3.OkHttpClient;
  import static org.levimc.launcher.core.minecraft.MinecraftProcessRestarterKt.EXTRA_CLOSE_RESTART_ACTIVITY_ON_FIRST_DRAW;
 
  public class MainActivity extends BaseActivity {
+    private static final String TAG = "MainActivity";
     private ActivityMainBinding binding;
     private MinecraftLauncher minecraftLauncher;
     private LanguageManager languageManager;
@@ -115,7 +114,6 @@ import okhttp3.OkHttpClient;
     private ActivityResultLauncher<Intent> accountLoginLauncher;
     private OnBackPressedCallback onBackPressedCallback;
     private boolean launcherInitialized;
-    private boolean postEulaFlowRunning;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,12 +121,16 @@ import okhttp3.OkHttpClient;
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         closeLauncherRestartAfterFirstDraw();
-        setupNavBar();
-        setupManagersAndHandlers();
-        if (!isInstanceShortcutIntent()) {
-            new GithubReleaseUpdater(this, "LiteLDev", "LeviLaunchroid", permissionResultLauncher).checkUpdateOnLaunch();
+        try {
+            setupNavBar();
+        } catch (Throwable error) {
+            Log.e(TAG, "Nav bar setup failed", error);
         }
-        showEulaIfNeeded();
+        try {
+            setupManagersAndHandlers();
+        } catch (Throwable error) {
+            Log.e(TAG, "Manager setup failed", error);
+        }
         setupOnBackPressedCallback();
 
         accountLoginLauncher = registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(), result -> {
@@ -142,7 +144,11 @@ import okhttp3.OkHttpClient;
             refreshNavAccountUI();
         });
 
-        initAccountHeader();
+        try {
+            initAccountHeader();
+        } catch (Throwable error) {
+            Log.e(TAG, "Account header init failed", error);
+        }
         binding.getRoot().post(this::showPostEulaFlow);
     }
 
@@ -224,17 +230,21 @@ import okhttp3.OkHttpClient;
      }
 
     private void refreshAccountHeaderUI() {
-        MsftAccountStore.MsftAccount active = getActiveAccount();
-        if (active == null) {
-            if (signInButton != null) signInButton.setVisibility(View.VISIBLE);
-            if (accountAvatarContainer != null) accountAvatarContainer.setVisibility(View.GONE);
-            if (accountAvatar != null) accountAvatar.setImageDrawable(null);
-            lastAvatarXuid = null;
-            if (avatarProgress != null) avatarProgress.setVisibility(View.GONE);
-        } else {
-            if (signInButton != null) signInButton.setVisibility(View.GONE);
-            if (accountAvatarContainer != null) accountAvatarContainer.setVisibility(View.VISIBLE);
-            loadXboxAvatar(active);
+        try {
+            MsftAccountStore.MsftAccount active = getActiveAccount();
+            if (active == null) {
+                if (signInButton != null) signInButton.setVisibility(View.VISIBLE);
+                if (accountAvatarContainer != null) accountAvatarContainer.setVisibility(View.GONE);
+                if (accountAvatar != null) accountAvatar.setImageDrawable(null);
+                lastAvatarXuid = null;
+                if (avatarProgress != null) avatarProgress.setVisibility(View.GONE);
+            } else {
+                if (signInButton != null) signInButton.setVisibility(View.GONE);
+                if (accountAvatarContainer != null) accountAvatarContainer.setVisibility(View.VISIBLE);
+                loadXboxAvatar(active);
+            }
+        } catch (Throwable error) {
+            Log.e(TAG, "Account header refresh failed", error);
         }
     }
 
@@ -488,41 +498,60 @@ import okhttp3.OkHttpClient;
         if (launcherInitialized || isFinishing() || isDestroyed()) return;
         launcherInitialized = true;
 
-        minecraftLauncher = new MinecraftLauncher(this);
-        viewModel = new ViewModelProvider(this, new MainViewModelFactory(getApplication())).get(MainViewModel.class);
-        apkImportManager = new ApkImportManager(this, viewModel);
+        try {
+            minecraftLauncher = new MinecraftLauncher(this);
+            viewModel = new ViewModelProvider(this, new MainViewModelFactory(getApplication())).get(MainViewModel.class);
+            apkImportManager = new ApkImportManager(this, viewModel);
 
-        initModsSection();
-        initContentManagementSection();
-        initMiscellaneousSection();
-        initializeVersionManager();
+            initModsSection();
+            initContentManagementSection();
+            initMiscellaneousSection();
+            initializeVersionManager();
+        } catch (Throwable error) {
+            Log.e(TAG, "Launcher initialization failed", error);
+            launcherInitialized = false;
+        }
     }
 
     private void initializeVersionManager() {
-        binding.launchButton.setEnabled(false);
-        versionManager = VersionManager.getIfInitialized();
-        if (versionManager != null) {
-            onVersionManagerReady();
-            return;
+        try {
+            binding.launchButton.setEnabled(false);
+            versionManager = VersionManager.getIfInitialized();
+            if (versionManager != null) {
+                onVersionManagerReady();
+                return;
+            }
+            VersionManager.initializeAsync(this, manager -> runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                versionManager = manager;
+                try {
+                    onVersionManagerReady();
+                } catch (Throwable error) {
+                    Log.e(TAG, "Version manager ready failed", error);
+                }
+            }));
+        } catch (Throwable error) {
+            Log.e(TAG, "Version manager initialization failed", error);
+            if (binding != null) binding.launchButton.setEnabled(true);
         }
-        VersionManager.initializeAsync(this, manager -> runOnUiThread(() -> {
-            if (isFinishing() || isDestroyed()) return;
-            versionManager = manager;
-            onVersionManagerReady();
-        }));
     }
 
     private void onVersionManagerReady() {
         if (versionManager == null || binding == null) return;
-        fileHandler = new FileHandler(this, viewModel, versionManager);
-        binding.launchButton.setEnabled(true);
-        if (!handleInstanceShortcutLaunch()) {
-            setTextMinecraftVersion();
-            updateViewModelVersion();
-            repairNeededVersions();
-            handleVersionDependentIntent();
+        try {
+            fileHandler = new FileHandler(this, viewModel, versionManager);
+            binding.launchButton.setEnabled(true);
+            if (!handleInstanceShortcutLaunch()) {
+                setTextMinecraftVersion();
+                updateViewModelVersion();
+                repairNeededVersions();
+                handleVersionDependentIntent();
+            }
+            refreshContentCounts();
+        } catch (Throwable error) {
+            Log.e(TAG, "Version manager ready handling failed", error);
+            binding.launchButton.setEnabled(true);
         }
-        refreshContentCounts();
     }
 
     private void handleVersionDependentIntent() {
@@ -628,59 +657,31 @@ import okhttp3.OkHttpClient;
     }
 
     private void showPostEulaFlow() {
-        SharedPreferences prefs = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
-        if (!prefs.getBoolean("eula_accepted", false) || postEulaFlowRunning || launcherInitialized) return;
-        if (isInstanceShortcutIntent()) {
-            initializeLauncher();
-            return;
-        }
-        postEulaFlowRunning = true;
-        ChangelogManager.showIfNeeded(this, () -> {
-            postEulaFlowRunning = false;
-            initializeLauncher();
-        });
-    }
-
-    private boolean isInstanceShortcutIntent() {
-        Intent intent = getIntent();
-        return intent != null && InstanceShortcutManager.ACTION_LAUNCH_INSTANCE.equals(intent.getAction());
-    }
-
-    private void showEulaIfNeeded() {
-        SharedPreferences prefs = getSharedPreferences("LauncherPrefs", MODE_PRIVATE);
-        if (!prefs.getBoolean("eula_accepted", false)) {
-            showEulaDialog();
-        }
-    }
-
-    private void showEulaDialog() {
-        CustomAlertDialog dia = new CustomAlertDialog(this)
-                .setTitleText(getString(R.string.eula_title))
-                .setMessage(getString(R.string.eula_message))
-                .setUseBorderedBackground(true)
-                .setBlurBackground(true)
-                .setPositiveButton(getString(R.string.eula_agree), v -> {
-                    getSharedPreferences("LauncherPrefs", MODE_PRIVATE)
-                            .edit().putBoolean("eula_accepted", true).apply();
-                    binding.getRoot().postDelayed(this::showPostEulaFlow, 220L);
-                })
-                .setNegativeButton(getString(R.string.eula_exit), v -> finishAffinity());
-        dia.setCancelable(false);
-        dia.show();
+        getSharedPreferences("LauncherPrefs", MODE_PRIVATE)
+                .edit().putBoolean("eula_accepted", true).apply();
+        initializeLauncher();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        refreshAccountHeaderUI();
+        try {
+            refreshAccountHeaderUI();
+        } catch (Throwable error) {
+            Log.e(TAG, "Account header refresh failed on resume", error);
+        }
         if (!launcherInitialized) {
             showPostEulaFlow();
             return;
         }
         if (versionManager != null) {
-            setTextMinecraftVersion();
-            viewModel.refreshMods();
-            refreshContentCounts();
+            try {
+                setTextMinecraftVersion();
+                viewModel.refreshMods();
+                refreshContentCounts();
+            } catch (Throwable error) {
+                Log.e(TAG, "Resume refresh failed", error);
+            }
         }
         if (binding != null && versionManager != null) {
             binding.launchButton.setEnabled(true);

@@ -46,7 +46,11 @@ public class SplashActivity extends BaseActivity {
         binding = ActivitySplashBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        applySplashTheme();
+        try {
+            applySplashTheme();
+        } catch (Throwable error) {
+            android.util.Log.e("SplashActivity", "Splash theme setup failed", error);
+        }
 
         binding.imgLeaf.setAlpha(0f);
         binding.imgLeaf.setScaleX(0.8f);
@@ -62,9 +66,21 @@ public class SplashActivity extends BaseActivity {
         binding.loadingBar.setProgress(0);
         binding.tvPreparing.setAlpha(0f);
 
-        warmUpStorageAndVersions();
+        try {
+            warmUpStorageAndVersions();
+        } catch (Throwable error) {
+            android.util.Log.e("SplashActivity", "Splash warm-up failed", error);
+        }
 
-        binding.getRoot().post(this::startSplashSequence);
+        binding.getRoot().post(() -> {
+            try {
+                startSplashSequence();
+            } catch (Throwable error) {
+                android.util.Log.e("SplashActivity", "Splash animation failed", error);
+                navigateToMain();
+            }
+        });
+        binding.getRoot().postDelayed(this::navigateToMain, 6000L);
     }
 
     private void warmUpStorageAndVersions() {

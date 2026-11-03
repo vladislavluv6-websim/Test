@@ -183,7 +183,8 @@ struct AimCandidate {
 };
 
 void aimAtLocalPlayer(void *localPlayer) {
-  if (!localPlayer || !g_enabled.load(std::memory_order_relaxed) ||
+  if (!localPlayer || localPlayer != g_localPlayer.load(std::memory_order_acquire) ||
+      !g_enabled.load(std::memory_order_relaxed) ||
       !g_applyTurnDelta || !g_fetchNearbyActors || !g_actorIsPlayer) {
     return;
   }
@@ -340,7 +341,7 @@ void aimAtLocalPlayer(void *localPlayer) {
 }
 
 void normalTickDetour(void *actor) {
-  if (actor) {
+  if (actor && actor == g_localPlayer.load(std::memory_order_acquire)) {
     aimAtLocalPlayer(actor);
   }
   if (g_normalTickOriginal) {
