@@ -29,6 +29,8 @@ public final class InbuiltModuleProvider {
     private static final String CFG_EDIT_CONTROLS = "edit_controls";
     private static final String CFG_AUTO_SPRINT_KEYBIND = "auto_sprint_keybind";
     private static final String CFG_SPEED_MULTIPLIER = "speed_multiplier";
+    private static final String CFG_AIM_ASSIST_RANGE = "aim_assist_range";
+    private static final String CFG_AIM_ASSIST_STRENGTH = "aim_assist_strength";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
     private static final String CFG_ZOOM_TRANSITION = "zoom_transition";
@@ -69,6 +71,9 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.SPEED,
                 R.string.inbuilt_mod_speed, R.string.inbuilt_mod_speed_desc,
+                groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.AIM_ASSIST,
+                R.string.inbuilt_mod_aim_assist, R.string.inbuilt_mod_aim_assist_desc,
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.CHICK_PET,
                 R.string.inbuilt_mod_chick_pet, R.string.inbuilt_mod_chick_pet_desc,
@@ -314,6 +319,17 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "200", "100", "500",
                     String.valueOf(manager.getSpeedMultiplier())));
+        } else if (ModIds.AIM_ASSIST.equals(modId)) {
+            configs.add(config(CFG_AIM_ASSIST_RANGE,
+                    context.getString(R.string.mod_config_aim_assist_range),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "8", "3", "16",
+                    String.valueOf(manager.getAimAssistRange())));
+            configs.add(config(CFG_AIM_ASSIST_STRENGTH,
+                    context.getString(R.string.mod_config_aim_assist_strength),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "100", "0", "100",
+                    String.valueOf(manager.getAimAssistStrength())));
         } else if (ModIds.VIRTUAL_CURSOR.equals(modId)) {
             configs.add(config(CFG_CURSOR_SENSITIVITY,
                     context.getString(R.string.mod_config_cursor_sensitivity_percent),
@@ -445,6 +461,12 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_SPEED_MULTIPLIER:
                 manager.setSpeedMultiplier(parseInt(value, manager.getSpeedMultiplier()));
+                break;
+            case CFG_AIM_ASSIST_RANGE:
+                manager.setAimAssistRange(parseInt(value, manager.getAimAssistRange()));
+                break;
+            case CFG_AIM_ASSIST_STRENGTH:
+                manager.setAimAssistStrength(parseInt(value, manager.getAimAssistStrength()));
                 break;
             case CFG_CURSOR_SENSITIVITY:
                 manager.setCursorSensitivity(parseInt(value, manager.getCursorSensitivity()));

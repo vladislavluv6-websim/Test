@@ -11,6 +11,7 @@ public class ModIconHelper {
             case ModIds.TOGGLE_HUD -> R.drawable.ic_toggle_hud_normal;
             case ModIds.AUTO_SPRINT -> R.drawable.ic_sprint_normal;
             case ModIds.SPEED -> R.drawable.ic_speed_normal;
+            case ModIds.AIM_ASSIST -> R.drawable.ic_aimassist_normal;
             case ModIds.CHICK_PET -> R.drawable.chick_idle_1;
             case ModIds.ZOOM -> R.drawable.ic_zoom_normal;
             case ModIds.FPS_DISPLAY -> R.drawable.ic_fps;
