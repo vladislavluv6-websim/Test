@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.Build
 import org.levimc.launcher.R
+import org.levimc.launcher.core.auth.MsftAccountStore
 import org.levimc.launcher.core.auth.MsftAuthManager
 import org.levimc.launcher.core.mods.Mod
 import org.levimc.launcher.core.mods.ModManager
@@ -57,16 +58,20 @@ object MinecraftRuntimePreparer {
         trace.mark("Minecraft version resolved", "${version.directoryName} ${version.versionCode}")
 
         if (FeatureSettings.getInstance().isLauncherManagedMcLoginEnabled) {
-            listener.onProgress(8, context.getString(R.string.ms_login_auth_xbox_device))
-            listener.onLog("Preparing Microsoft account")
-            try {
-                MsftAuthManager.prepareActiveAccount(context.applicationContext)
-                trace.mark("Microsoft credentials prepared")
-            } catch (error: Exception) {
-                throw IllegalStateException(
-                    context.getString(R.string.ms_login_failed_detail, MsftAuthManager.describeError(error)),
-                    error
-                )
+            val active = MsftAccountStore.getActive(context.applicationContext)
+            if (active != null && !active.minecraftUsername.isNullOrEmpty()) {
+                listener.onProgress(8, context.getString(R.string.ms_login_auth_xbox_device))
+                listener.onLog("Refreshing Microsoft account")
+                try {
+                    MsftAuthManager.prepareActiveAccount(context.applicationContext)
+                    trace.mark("Microsoft credentials refreshed")
+                } catch (error: Exception) {
+                    val detail = MsftAuthManager.describeError(error)
+                    trace.warning("Microsoft credential refresh failed", detail)
+                    listener.onLog("Continuing without Microsoft account: $detail")
+                }
+            } else {
+                trace.mark("Microsoft account skipped", "no active account")
             }
         }
 

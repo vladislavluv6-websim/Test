@@ -825,25 +825,6 @@ import okhttp3.OkHttpClient;
             return;
         }
 
-        if (FeatureSettings.getInstance().isLauncherManagedMcLoginEnabled()) {
-            trace.mark("Checking launcher-managed login");
-            MsftAccountStore.MsftAccount active = getActiveAccount();
-            boolean loggedIn = active != null && active.minecraftUsername != null && !active.minecraftUsername.isEmpty();
-            if (!loggedIn) {
-                trace.warning("Launch cancelled", "Minecraft account is missing");
-                binding.launchButton.setEnabled(true);
-                new CustomAlertDialog(this)
-                        .setTitleText(getString(R.string.dialog_title_login_required))
-                        .setMessage(getString(R.string.dialog_message_login_required))
-                        .setPositiveButton(getString(R.string.go_to_accounts), v -> {
-                            startActivity(new Intent(this, AccountsActivity.class));
-                        })
-                        .setNegativeButton(getString(R.string.disable_launcher_login_and_continue), null)
-                        .show();
-                return;
-            }
-        }
-
         trace.mark("Launch preflight completed", version.directoryName + " " + version.versionCode);
         try {
             Intent launchIntent = createMinecraftLaunchIntent();

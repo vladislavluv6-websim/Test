@@ -59,7 +59,7 @@ constexpr float kMaxRange = 16.0f;
 constexpr float kRadiansToDegrees = 57.2957795f;
 constexpr float kFovPreferenceDegrees = 100.0f;
 constexpr float kAimDeadzoneDegrees = 0.05f;
-constexpr float kMaxTurnSpeedDegreesPerSecond = 360.0f;
+constexpr float kMaxTurnSpeedDegreesPerSecond = 1800.0f;
 constexpr int kActorTypeMob = 0x100;
 
 struct Vec2 {

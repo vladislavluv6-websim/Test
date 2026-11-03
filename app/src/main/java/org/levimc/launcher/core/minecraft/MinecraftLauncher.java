@@ -5,15 +5,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.os.Build;
-import android.text.TextUtils;
 import android.widget.Toast;
 
 import org.levimc.launcher.R;
-import org.levimc.launcher.core.auth.MsftAccountStore;
 import org.levimc.launcher.core.versions.GameVersion;
-import org.levimc.launcher.settings.FeatureSettings;
-import org.levimc.launcher.ui.activities.AccountsActivity;
-import org.levimc.launcher.ui.dialogs.CustomAlertDialog;
 import org.levimc.launcher.util.LauncherStorage;
 import org.levimc.launcher.util.LauncherBackgroundController;
 import android.util.Log;
@@ -139,15 +134,6 @@ public class MinecraftLauncher {
 
             activity.runOnUiThread(() -> {
                 try {
-                    if (FeatureSettings.getInstance().isLauncherManagedMcLoginEnabled()) {
-                        MsftAccountStore.MsftAccount active = MsftAccountStore.getActive(activity);
-                        if (active == null || TextUtils.isEmpty(active.minecraftUsername)) {
-                            Log.w(TAG, "Launch denied: Microsoft account is not signed in");
-                            showMicrosoftLoginRequiredDialog(activity);
-                            notifyLaunchFailed(callback, new SecurityException("Microsoft account is required"));
-                            return;
-                        }
-                    }
                     launchMinecraftActivity(sourceIntent, version, false);
                     notifyLaunchStarted(callback);
                 } catch (Exception e) {
@@ -212,16 +198,6 @@ public class MinecraftLauncher {
         activity.startActivity(launchIntent);
         activity.overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
         trace.mark("MinecraftLoadingActivity startActivity called");
-    }
-
-    private void showMicrosoftLoginRequiredDialog(Activity activity) {
-        new CustomAlertDialog(activity)
-                .setTitleText(activity.getString(R.string.dialog_title_login_required))
-                .setMessage(activity.getString(R.string.dialog_message_login_required))
-                .setPositiveButton(activity.getString(R.string.go_to_accounts), v ->
-                        activity.startActivity(new Intent(activity, AccountsActivity.class)))
-                .setNegativeButton(activity.getString(R.string.cancel), null)
-                .show();
     }
 
     private void showLaunchErrorOnUi(String message) {
