@@ -2,6 +2,7 @@
 
 #include <android/log.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -30,10 +31,6 @@ constexpr const char *kClientInstanceGetLocalPlayerSignature =
     "? ? ? ? E0 03 1F AA ? ? ? F9 ? ? ? F8 1F 01 09 EB ? ? ? 54 ? ? ? A9 ? ? ? F9 "
     "? ? ? 91 C0 03 5F D6 ? ? ? ? C0 03 5F D6";
 
-constexpr const char *kApplyTurnDeltaSignature =
-    "? ? ? D1 ? ? ? FD ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 56 D0 3B D5 "
-    "F3 03 00 AA F4 03 01 AA ? ? ? F9 ? ? ? F8 ? ? ? F9 ? ? ? F9";
-
 constexpr const char *kFetchNearbyActorsSignature =
     "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 "
     "5B D0 3B D5 F3 03 08 AA F5 03 02 2A";
@@ -51,12 +48,14 @@ constexpr uintptr_t kActorRotationComponent = 0x238;
 constexpr uintptr_t kStatePosition = 0;
 
 constexpr float kEyeHeight = 1.62f;
-constexpr float kChestOffset = 1.35f;
+constexpr float kTargetCenterOffset = 0.9f;
 constexpr float kDefaultRange = 8.0f;
 constexpr float kMinRange = 3.0f;
 constexpr float kMaxRange = 16.0f;
 constexpr float kRadiansToDegrees = 57.2957795f;
-constexpr float kFovPreferenceDegrees = 90.0f;
+constexpr float kFovPreferenceDegrees = 100.0f;
+constexpr float kAimDeadzoneDegrees = 0.05f;
+constexpr float kMaxTurnSpeedDegreesPerSecond = 360.0f;
 constexpr int kActorTypeMob = 0x100;
 
 struct Vec2 {
@@ -85,14 +84,12 @@ struct ActorVec {
 using NormalTickFn = void (*)(void *);
 using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
-using ApplyTurnDeltaFn = void (*)(void *, const Vec2 &);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientInstanceUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
-ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 
@@ -107,6 +104,10 @@ bool g_clientHookInstalled = false;
 bool g_tickHookInstalled = false;
 bool g_installed = false;
 std::chrono::steady_clock::time_point g_lastInitAttempt{};
+
+std::atomic<void *> g_lockedTarget{nullptr};
+std::chrono::steady_clock::time_point g_targetLockUntil{};
+std::chrono::steady_clock::time_point g_lastAimTime{};
 
 void logInfo(const char *message) {
   __android_log_print(ANDROID_LOG_INFO, kTag, "%s", message);
@@ -162,6 +163,23 @@ bool readRotation(void *actor, Vec2 *out) {
   return true;
 }
 
+bool writeRotation(void *actor, float pitch, float yaw) {
+  if (!actor) {
+    return false;
+  }
+  auto *base = reinterpret_cast<char *>(actor);
+  auto rotation = *reinterpret_cast<uintptr_t *>(base + kActorRotationComponent);
+  if (rotation < 0x1000 || (rotation & 0x7) != 0) {
+    return false;
+  }
+  auto *values = reinterpret_cast<float *>(rotation);
+  values[0] = pitch;
+  values[1] = yaw;
+  values[2] = pitch;
+  values[3] = yaw;
+  return true;
+}
+
 struct AimCandidate {
   void *actor = nullptr;
   float distance = 0.0f;
@@ -172,7 +190,7 @@ struct AimCandidate {
 
 void aimAtLocalPlayer(void *localPlayer) {
   if (!localPlayer || !g_enabled.load(std::memory_order_relaxed) ||
-      !g_applyTurnDelta || !g_fetchNearbyActors || !g_actorIsPlayer) {
+      !g_fetchNearbyActors || !g_actorIsPlayer) {
     return;
   }
 
@@ -190,6 +208,7 @@ void aimAtLocalPlayer(void *localPlayer) {
   Vec3 extent{range, range, range};
   ActorVec nearby = g_fetchNearbyActors(localPlayer, &extent, kActorTypeMob);
   if (!nearby.begin || !nearby.end || nearby.end <= nearby.begin) {
+    g_lockedTarget.store(nullptr, std::memory_order_relaxed);
     return;
   }
   if (nearby.end - nearby.begin > 512) {
@@ -198,8 +217,11 @@ void aimAtLocalPlayer(void *localPlayer) {
 
   AimCandidate bestFov{};
   AimCandidate bestNear{};
+  AimCandidate lockedCandidate{};
   bool haveFov = false;
   bool haveNear = false;
+  bool haveLocked = false;
+  void *lockedTarget = g_lockedTarget.load(std::memory_order_relaxed);
 
   for (DistanceSortedActor *it = nearby.begin; it < nearby.end; ++it) {
     void *actor = it->actor;
@@ -216,7 +238,7 @@ void aimAtLocalPlayer(void *localPlayer) {
     }
 
     const float dx = target.x - eye.x;
-    const float dy = (target.y + kChestOffset) - eye.y;
+    const float dy = (target.y + kTargetCenterOffset) - eye.y;
     const float dz = target.z - eye.z;
     const float horizontal = std::sqrt(dx * dx + dz * dz);
     const float distance = std::sqrt(horizontal * horizontal + dy * dy);
@@ -249,16 +271,40 @@ void aimAtLocalPlayer(void *localPlayer) {
       bestFov = candidate;
       haveFov = true;
     }
+    if (actor == lockedTarget) {
+      lockedCandidate = candidate;
+      haveLocked = true;
+    }
   }
 
-  const AimCandidate *target = haveFov ? &bestFov : (haveNear ? &bestNear : nullptr);
+  const auto now = std::chrono::steady_clock::now();
+  const AimCandidate *target = nullptr;
+  if (haveLocked && now < g_targetLockUntil) {
+    target = &lockedCandidate;
+    if (haveFov && bestFov.angular + 8.0f < lockedCandidate.angular) {
+      target = &bestFov;
+      g_lockedTarget.store(bestFov.actor, std::memory_order_relaxed);
+      g_targetLockUntil = now + std::chrono::milliseconds(600);
+    }
+  } else if (haveFov) {
+    target = &bestFov;
+    g_lockedTarget.store(bestFov.actor, std::memory_order_relaxed);
+    g_targetLockUntil = now + std::chrono::milliseconds(600);
+  } else if (haveNear) {
+    target = &bestNear;
+    g_lockedTarget.store(bestNear.actor, std::memory_order_relaxed);
+    g_targetLockUntil = now + std::chrono::milliseconds(600);
+  }
+
   if (!target) {
+    g_lockedTarget.store(nullptr, std::memory_order_relaxed);
     return;
   }
 
   float deltaYaw = wrapDegrees(target->desiredYaw - current.yaw);
   float deltaPitch = wrapDegrees(target->desiredPitch - current.pitch);
-  if (std::fabs(deltaYaw) < 0.05f && std::fabs(deltaPitch) < 0.05f) {
+  if (std::fabs(deltaYaw) < kAimDeadzoneDegrees &&
+      std::fabs(deltaPitch) < kAimDeadzoneDegrees) {
     return;
   }
 
@@ -266,39 +312,41 @@ void aimAtLocalPlayer(void *localPlayer) {
   if (strength <= 0.0f) {
     return;
   }
-  const float maxStep = 180.0f * strength;
-  deltaYaw = wrapDegrees(deltaYaw * strength);
-  deltaPitch = wrapDegrees(deltaPitch * strength);
-  if (deltaYaw > maxStep) deltaYaw = maxStep;
-  if (deltaYaw < -maxStep) deltaYaw = -maxStep;
-  if (deltaPitch > maxStep) deltaPitch = maxStep;
-  if (deltaPitch < -maxStep) deltaPitch = -maxStep;
 
-  const Vec2 delta{deltaPitch, deltaYaw};
-  g_applyTurnDelta(localPlayer, delta);
+  float dt = 0.05f;
+  if (g_lastAimTime.time_since_epoch().count() != 0) {
+    dt = std::chrono::duration<float>(now - g_lastAimTime).count();
+  }
+  g_lastAimTime = now;
+  if (!std::isfinite(dt) || dt < 0.001f) {
+    dt = 0.001f;
+  } else if (dt > 0.1f) {
+    dt = 0.1f;
+  }
+
+  const float maxStep = kMaxTurnSpeedDegreesPerSecond * strength * dt;
+  const float stepYaw = std::clamp(deltaYaw, -maxStep, maxStep);
+  const float stepPitch = std::clamp(deltaPitch, -maxStep, maxStep);
+
+  const float newPitch = std::clamp(current.pitch + stepPitch, -89.9f, 89.9f);
+  const float newYaw = wrapDegrees(current.yaw + stepYaw);
+  writeRotation(localPlayer, newPitch, newYaw);
 
   uint32_t count = g_targetLogCounter.fetch_add(1, std::memory_order_relaxed);
   if (count % 30 == 0) {
     __android_log_print(
         ANDROID_LOG_INFO, kTag,
-        "target=%p dist=%.2f desired=(%.2f,%.2f) current=(%.2f,%.2f) delta=(%.2f,%.2f) "
+        "target=%p dist=%.2f desired=(%.2f,%.2f) current=(%.2f,%.2f) step=(%.2f,%.2f) "
         "strength=%.0f",
         target->actor, target->distance, target->desiredPitch, target->desiredYaw,
-        current.pitch, current.yaw, delta.pitch, delta.yaw,
+        current.pitch, current.yaw, stepPitch, stepYaw,
         g_strength.load(std::memory_order_relaxed));
   }
 }
 
 void normalTickDetour(void *actor) {
   if (actor) {
-    void *localPlayer = g_localPlayer.load(std::memory_order_relaxed);
-    if (!localPlayer && g_actorIsPlayer && g_actorIsPlayer(actor)) {
-      g_localPlayer.store(actor, std::memory_order_release);
-      localPlayer = actor;
-    }
-    if (actor == localPlayer) {
-      aimAtLocalPlayer(actor);
-    }
+    aimAtLocalPlayer(actor);
   }
   if (g_normalTickOriginal) {
     g_normalTickOriginal(actor);
@@ -317,6 +365,7 @@ void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
       if (previous != localPlayer) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "local player=%p", localPlayer);
       }
+      aimAtLocalPlayer(localPlayer);
     }
   }
 
@@ -342,44 +391,30 @@ bool initialize() {
       pl::memory::resolveSignature(kClientInstanceUpdateSignature, kMinecraftLibrary);
   const uintptr_t localPlayerAddress =
       pl::memory::resolveSignature(kClientInstanceGetLocalPlayerSignature, kMinecraftLibrary);
-  const uintptr_t applyTurnDeltaAddress =
-      pl::memory::resolveSignature(kApplyTurnDeltaSignature, kMinecraftLibrary);
   const uintptr_t fetchNearbyActorsAddress =
       pl::memory::resolveSignature(kFetchNearbyActorsSignature, kMinecraftLibrary);
   const uintptr_t actorIsPlayerAddress =
       pl::memory::resolveSignature(kActorIsPlayerSignature, kMinecraftLibrary);
 
   if (!normalTickAddress || !clientUpdateAddress || !localPlayerAddress ||
-      !applyTurnDeltaAddress || !fetchNearbyActorsAddress || !actorIsPlayerAddress) {
+      !fetchNearbyActorsAddress || !actorIsPlayerAddress) {
     logWarning("Unable to resolve required Minecraft signatures");
     return false;
   }
 
   g_getLocalPlayer = reinterpret_cast<GetLocalPlayerFn>(localPlayerAddress);
-  g_applyTurnDelta = reinterpret_cast<ApplyTurnDeltaFn>(applyTurnDeltaAddress);
   g_fetchNearbyActors = reinterpret_cast<FetchNearbyActorsFn>(fetchNearbyActorsAddress);
   g_actorIsPlayer = reinterpret_cast<ActorIsPlayerFn>(actorIsPlayerAddress);
 
   __android_log_print(
       ANDROID_LOG_INFO, kTag,
       "1.26.60 signatures: normalTick=%p clientUpdate=%p getLocalPlayer=%p "
-      "applyTurnDelta=%p fetchNearby=%p isPlayer=%p",
+      "fetchNearby=%p isPlayer=%p",
       reinterpret_cast<void *>(normalTickAddress),
       reinterpret_cast<void *>(clientUpdateAddress),
       reinterpret_cast<void *>(localPlayerAddress),
-      reinterpret_cast<void *>(applyTurnDeltaAddress),
       reinterpret_cast<void *>(fetchNearbyActorsAddress),
       reinterpret_cast<void *>(actorIsPlayerAddress));
-
-  if (!g_clientHookInstalled) {
-    if (pl::memory::hook((pl::memory::FuncPtr)clientUpdateAddress,
-                         (pl::memory::FuncPtr)clientInstanceUpdateDetour,
-                         (pl::memory::FuncPtr *)&g_clientInstanceUpdateOriginal) != 0) {
-      logWarning("Unable to hook ClientInstance::update");
-      return false;
-    }
-    g_clientHookInstalled = true;
-  }
 
   if (!g_tickHookInstalled) {
     if (pl::memory::hook((pl::memory::FuncPtr)normalTickAddress,
@@ -389,6 +424,16 @@ bool initialize() {
       return false;
     }
     g_tickHookInstalled = true;
+  }
+
+  if (!g_clientHookInstalled) {
+    if (pl::memory::hook((pl::memory::FuncPtr)clientUpdateAddress,
+                         (pl::memory::FuncPtr)clientInstanceUpdateDetour,
+                         (pl::memory::FuncPtr *)&g_clientInstanceUpdateOriginal) != 0) {
+      logWarning("Unable to hook ClientInstance::update");
+      return false;
+    }
+    g_clientHookInstalled = true;
   }
 
   g_installed = true;
@@ -409,6 +454,9 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetEnabl
     JNIEnv *, jclass, jboolean enabled) {
   const bool value = enabled == JNI_TRUE;
   g_enabled.store(value, std::memory_order_relaxed);
+  if (!value) {
+    g_lockedTarget.store(nullptr, std::memory_order_relaxed);
+  }
   __android_log_print(ANDROID_LOG_INFO, kTag, "enabled=%d", value ? 1 : 0);
 }
 
