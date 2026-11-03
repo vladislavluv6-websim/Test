@@ -657,6 +657,10 @@
     <string name="inbuilt_mod_hud_desc">Скрыть панель быстрого доступа и UI</string>
     <string name="inbuilt_mod_autosprint">Авто-спринт</string>
     <string name="inbuilt_mod_autosprint_desc">Включение/выключение спринта</string>
+    <string name="inbuilt_mod_speed">Скорость</string>
+    <string name="inbuilt_mod_speed_desc">Ускорение движения (экспериментально)</string>
+    <string name="mod_config_speed_multiplier">Множитель скорости (%)</string>
+    <string name="speed_mod_unavailable">Speed hack недоступен для этой версии игры</string>
     <string name="inbuilt_mod_chick_pet">Питомец-цыплёнок</string>
     <string name="inbuilt_mod_chick_pet_desc">Милый пиксельный цыплёнок, который гуляет, спит и убегает при касании!</string>
     <string name="inbuilt_mod_zoom">Зум</string>

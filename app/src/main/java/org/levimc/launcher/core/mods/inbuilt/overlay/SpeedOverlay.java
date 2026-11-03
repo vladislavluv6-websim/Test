@@ -1,0 +1,81 @@
+package org.levimc.launcher.core.mods.inbuilt.overlay;
+
+import android.app.Activity;
+import android.widget.ImageButton;
+import android.widget.Toast;
+
+import org.levimc.launcher.R;
+import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
+import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
+import org.levimc.launcher.core.mods.inbuilt.nativemod.SpeedMod;
+
+public class SpeedOverlay extends BaseOverlayButton {
+    private boolean isActive = false;
+
+    public SpeedOverlay(Activity activity) {
+        super(activity);
+    }
+
+    @Override
+    protected String getModId() {
+        return ModIds.SPEED;
+    }
+
+    @Override
+    protected int getIconResource() {
+        return isActive ? R.drawable.ic_speed_pressed : R.drawable.ic_speed_normal;
+    }
+
+    @Override
+    public void show(int startX, int startY) {
+        if (!isActive) {
+            float multiplier = InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f;
+            isActive = SpeedMod.setEnabled(true, multiplier);
+        }
+        super.show(startX, startY);
+    }
+
+    @Override
+    protected void onButtonClick() {
+        boolean nextState = !isActive;
+        if (nextState) {
+            float multiplier = InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f;
+            if (!SpeedMod.setEnabled(true, multiplier)) {
+                Toast.makeText(activity, R.string.speed_mod_unavailable, Toast.LENGTH_SHORT).show();
+                nextState = false;
+            }
+        } else {
+            SpeedMod.setEnabled(false, 1.0f);
+        }
+        isActive = nextState;
+        updateButtonState(isActive);
+    }
+
+    private void updateButtonState(boolean active) {
+        if (overlayView != null) {
+            ImageButton btn = overlayView.findViewById(R.id.mod_overlay_button);
+            if (btn != null) {
+                btn.setAlpha(getButtonOpacity());
+                btn.setImageResource(active ? R.drawable.ic_speed_pressed : R.drawable.ic_speed_normal);
+            }
+        }
+    }
+
+    @Override
+    public void applyConfigurationChanges() {
+        super.applyConfigurationChanges();
+        if (isActive) {
+            SpeedMod.setMultiplier(InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f);
+        }
+    }
+
+    @Override
+    public void hide() {
+        if (isActive) {
+            SpeedMod.setEnabled(false, 1.0f);
+            isActive = false;
+            updateButtonState(false);
+        }
+        super.hide();
+    }
+}

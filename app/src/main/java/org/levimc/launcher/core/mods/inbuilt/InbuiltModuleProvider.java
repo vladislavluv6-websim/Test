@@ -28,6 +28,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_ACTIVATION_KEYBIND = "activation_keybind";
     private static final String CFG_EDIT_CONTROLS = "edit_controls";
     private static final String CFG_AUTO_SPRINT_KEYBIND = "auto_sprint_keybind";
+    private static final String CFG_SPEED_MULTIPLIER = "speed_multiplier";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
     private static final String CFG_ZOOM_TRANSITION = "zoom_transition";
@@ -65,6 +66,9 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.AUTO_SPRINT,
                 R.string.inbuilt_mod_autosprint, R.string.inbuilt_mod_autosprint_desc,
+                groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.SPEED,
+                R.string.inbuilt_mod_speed, R.string.inbuilt_mod_speed_desc,
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.CHICK_PET,
                 R.string.inbuilt_mod_chick_pet, R.string.inbuilt_mod_chick_pet_desc,
@@ -304,6 +308,12 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.KEYBIND,
                     String.valueOf(manager.getDefaultInbuiltModKeybind(modId)), "", "",
                     String.valueOf(manager.getAutoSprintKeybind())));
+        } else if (ModIds.SPEED.equals(modId)) {
+            configs.add(config(CFG_SPEED_MULTIPLIER,
+                    context.getString(R.string.mod_config_speed_multiplier),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "200", "100", "500",
+                    String.valueOf(manager.getSpeedMultiplier())));
         } else if (ModIds.VIRTUAL_CURSOR.equals(modId)) {
             configs.add(config(CFG_CURSOR_SENSITIVITY,
                     context.getString(R.string.mod_config_cursor_sensitivity_percent),
@@ -432,6 +442,9 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AUTO_SPRINT_KEYBIND:
                 manager.setAutoSprintKeybind(parseInt(value, manager.getAutoSprintKeybind()));
+                break;
+            case CFG_SPEED_MULTIPLIER:
+                manager.setSpeedMultiplier(parseInt(value, manager.getSpeedMultiplier()));
                 break;
             case CFG_CURSOR_SENSITIVITY:
                 manager.setCursorSensitivity(parseInt(value, manager.getCursorSensitivity()));

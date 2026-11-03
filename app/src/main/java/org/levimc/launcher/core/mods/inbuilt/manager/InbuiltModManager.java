@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class InbuiltModManager {
     private static final String PREFS_NAME = "inbuilt_mods_prefs";
     private static final String KEY_AUTOSPRINT_KEY = "autosprint_key";
+    private static final String KEY_SPEED_MULTIPLIER = "speed_multiplier";
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
     private static final String KEY_OVERLAY_BUTTON_SIZE_PREFIX = "overlay_button_size_";
     private static final String KEY_OVERLAY_OPACITY_PREFIX = "overlay_opacity_";
@@ -50,6 +51,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_ZOOM_LEVEL = 10;
     private static final int DEFAULT_ZOOM_TRANSITION_DURATION = 150;
     private static final int DEFAULT_CURSOR_SENSITIVITY = 120;
+    private static final int DEFAULT_SPEED_MULTIPLIER = 200;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
@@ -89,9 +91,20 @@ public class InbuiltModManager {
         prefs.edit().putInt(KEY_AUTOSPRINT_KEY, keyCode).apply();
     }
 
+    public int getSpeedMultiplier() {
+        return Math.max(100, Math.min(500,
+                prefs.getInt(KEY_SPEED_MULTIPLIER, DEFAULT_SPEED_MULTIPLIER)));
+    }
+
+    public void setSpeedMultiplier(int multiplier) {
+        prefs.edit().putInt(KEY_SPEED_MULTIPLIER,
+                Math.max(100, Math.min(500, multiplier))).apply();
+    }
+
     public int getDefaultInbuiltModKeybind(String modId) {
         if (ModIds.ZOOM.equals(modId)) return KeyEvent.KEYCODE_C;
         if (ModIds.AUTO_SPRINT.equals(modId)) return KeyEvent.KEYCODE_CTRL_LEFT;
+        if (ModIds.SPEED.equals(modId)) return KeyEvent.KEYCODE_V;
         if (ModIds.SNAPLOOK.equals(modId)) return KeyEvent.KEYCODE_X;
         return KeyEvent.KEYCODE_UNKNOWN;
     }

@@ -650,6 +650,10 @@
     <string name="mod_config_hide_launcher_hud">Also hide launcher HUD and overlay buttons</string>
     <string name="inbuilt_mod_autosprint">Auto Sprint</string>
     <string name="inbuilt_mod_autosprint_desc">Toggle sprint on/off</string>
+    <string name="inbuilt_mod_speed">Speed Hack</string>
+    <string name="inbuilt_mod_speed_desc">Move faster than normal (experimental)</string>
+    <string name="mod_config_speed_multiplier">Speed multiplier (%)</string>
+    <string name="speed_mod_unavailable">Speed hack is unavailable for this game version</string>
     <string name="inbuilt_mod_chick_pet">Chick Pet</string>
     <string name="inbuilt_mod_chick_pet_desc">A cute pixelated chick that walks around, sleeps, and runs when touched!</string>
     <string name="inbuilt_mod_zoom">Zoom</string>

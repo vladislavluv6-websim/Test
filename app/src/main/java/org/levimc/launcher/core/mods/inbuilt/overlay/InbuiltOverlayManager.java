@@ -30,7 +30,7 @@ public class InbuiltOverlayManager {
     private final List<BaseOverlayButton> overlays = new ArrayList<>();
     private static final String[] KEYBIND_MOD_IDS = {
             ModIds.QUICK_DROP, ModIds.CAMERA_PERSPECTIVE, ModIds.TOGGLE_HUD,
-            ModIds.AUTO_SPRINT, ModIds.ZOOM, ModIds.FPS_DISPLAY, ModIds.CPS_DISPLAY,
+            ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.ZOOM, ModIds.FPS_DISPLAY, ModIds.CPS_DISPLAY,
             ModIds.SNAPLOOK, ModIds.VIRTUAL_CURSOR, ModIds.GYRO,
             ModIds.POJAV_CONTROLS, ModIds.HOTBAR_SLOT
     };
@@ -163,6 +163,7 @@ public class InbuiltOverlayManager {
         modActiveStates.put(ModIds.CAMERA_PERSPECTIVE, false);
         modActiveStates.put(ModIds.TOGGLE_HUD, false);
         modActiveStates.put(ModIds.AUTO_SPRINT, false);
+        modActiveStates.put(ModIds.SPEED, false);
         modActiveStates.put(ModIds.CHICK_PET, false);
         modActiveStates.put(ModIds.ZOOM, false);
         modActiveStates.put(ModIds.FPS_DISPLAY, false);
@@ -178,12 +179,13 @@ public class InbuiltOverlayManager {
         modPositionMap.put(ModIds.CAMERA_PERSPECTIVE, nextY + SPACING * 2);
         modPositionMap.put(ModIds.TOGGLE_HUD, nextY + SPACING * 3);
         modPositionMap.put(ModIds.AUTO_SPRINT, nextY + SPACING * 4);
-        modPositionMap.put(ModIds.ZOOM, nextY + SPACING * 5);
-        modPositionMap.put(ModIds.FPS_DISPLAY, nextY + SPACING * 6);
-        modPositionMap.put(ModIds.CPS_DISPLAY, nextY + SPACING * 7);
-        modPositionMap.put(ModIds.SNAPLOOK, nextY + SPACING * 8);
-        modPositionMap.put(ModIds.VIRTUAL_CURSOR, nextY + SPACING * 9);
-        modPositionMap.put(ModIds.GYRO, nextY + SPACING * 10);
+        modPositionMap.put(ModIds.SPEED, nextY + SPACING * 5);
+        modPositionMap.put(ModIds.ZOOM, nextY + SPACING * 6);
+        modPositionMap.put(ModIds.FPS_DISPLAY, nextY + SPACING * 7);
+        modPositionMap.put(ModIds.CPS_DISPLAY, nextY + SPACING * 8);
+        modPositionMap.put(ModIds.SNAPLOOK, nextY + SPACING * 9);
+        modPositionMap.put(ModIds.VIRTUAL_CURSOR, nextY + SPACING * 10);
+        modPositionMap.put(ModIds.GYRO, nextY + SPACING * 11);
 
         if (zoomOverlay == null) {
             zoomOverlay = new ZoomOverlay(activity);
@@ -199,6 +201,7 @@ public class InbuiltOverlayManager {
         restorePersistedInbuiltModState(manager, ModIds.CAMERA_PERSPECTIVE);
         restorePersistedInbuiltModState(manager, ModIds.TOGGLE_HUD);
         restorePersistedInbuiltModState(manager, ModIds.AUTO_SPRINT);
+        restorePersistedInbuiltModState(manager, ModIds.SPEED);
         restorePersistedInbuiltModState(manager, ModIds.CHICK_PET);
         restorePersistedInbuiltModState(manager, ModIds.ZOOM);
         restorePersistedInbuiltModState(manager, ModIds.FPS_DISPLAY);
@@ -256,6 +259,7 @@ public class InbuiltOverlayManager {
             case ModIds.CAMERA_PERSPECTIVE: controller = new CameraPerspectiveOverlay(activity); break;
             case ModIds.TOGGLE_HUD: controller = new ToggleHudOverlay(activity); break;
             case ModIds.AUTO_SPRINT: controller = new AutoSprintOverlay(activity); break;
+            case ModIds.SPEED: controller = new SpeedOverlay(activity); break;
             case ModIds.VIRTUAL_CURSOR: controller = new VirtualCursorOverlay(activity); break;
             case ModIds.ZOOM:
                 if (zoomOverlay == null) zoomOverlay = new ZoomOverlay(activity);
@@ -313,6 +317,12 @@ public class InbuiltOverlayManager {
                 sprint.show(savedX, savedY);
                 overlays.add(sprint);
                 modOverlayMap.put(modId, sprint);
+                break;
+            case ModIds.SPEED:
+                SpeedOverlay speed = (SpeedOverlay) getKeybindController(ModIds.SPEED);
+                speed.show(savedX, savedY);
+                overlays.add(speed);
+                modOverlayMap.put(modId, speed);
                 break;
             case ModIds.CHICK_PET:
                 if (chickPetOverlay == null) {
@@ -446,6 +456,11 @@ public class InbuiltOverlayManager {
             return;
         }
         
+        if (modId.equals(ModIds.SPEED)) {
+            BaseOverlayButton controller = keybindControllers.get(ModIds.SPEED);
+            if (controller != null) controller.hide();
+        }
+
         BaseOverlayButton overlay = modOverlayMap.get(modId);
         if (overlay != null) {
             if (overlay == selectedHudEditorOverlay) {
