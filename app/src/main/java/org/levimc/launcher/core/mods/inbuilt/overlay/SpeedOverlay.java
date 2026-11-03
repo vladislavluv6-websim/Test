@@ -5,15 +5,26 @@ import android.widget.ImageButton;
 import android.widget.Toast;
 
 import org.levimc.launcher.R;
+import org.levimc.launcher.core.mods.ModManager;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.SpeedMod;
+import org.levimc.launcher.core.versions.GameVersion;
 
 public class SpeedOverlay extends BaseOverlayButton {
+    private static final String SUPPORTED_MINECRAFT_VERSION = "1.26.60";
     private boolean isActive = false;
 
     public SpeedOverlay(Activity activity) {
         super(activity);
+    }
+
+    private boolean isSupportedVersion() {
+        GameVersion version = ModManager.getInstance().getCurrentVersion();
+        if (version == null || version.versionCode == null || version.versionCode.isEmpty()) {
+            return true;
+        }
+        return version.versionCode.startsWith(SUPPORTED_MINECRAFT_VERSION);
     }
 
     @Override
@@ -28,7 +39,7 @@ public class SpeedOverlay extends BaseOverlayButton {
 
     @Override
     public void show(int startX, int startY) {
-        if (!isActive) {
+        if (!isActive && isSupportedVersion()) {
             float multiplier = InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f;
             isActive = SpeedMod.setEnabled(true, multiplier);
         }
@@ -39,10 +50,15 @@ public class SpeedOverlay extends BaseOverlayButton {
     protected void onButtonClick() {
         boolean nextState = !isActive;
         if (nextState) {
-            float multiplier = InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f;
-            if (!SpeedMod.setEnabled(true, multiplier)) {
+            if (!isSupportedVersion()) {
                 Toast.makeText(activity, R.string.speed_mod_unavailable, Toast.LENGTH_SHORT).show();
                 nextState = false;
+            } else {
+                float multiplier = InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f;
+                if (!SpeedMod.setEnabled(true, multiplier)) {
+                    Toast.makeText(activity, R.string.speed_mod_unavailable, Toast.LENGTH_SHORT).show();
+                    nextState = false;
+                }
             }
         } else {
             SpeedMod.setEnabled(false, 1.0f);

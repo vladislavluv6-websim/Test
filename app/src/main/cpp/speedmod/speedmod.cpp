@@ -17,22 +17,20 @@ constexpr const char *kTag = "SpeedMod";
 constexpr const char *kMinecraftLibrary = "libminecraftpe.so";
 
 constexpr const char *kNormalTickSignature =
-    "E8 0F 19 FC FD 7B 01 A9 FC 6F 02 A9 FA 67 03 A9 F8 5F 04 A9 F6 57 05 A9 "
-    "F4 4F 06 A9 FD 43 00 91 FF C3 09 D1 54 D0 3B D5 F3 03 00 AA 88 16 40 F9 "
-    "A8 03 1E F8 08 C0 78 39 ? ? ? ? 68 92 4C B9";
+    "? ? ? FC ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 "
+    "? ? ? D1 54 D0 3B D5 F3 03 00 AA ? ? ? F9 ? ? ? F8 ? ? ? 39";
 
 constexpr const char *kClientInstanceUpdateSignature =
-    "FD 7B BA A9 FC 6F 01 A9 FA 67 02 A9 F8 5F 03 A9 F6 57 04 A9 F4 4F 05 A9 "
-    "FD 03 00 91 FF C3 12 D1 59 D0 3B D5 F3 03 00 AA F4 03 01 2A 28 17 40 F9 "
-    "A8 83 1F F8 08 00 40 F9 09 35 46 F9 E8 E3 01 91";
+    "? ? ? FC ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 "
+    "? ? ? D1 59 D0 3B D5 ? ? ? 52 F5 03 02 2A";
 
 constexpr const char *kClientInstanceGetLocalPlayerSignature =
-    "FF 43 01 D1 FD 7B 03 A9 F3 23 00 F9 FD C3 00 91 53 D0 3B D5 E8 03 00 AA "
-    "E0 23 00 91 69 16 40 F9 01 61 08 91 A9 83 1F F8 ? ? ? ? E0 23 00 91 ? ? ? ? "
-    "? ? ? ? E0 23 00 91 21 00 80 52 ? ? ? ? ? ? ? ? E0 03 1F AA 68 16 40 F9 "
-    "A9 83 5F F8 1F 01 09 EB ? ? ? ? FD 7B 43 A9";
+    "? ? ? D1 ? ? ? A9 ? ? ? F9 ? ? ? 91 53 D0 3B D5 E8 03 00 AA ? ? ? 91 ? ? ? F9 "
+    "? ? ? 91 ? ? ? F8 ? ? ? ? ? ? ? 91 ? ? ? ? ? ? ? 36 ? ? ? 91 ? ? ? 52 ? ? ? ? "
+    "? ? ? ? E0 03 1F AA ? ? ? F9 ? ? ? F8 1F 01 09 EB ? ? ? 54 ? ? ? A9 ? ? ? F9 "
+    "? ? ? 91 C0 03 5F D6 ? ? ? ? C0 03 5F D6";
 
-constexpr uintptr_t kActorStateVectorComponent = 0x208;
+constexpr uintptr_t kActorStateVectorComponent = 0x228;
 constexpr uintptr_t kStatePosition = 0;
 constexpr uintptr_t kStatePreviousPosition = 12;
 constexpr uintptr_t kStatePositionDelta = 24;
@@ -90,8 +88,14 @@ void applySpeed(void *actor) {
 
   constexpr float kWorldLimit = 3.0e7f;
   if (!std::isfinite(position[0]) || !std::isfinite(position[1]) ||
-      !std::isfinite(position[2]) || std::fabs(position[0]) > kWorldLimit ||
+      !std::isfinite(position[2]) || !std::isfinite(previous[0]) ||
+      !std::isfinite(previous[1]) || !std::isfinite(previous[2]) ||
+      std::fabs(position[0]) > kWorldLimit ||
       std::fabs(position[1]) > kWorldLimit || std::fabs(position[2]) > kWorldLimit) {
+    return;
+  }
+
+  if (horizontalLength(position[0] - previous[0], position[2] - previous[2]) > 10.0f) {
     return;
   }
 
@@ -171,6 +175,12 @@ bool initialize() {
     logWarning("Unable to resolve required Minecraft signatures");
     return false;
   }
+
+  __android_log_print(ANDROID_LOG_INFO, kTag,
+                      "1.26.60 signatures: normalTick=%p clientUpdate=%p getLocalPlayer=%p",
+                      reinterpret_cast<void *>(normalTickAddress),
+                      reinterpret_cast<void *>(clientUpdateAddress),
+                      reinterpret_cast<void *>(localPlayerAddress));
 
   if (!g_getLocalPlayer) {
     g_getLocalPlayer = reinterpret_cast<GetLocalPlayerFn>(localPlayerAddress);
