@@ -20,14 +20,24 @@ public class SettingsStorage {
     public static FeatureSettings load(Context context) {
         SharedPreferences sp = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE);
         String json = sp.getString(KEY_SETTINGS_JSON, null);
+        FeatureSettings settings;
         if (json == null) {
-            return new FeatureSettings();
+            settings = new FeatureSettings();
+        } else {
+            try {
+                settings = gson.fromJson(json, FeatureSettings.class);
+            } catch (JsonSyntaxException e) {
+                settings = new FeatureSettings();
+            }
+            if (settings == null) {
+                settings = new FeatureSettings();
+            }
         }
-        try {
-            return gson.fromJson(json, FeatureSettings.class);
-        } catch (JsonSyntaxException e) {
-            return new FeatureSettings();
+        if (!settings.isLauncherManagedMcLoginMigrated()) {
+            settings.applyLauncherManagedMcLoginMigration();
+            save(context, settings);
         }
+        return settings;
     }
 
     public static void clear(Context context) {

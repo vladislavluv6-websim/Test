@@ -6,7 +6,8 @@ public class FeatureSettings {
     private static volatile FeatureSettings INSTANCE;
     private static Context appContext;
     private boolean versionIsolationEnabled = false;
-    private boolean launcherManagedMcLoginEnabled = false;
+    private boolean launcherManagedMcLoginEnabled = true;
+    private boolean launcherManagedMcLoginMigrated = false;
     private boolean logcatOverlayEnabled = false;
     private boolean foregroundServiceEnabled = false;
     private Boolean crashUploadEnabled = true;
@@ -42,6 +43,12 @@ public class FeatureSettings {
 
     public boolean isLauncherManagedMcLoginEnabled() { return launcherManagedMcLoginEnabled; }
     public void setLauncherManagedMcLoginEnabled(boolean enabled) { this.launcherManagedMcLoginEnabled = enabled; autoSave(); }
+
+    boolean isLauncherManagedMcLoginMigrated() { return launcherManagedMcLoginMigrated; }
+    void applyLauncherManagedMcLoginMigration() {
+        this.launcherManagedMcLoginEnabled = true;
+        this.launcherManagedMcLoginMigrated = true;
+    }
 
     public boolean isLogcatOverlayEnabled() { return logcatOverlayEnabled; }
     public void setLogcatOverlayEnabled(boolean enabled) { this.logcatOverlayEnabled = enabled; autoSave(); }

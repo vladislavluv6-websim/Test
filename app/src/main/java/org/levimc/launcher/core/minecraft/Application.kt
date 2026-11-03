@@ -15,6 +15,7 @@ class LauncherApplication : Application() {
         super.onCreate()
         context = applicationContext
         FeatureSettings.init(applicationContext)
+        FeatureSettings.getInstance()
         CrashReporter.init(this)
         val processName = Application.getProcessName()
         if (processName.endsWith(":crash")) return
