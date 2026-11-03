@@ -1,6 +1,7 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.app.Activity;
+import android.util.Log;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
@@ -12,7 +13,9 @@ import org.levimc.launcher.core.mods.inbuilt.nativemod.SpeedMod;
 import org.levimc.launcher.core.versions.GameVersion;
 
 public class SpeedOverlay extends BaseOverlayButton {
+    private static final String TAG = "SpeedMod";
     private static final String SUPPORTED_MINECRAFT_VERSION = "1.26.60";
+    private static boolean versionLogged = false;
     private boolean isActive = false;
 
     public SpeedOverlay(Activity activity) {
@@ -21,6 +24,10 @@ public class SpeedOverlay extends BaseOverlayButton {
 
     private boolean isSupportedVersion() {
         GameVersion version = ModManager.getInstance().getCurrentVersion();
+        if (!versionLogged) {
+            versionLogged = true;
+            Log.i(TAG, "Minecraft version=" + (version == null ? "unknown" : version.versionCode));
+        }
         if (version == null || version.versionCode == null || version.versionCode.isEmpty()) {
             return true;
         }

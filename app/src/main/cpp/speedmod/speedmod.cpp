@@ -1,11 +1,13 @@
 #include <jni.h>
 
 #include <android/log.h>
+#include <dlfcn.h>
 
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <mutex>
 
 #include "pl/memory/Hook.hpp"
@@ -33,25 +35,34 @@ constexpr const char *kClientInstanceGetLocalPlayerSignature =
 constexpr uintptr_t kActorStateVectorComponent = 0x228;
 constexpr uintptr_t kStatePosition = 0;
 constexpr uintptr_t kStatePreviousPosition = 12;
-constexpr uintptr_t kStatePositionDelta = 24;
+constexpr uintptr_t kStateVelocity = 24;
 constexpr float kMaxExtraBlocksPerTick = 0.75f;
 
 using NormalTickFn = void (*)(void *);
+using BaseTickFn = void (*)(void *);
 using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
+BaseTickFn g_baseTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientInstanceUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
 
 std::atomic_bool g_enabled{false};
 std::atomic<float> g_multiplier{2.0f};
+std::atomic<void *> g_clientLocalPlayer{nullptr};
 std::atomic<void *> g_localPlayer{nullptr};
+std::atomic<uint32_t> g_tickLogCounter{0};
+std::atomic<uint32_t> g_mismatchLogCounter{0};
 
 std::mutex g_initMutex;
 bool g_clientHookInstalled = false;
 bool g_tickHookInstalled = false;
+bool g_baseTickHookInstalled = false;
+bool g_baseTickHookAttempted = false;
 bool g_installed = false;
+uintptr_t g_normalTickAddress = 0;
+uintptr_t g_baseTickAddress = 0;
 std::chrono::steady_clock::time_point g_lastInitAttempt{};
 
 void logInfo(const char *message) {
@@ -66,14 +77,32 @@ float horizontalLength(float x, float z) {
   return std::sqrt(x * x + z * z);
 }
 
+struct TickState {
+  void *actor = nullptr;
+  float posX = 0.0f;
+  float posZ = 0.0f;
+  float baseVx = 0.0f;
+  float baseVz = 0.0f;
+  float multiplier = 1.0f;
+  bool applied = false;
+};
+
+thread_local TickState g_tickState;
+
 void applySpeed(void *actor) {
+  g_tickState.applied = false;
   if (!actor || !g_enabled.load(std::memory_order_relaxed)) {
     return;
   }
 
   void *localPlayer = g_localPlayer.load(std::memory_order_relaxed);
-  if (!localPlayer || actor != localPlayer) {
-    return;
+  if (localPlayer && actor != localPlayer) {
+    uint32_t count = g_mismatchLogCounter.fetch_add(1, std::memory_order_relaxed);
+    if (count == 0) {
+      __android_log_print(ANDROID_LOG_WARN, kTag,
+                          "tick actor %p does not match local player %p",
+                          actor, localPlayer);
+    }
   }
 
   auto *base = reinterpret_cast<char *>(actor);
@@ -84,7 +113,7 @@ void applySpeed(void *actor) {
 
   auto *position = reinterpret_cast<float *>(stateVector + kStatePosition);
   auto *previous = reinterpret_cast<float *>(stateVector + kStatePreviousPosition);
-  auto *delta = reinterpret_cast<float *>(stateVector + kStatePositionDelta);
+  auto *velocity = reinterpret_cast<float *>(stateVector + kStateVelocity);
 
   constexpr float kWorldLimit = 3.0e7f;
   if (!std::isfinite(position[0]) || !std::isfinite(position[1]) ||
@@ -99,17 +128,17 @@ void applySpeed(void *actor) {
     return;
   }
 
-  float dx = delta[0];
-  float dz = delta[2];
-  if (!std::isfinite(dx) || !std::isfinite(dz)) {
+  float vx = velocity[0];
+  float vz = velocity[2];
+  if (!std::isfinite(vx) || !std::isfinite(vz)) {
     return;
   }
-  if (horizontalLength(dx, dz) < 1.0e-5f) {
-    dx = position[0] - previous[0];
-    dz = position[2] - previous[2];
+  if (horizontalLength(vx, vz) < 1.0e-5f) {
+    vx = position[0] - previous[0];
+    vz = position[2] - previous[2];
   }
 
-  const float movement = horizontalLength(dx, dz);
+  const float movement = horizontalLength(vx, vz);
   if (movement < 1.0e-5f || movement > 2.0f) {
     return;
   }
@@ -119,8 +148,63 @@ void applySpeed(void *actor) {
     return;
   }
 
-  float extraX = dx * (multiplier - 1.0f);
-  float extraZ = dz * (multiplier - 1.0f);
+  float extraX = vx * (multiplier - 1.0f);
+  float extraZ = vz * (multiplier - 1.0f);
+  const float extraLength = horizontalLength(extraX, extraZ);
+  if (extraLength > kMaxExtraBlocksPerTick) {
+    const float scale = kMaxExtraBlocksPerTick / extraLength;
+    extraX *= scale;
+    extraZ *= scale;
+  }
+
+  g_tickState.actor = actor;
+  g_tickState.posX = position[0];
+  g_tickState.posZ = position[2];
+  g_tickState.baseVx = vx;
+  g_tickState.baseVz = vz;
+  g_tickState.multiplier = multiplier;
+  g_tickState.applied = true;
+
+  velocity[0] = vx + extraX;
+  velocity[2] = vz + extraZ;
+
+  uint32_t count = g_tickLogCounter.fetch_add(1, std::memory_order_relaxed);
+  if (count % 20 == 0) {
+    __android_log_print(
+        ANDROID_LOG_INFO, kTag,
+        "speed actor=%p pos=(%.3f,%.3f) vel=(%.3f,%.3f) -> (%.3f,%.3f) mult=%.2f",
+        actor, position[0], position[2], vx, vz, velocity[0], velocity[2],
+        multiplier);
+  }
+}
+
+void applyPositionFallback(void *actor) {
+  if (!g_tickState.applied || g_tickState.actor != actor) {
+    return;
+  }
+
+  auto *base = reinterpret_cast<char *>(actor);
+  auto stateVector = *reinterpret_cast<uintptr_t *>(base + kActorStateVectorComponent);
+  if (stateVector < 0x1000 || (stateVector & 0x7) != 0) {
+    return;
+  }
+
+  auto *position = reinterpret_cast<float *>(stateVector + kStatePosition);
+  if (!std::isfinite(position[0]) || !std::isfinite(position[2])) {
+    return;
+  }
+
+  const float actual = horizontalLength(position[0] - g_tickState.posX,
+                                        position[2] - g_tickState.posZ);
+  const float baseMovement =
+      horizontalLength(g_tickState.baseVx, g_tickState.baseVz);
+  if (baseMovement < 1.0e-5f || actual < 1.0e-5f ||
+      actual >= baseMovement * 1.15f) {
+    return;
+  }
+
+  float extraX = g_tickState.baseVx * (g_tickState.multiplier - 1.0f);
+  float extraZ = g_tickState.baseVz * (g_tickState.multiplier - 1.0f);
   const float extraLength = horizontalLength(extraX, extraZ);
   if (extraLength > kMaxExtraBlocksPerTick) {
     const float scale = kMaxExtraBlocksPerTick / extraLength;
@@ -130,13 +214,106 @@ void applySpeed(void *actor) {
 
   position[0] += extraX;
   position[2] += extraZ;
+
+  uint32_t count = g_tickLogCounter.load(std::memory_order_relaxed);
+  if (count % 20 == 0) {
+    __android_log_print(
+        ANDROID_LOG_INFO, kTag,
+        "position fallback actor=%p actual=%.3f base=%.3f extra=(%.3f,%.3f)",
+        actor, actual, baseMovement, extraX, extraZ);
+  }
+}
+
+bool isMinecraftAddress(uintptr_t address) {
+  Dl_info info{};
+  if (dladdr(reinterpret_cast<void *>(address), &info) == 0) {
+    return true;
+  }
+  return info.dli_fname == nullptr ||
+         std::strstr(info.dli_fname, kMinecraftLibrary) != nullptr;
+}
+
+void baseTickDetour(void *actor) {
+  void *localPlayer = g_localPlayer.load(std::memory_order_relaxed);
+  const bool isLocal = localPlayer && actor == localPlayer;
+  if (isLocal) {
+    applySpeed(actor);
+  }
+  if (g_baseTickOriginal) {
+    g_baseTickOriginal(actor);
+  }
+  if (isLocal) {
+    applyPositionFallback(actor);
+  }
+}
+
+bool installBaseTickHook(void *localPlayer) {
+  if (g_baseTickHookInstalled) {
+    return true;
+  }
+  if (g_baseTickHookAttempted || !localPlayer) {
+    return false;
+  }
+  g_baseTickHookAttempted = true;
+
+  auto **vtable = *reinterpret_cast<void ***>(localPlayer);
+  if (!vtable) {
+    logWarning("Local player vtable is null");
+    return false;
+  }
+
+  const uintptr_t baseTick = reinterpret_cast<uintptr_t>(vtable[25]);
+  if (!baseTick || baseTick == g_normalTickAddress) {
+    logWarning("Actor::baseTick vtable entry is invalid");
+    return false;
+  }
+  if (!isMinecraftAddress(baseTick)) {
+    logWarning("Actor::baseTick vtable entry is not in libminecraftpe");
+    return false;
+  }
+  if (pl::memory::hook((pl::memory::FuncPtr)baseTick,
+                       (pl::memory::FuncPtr)baseTickDetour,
+                       (pl::memory::FuncPtr *)&g_baseTickOriginal) != 0) {
+    logWarning("Unable to hook Actor::baseTick");
+    return false;
+  }
+
+  g_baseTickAddress = baseTick;
+  g_baseTickHookInstalled = true;
+  __android_log_print(ANDROID_LOG_INFO, kTag,
+                      "Actor::baseTick hooked at %p (vtable[25])",
+                      reinterpret_cast<void *>(baseTick));
+  return true;
 }
 
 void normalTickDetour(void *actor) {
+  if (actor) {
+    void *clientLocal = g_clientLocalPlayer.load(std::memory_order_relaxed);
+    if (!clientLocal || actor == clientLocal) {
+      void *previous = g_localPlayer.exchange(actor, std::memory_order_acq_rel);
+      if (!previous) {
+        __android_log_print(ANDROID_LOG_INFO, kTag,
+                            "local player from normalTick=%p", actor);
+      } else if (previous != actor) {
+        __android_log_print(ANDROID_LOG_WARN, kTag,
+                            "local player changed %p -> %p", previous, actor);
+      }
+    }
+    if (!g_clientLocalPlayer.load(std::memory_order_relaxed) &&
+        !g_baseTickHookInstalled && !g_baseTickHookAttempted) {
+      installBaseTickHook(actor);
+    }
+  }
+
+  if (!g_baseTickHookInstalled) {
+    applySpeed(actor);
+  }
   if (g_normalTickOriginal) {
     g_normalTickOriginal(actor);
   }
-  applySpeed(actor);
+  if (!g_baseTickHookInstalled) {
+    applyPositionFallback(actor);
+  }
 }
 
 void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
@@ -145,7 +322,15 @@ void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
                      : nullptr;
 
   if (clientInstance && g_getLocalPlayer) {
-    g_localPlayer.store(g_getLocalPlayer(clientInstance), std::memory_order_release);
+    void *localPlayer = g_getLocalPlayer(clientInstance);
+    g_clientLocalPlayer.store(localPlayer, std::memory_order_release);
+    if (localPlayer) {
+      void *previous = g_localPlayer.exchange(localPlayer, std::memory_order_acq_rel);
+      if (localPlayer != previous) {
+        __android_log_print(ANDROID_LOG_INFO, kTag, "local player=%p", localPlayer);
+      }
+      installBaseTickHook(localPlayer);
+    }
   }
 
   return result;
@@ -175,6 +360,8 @@ bool initialize() {
     logWarning("Unable to resolve required Minecraft signatures");
     return false;
   }
+
+  g_normalTickAddress = normalTickAddress;
 
   __android_log_print(ANDROID_LOG_INFO, kTag,
                       "1.26.60 signatures: normalTick=%p clientUpdate=%p getLocalPlayer=%p",
@@ -222,7 +409,9 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_SpeedMod_nativeInit(
 extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_SpeedMod_nativeSetEnabled(
     JNIEnv *, jclass, jboolean enabled) {
-  g_enabled.store(enabled == JNI_TRUE, std::memory_order_relaxed);
+  const bool value = enabled == JNI_TRUE;
+  g_enabled.store(value, std::memory_order_relaxed);
+  __android_log_print(ANDROID_LOG_INFO, kTag, "enabled=%d", value ? 1 : 0);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

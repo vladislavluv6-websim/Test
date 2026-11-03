@@ -8,5 +8,5 @@ target_compile_options(speedmod PRIVATE
         -fvisibility=hidden
         -fvisibility-inlines-hidden)
 
-target_link_libraries(speedmod PRIVATE preloader log)
+target_link_libraries(speedmod PRIVATE preloader log dl)
 target_link_options(speedmod PRIVATE -Wl,-z,max-page-size=16384)
