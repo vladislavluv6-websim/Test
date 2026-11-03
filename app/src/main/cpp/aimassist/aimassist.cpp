@@ -68,8 +68,8 @@ struct Vec2 {
 };
 
 struct TurnDelta {
+  float pitchUp;
   float yaw;
-  float pitch;
 };
 
 struct Vec3 {
@@ -322,7 +322,7 @@ void aimAtLocalPlayer(void *localPlayer) {
   const float stepYaw = std::clamp(deltaYaw, -maxStep, maxStep);
   const float stepPitch = std::clamp(deltaPitch, -maxStep, maxStep);
 
-  const TurnDelta delta{stepYaw, stepPitch};
+  const TurnDelta delta{-stepPitch, stepYaw};
   g_applyTurnDelta(localPlayer, delta);
 
   uint32_t count = g_targetLogCounter.fetch_add(1, std::memory_order_relaxed);
@@ -332,9 +332,9 @@ void aimAtLocalPlayer(void *localPlayer) {
     __android_log_print(
         ANDROID_LOG_INFO, kTag,
         "target=%p dist=%.2f desired=(pitch %.2f, yaw %.2f) current=(pitch %.2f, yaw %.2f) "
-        "step=(yaw %.2f, pitch %.2f) after=(pitch %.2f, yaw %.2f) strength=%.0f",
+        "step=(pitchUp %.2f, yaw %.2f) after=(pitch %.2f, yaw %.2f) strength=%.0f",
         target->actor, target->distance, target->desiredPitch, target->desiredYaw,
-        current.pitch, current.yaw, stepYaw, stepPitch, after.pitch, after.yaw,
+        current.pitch, current.yaw, -stepPitch, stepYaw, after.pitch, after.yaw,
         g_strength.load(std::memory_order_relaxed));
   }
 }
