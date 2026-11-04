@@ -50,12 +50,6 @@ constexpr uintptr_t kActorStateVectorComponent = 0x228;
 constexpr uintptr_t kActorRotationComponent = 0x238;
 constexpr uintptr_t kStatePosition = 0;
 
-// Actor vtable slots (1.26.x, Itanium ABI, indices from the address point).
-// attack(Actor&) is a virtual on Actor overridden by Player.
-constexpr size_t kActorAttackVtableSlot = 141;
-// Mob::swing() is a virtual on Mob; Player/LocalPlayer inherit it.
-constexpr size_t kMobSwingVtableSlot = 176;
-
 constexpr float kEyeHeight = 1.62f;
 constexpr float kTargetCenterOffset = 0.9f;
 constexpr float kDefaultRange = 8.0f;
@@ -69,8 +63,8 @@ constexpr float kLegitDeadzoneDegrees = 1.5f;
 constexpr float kMaxTurnSpeedDegreesPerSecond = 1800.0f;
 constexpr float kLegitTurnSpeedMin = 340.0f;
 constexpr float kLegitTurnSpeedMax = 520.0f;
-constexpr float kTriggerFovDegrees = 4.0f;
-constexpr float kTriggerMaxDistance = 5.0f;
+constexpr float kTriggerFovDegrees = 2.0f;
+constexpr float kTriggerMaxDistance = 3.4f;
 constexpr int kTriggerDefaultDelayMs = 250;
 constexpr int kTriggerMinDelayMs = 120;
 constexpr int kTriggerMaxDelayMs = 400;
@@ -104,16 +98,12 @@ using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
-using ActorAttackFn = bool (*)(void *, void *);
-using MobSwingFn = void (*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientInstanceUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
-ActorAttackFn g_actorAttack = nullptr;
-MobSwingFn g_mobSwing = nullptr;
 
 std::atomic_bool g_enabled{false};
 std::atomic_bool g_legitMode{true};
@@ -137,11 +127,16 @@ std::atomic<void *> g_triggerTarget{nullptr};
 std::chrono::steady_clock::time_point g_targetLockUntil{};
 std::chrono::steady_clock::time_point g_lastAimTime{};
 std::chrono::steady_clock::time_point g_reactionUntil{};
-std::chrono::steady_clock::time_point g_onTargetSince{};
-std::chrono::steady_clock::time_point g_nextAttackAt{};
+std::chrono::steady_clock::time_point g_humanPauseUntil{};
 
 float g_turnSpeed = kLegitTurnSpeedMax;
-float g_aimGain = 0.25f;
+float g_aimResponsiveness = 7.0f;
+float g_humanOffsetPitch = 0.0f;
+float g_humanOffsetYaw = 0.0f;
+float g_noiseFreqX = 0.55f;
+float g_noiseFreqY = 0.47f;
+float g_noisePhaseX = 0.0f;
+float g_noisePhaseY = 0.0f;
 float g_smoothedPitch = 0.0f;
 float g_smoothedYaw = 0.0f;
 bool g_hasSmoothed = false;
@@ -251,61 +246,6 @@ bool writeRotation(void *actor, float pitch, float yaw) {
   return true;
 }
 
-bool isMinecraftAddress(uintptr_t address) {
-  if (!address) {
-    return false;
-  }
-  Dl_info info{};
-  if (dladdr(reinterpret_cast<void *>(address), &info) == 0 || !info.dli_fname) {
-    return false;
-  }
-  const char *name = info.dli_fname;
-  for (const char *p = name; *p; ++p) {
-    if (p[0] == 'l' && p[1] == 'i' && p[2] == 'b' && p[3] == 'm' &&
-        p[4] == 'i' && p[5] == 'n' && p[6] == 'e') {
-      return true;
-    }
-  }
-  return false;
-}
-
-void *resolveVtableSlot(void *instance, size_t slot) {
-  if (!instance) {
-    return nullptr;
-  }
-  auto **vtable = *reinterpret_cast<void ***>(instance);
-  if (!vtable) {
-    return nullptr;
-  }
-  void *fn = vtable[slot];
-  if (!isMinecraftAddress(reinterpret_cast<uintptr_t>(fn))) {
-    return nullptr;
-  }
-  return fn;
-}
-
-void resolveAttackFunctions(void *localPlayer) {
-  if (!localPlayer || (g_actorAttack && g_mobSwing)) {
-    return;
-  }
-  if (!g_actorAttack) {
-    void *fn = resolveVtableSlot(localPlayer, kActorAttackVtableSlot);
-    if (fn) {
-      g_actorAttack = reinterpret_cast<ActorAttackFn>(fn);
-      __android_log_print(ANDROID_LOG_INFO, kTag, "Player::attack resolved=%p slot=%zu",
-                          fn, kActorAttackVtableSlot);
-    }
-  }
-  if (!g_mobSwing) {
-    void *fn = resolveVtableSlot(localPlayer, kMobSwingVtableSlot);
-    if (fn) {
-      g_mobSwing = reinterpret_cast<MobSwingFn>(fn);
-      __android_log_print(ANDROID_LOG_INFO, kTag, "Mob::swing resolved=%p slot=%zu",
-                          fn, kMobSwingVtableSlot);
-    }
-  }
-}
-
 struct AimCandidate {
   void *actor = nullptr;
   float distance = 0.0f;
@@ -325,8 +265,6 @@ void aimAtLocalPlayer(void *localPlayer) {
   if (!aimEnabled && !triggerEnabled) {
     return;
   }
-
-  resolveAttackFunctions(localPlayer);
 
   Vec3 eye{};
   if (!readPosition(localPlayer, &eye)) {
@@ -453,9 +391,16 @@ void aimAtLocalPlayer(void *localPlayer) {
     g_aimSettled = false;
     g_turnSpeed = legit ? randomRange(kLegitTurnSpeedMin, kLegitTurnSpeedMax)
                         : kMaxTurnSpeedDegreesPerSecond;
-    g_aimGain = legit ? randomRange(0.16f, 0.22f) : 1.0f;
+    g_aimResponsiveness = legit ? randomRange(5.0f, 7.5f)
+                                : randomRange(18.0f, 24.0f);
+    g_humanOffsetPitch = randomRange(-0.06f, 0.06f);
+    g_humanOffsetYaw = randomRange(-0.06f, 0.06f);
+    g_noiseFreqX = randomRange(0.35f, 0.8f);
+    g_noiseFreqY = randomRange(0.35f, 0.8f);
+    g_noisePhaseX = randomRange(0.0f, 6.2831853f);
+    g_noisePhaseY = randomRange(0.0f, 6.2831853f);
     g_reactionUntil = now + std::chrono::milliseconds(
-        legit ? randomRangeInt(140, 280) : 0);
+        legit ? randomRangeInt(160, 320) : 0);
   }
 
   float desiredPitch = target->desiredPitch;
@@ -467,6 +412,17 @@ void aimAtLocalPlayer(void *localPlayer) {
     desiredPitch = g_smoothedPitch;
     desiredYaw = g_smoothedYaw;
   }
+
+  // Human micro-sway + tiny per-target offset. Real players are never perfectly
+  // still; this breaks "perfect tracking" ML/Polar heuristics without shaking.
+  const float seconds =
+      std::chrono::duration<float>(now.time_since_epoch()).count();
+  const float swayPitch =
+      std::sin(seconds * g_noiseFreqX * 6.2831853f + g_noisePhaseX) * 0.035f;
+  const float swayYaw =
+      std::sin(seconds * g_noiseFreqY * 6.2831853f + g_noisePhaseY) * 0.035f;
+  desiredPitch += g_humanOffsetPitch + swayPitch;
+  desiredYaw += g_humanOffsetYaw + swayYaw;
 
   const float deltaYaw = wrapDegrees(desiredYaw - current.yaw);
   const float deltaPitch = wrapDegrees(desiredPitch - current.pitch);
@@ -485,40 +441,17 @@ void aimAtLocalPlayer(void *localPlayer) {
     g_aimSettled = false;
   }
 
-  // --- Trigger bot: native attack through the game's own attack/swing path ---
+  // --- Trigger bot readiness ---
+  // We only publish "crosshair is on a player". Timing, cooldown and the actual
+  // attack are done on the Java side through the game's real input pipeline, so
+  // the server receives a genuine vanilla attack packet.
   const bool onTarget =
       targetAngular <= kTriggerFovDegrees && target->distance <= kTriggerMaxDistance;
   const bool settled = g_aimSettled &&
-                       now - g_aimSettledSince >= std::chrono::milliseconds(150);
-
-  if (triggerEnabled && onTarget && (aimEnabled ? settled : true)) {
-    g_triggerTarget.store(target->actor, std::memory_order_relaxed);
-    if (g_onTargetSince.time_since_epoch().count() == 0) {
-      g_onTargetSince = now;
-    }
-    const int delayMs = g_triggerDelayMs.load(std::memory_order_relaxed);
-    const bool ready = now - g_onTargetSince >= std::chrono::milliseconds(delayMs);
-    g_triggerReady.store(ready, std::memory_order_relaxed);
-
-    if (ready && now >= g_nextAttackAt) {
-      const int jitter = randomRangeInt(40, std::max(120, delayMs));
-      g_nextAttackAt = now + std::chrono::milliseconds(delayMs + jitter);
-      if (randomRangeInt(0, 99) >= 15) {
-        // Real attack: the game emits the InventoryTransaction attack packet and
-        // the vanilla arm swing animation itself. No synthetic input events.
-        if (g_mobSwing) {
-          g_mobSwing(localPlayer);
-        }
-        if (g_actorAttack) {
-          g_actorAttack(localPlayer, target->actor);
-        }
-      }
-    }
-  } else {
-    g_triggerReady.store(false, std::memory_order_relaxed);
-    g_triggerTarget.store(nullptr, std::memory_order_relaxed);
-    g_onTargetSince = std::chrono::steady_clock::time_point{};
-  }
+                       now - g_aimSettledSince >= std::chrono::milliseconds(120);
+  const bool ready = triggerEnabled && onTarget && settled;
+  g_triggerReady.store(ready, std::memory_order_relaxed);
+  g_triggerTarget.store(ready ? target->actor : nullptr, std::memory_order_relaxed);
 
   if (!aimEnabled) {
     return;
@@ -550,19 +483,33 @@ void aimAtLocalPlayer(void *localPlayer) {
     dt = 0.1f;
   }
 
-  float stepYaw = 0.0f;
-  float stepPitch = 0.0f;
-  if (legit) {
-    const float maxStep = g_turnSpeed * strength * dt;
-    stepYaw = std::clamp(deltaYaw * g_aimGain, -maxStep, maxStep);
-    stepPitch = std::clamp(deltaPitch * g_aimGain, -maxStep, maxStep);
-    if (std::fabs(stepYaw) < 0.02f) stepYaw = 0.0f;
-    if (std::fabs(stepPitch) < 0.02f) stepPitch = 0.0f;
-  } else {
-    const float maxStep = kMaxTurnSpeedDegreesPerSecond * strength * dt;
-    stepYaw = std::clamp(deltaYaw, -maxStep, maxStep);
-    stepPitch = std::clamp(deltaPitch, -maxStep, maxStep);
+  // Occasional human micro-pause; breaks constant velocities that ML anticheats
+  // (and Polar's rotation heuristics) look for.
+  if (legit && randomRangeInt(0, 999) < 2) {
+    g_humanPauseUntil = now + std::chrono::milliseconds(randomRangeInt(40, 110));
   }
+  if (now < g_humanPauseUntil) {
+    return;
+  }
+
+  // Exponential ease-out: fast when far, gentle when close. This is the smooth
+  // "Java cheat" camera feel instead of a snap.
+  float alpha = 1.0f - std::exp(-g_aimResponsiveness * dt);
+  alpha = std::clamp(alpha, 0.0f, 1.0f);
+  const float speedScale = legit ? strength : 1.0f;
+
+  const float maxStep =
+      (legit ? g_turnSpeed : kMaxTurnSpeedDegreesPerSecond) * strength * dt;
+  float stepYaw = std::clamp(deltaYaw * alpha * speedScale, -maxStep, maxStep);
+  float stepPitch = std::clamp(deltaPitch * alpha * speedScale, -maxStep, maxStep);
+
+  // Quantize to a tiny grid and add sub-step noise so the yaw/pitch deltas do
+  // not share a detectable GCD (Polar checks for that).
+  constexpr float kQuantum = 0.01f;
+  stepYaw = std::round(stepYaw / kQuantum) * kQuantum + randomRange(-0.0015f, 0.0015f);
+  stepPitch = std::round(stepPitch / kQuantum) * kQuantum + randomRange(-0.0015f, 0.0015f);
+  if (std::fabs(stepYaw) < 0.02f) stepYaw = 0.0f;
+  if (std::fabs(stepPitch) < 0.02f) stepPitch = 0.0f;
 
   if (stepYaw == 0.0f && stepPitch == 0.0f) {
     return;
@@ -606,7 +553,6 @@ void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
       void *previous = g_localPlayer.exchange(localPlayer, std::memory_order_acq_rel);
       if (previous != localPlayer) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "local player=%p", localPlayer);
-        resolveAttackFunctions(localPlayer);
       }
     }
   }
@@ -744,7 +690,6 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTrigg
   if (enabled != JNI_TRUE) {
     g_triggerReady.store(false, std::memory_order_relaxed);
     g_triggerTarget.store(nullptr, std::memory_order_relaxed);
-    g_onTargetSince = std::chrono::steady_clock::time_point{};
   }
 }
 

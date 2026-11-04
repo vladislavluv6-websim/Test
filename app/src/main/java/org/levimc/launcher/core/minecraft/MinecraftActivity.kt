@@ -429,6 +429,43 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         val metrics = resources.displayMetrics
         val x = metrics.widthPixels / 2f
         val y = metrics.heightPixels / 2f
+
+        // The game registers its touch callback through PreloaderInput. Sending
+        // the synthetic tap through that same pipeline (not super.dispatchTouch)
+        // makes Bedrock treat it as a real screen tap and produce a vanilla
+        // attack packet with the correct swing animation.
+        val touchHandled = try {
+            PreloaderInput.onTouch(MotionEvent.ACTION_DOWN, 0, x, y)
+        } catch (throwable: Throwable) {
+            false
+        }
+        if (touchHandled) {
+            window.decorView.postDelayed({
+                try {
+                    PreloaderInput.onTouch(MotionEvent.ACTION_UP, 0, x, y)
+                } catch (ignored: Throwable) {
+                }
+            }, 45L)
+            return true
+        }
+
+        // Mouse-mode fallback (DeX / Chromebooks / mouse-enabled builds).
+        val mouseHandled = try {
+            PreloaderInput.onMouse(MotionEvent.BUTTON_PRIMARY, true)
+        } catch (throwable: Throwable) {
+            false
+        }
+        if (mouseHandled) {
+            window.decorView.postDelayed({
+                try {
+                    PreloaderInput.onMouse(MotionEvent.BUTTON_PRIMARY, false)
+                } catch (ignored: Throwable) {
+                }
+            }, 45L)
+            return true
+        }
+
+        // Last resort: raw touch to the game view.
         val now = SystemClock.uptimeMillis()
         val downEvent = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
         val downHandled = try {
