@@ -13,6 +13,7 @@
 
 #include "pl/memory/Hook.hpp"
 #include "pl/memory/Signature.hpp"
+#include "pl/memory/Vtable.hpp"
 
 namespace {
 
@@ -33,10 +34,6 @@ constexpr const char *kClientInstanceGetLocalPlayerSignature =
     "? ? ? ? E0 03 1F AA ? ? ? F9 ? ? ? F8 1F 01 09 EB ? ? ? 54 ? ? ? A9 ? ? ? F9 "
     "? ? ? 91 C0 03 5F D6 ? ? ? ? C0 03 5F D6";
 
-constexpr const char *kApplyTurnDeltaSignature =
-    "? ? ? D1 ? ? ? FD ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 56 D0 3B D5 "
-    "F3 03 00 AA F4 03 01 AA ? ? ? F9 ? ? ? F8 ? ? ? F9 ? ? ? F9";
-
 constexpr const char *kFetchNearbyActorsSignature =
     "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 "
     "5B D0 3B D5 F3 03 08 AA F5 03 02 2A";
@@ -49,17 +46,14 @@ constexpr const char *kActorIsPlayerSignature =
     "? ? ? 92 ? ? ? B8 28 01 08 4A ? ? ? 12 1F 01 09 6B E0 27 9F 1A C0 03 5F D6 "
     "E0 03 1F 2A C0 03 5F D6 ? ? ? D1 ? ? ? FD";
 
-// Mob::swing signature (1.26.x): sub SP, MOV X19,X0, then body; we hook vtable slot too.
-constexpr const char *kMobSwingSignature =
-    "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? 91 F3 03 00 AA ? ? ? 94 ? ? ? B9";
-
 constexpr uintptr_t kActorStateVectorComponent = 0x228;
 constexpr uintptr_t kActorRotationComponent = 0x238;
 constexpr uintptr_t kStatePosition = 0;
 
-// Vtable slots (Itanium, from vtable address point)
-// Mob::swing is a virtual on Mob; LocalPlayer inherits Player->Mob->Actor.
-// We resolve it from the local player's own vtable at runtime.
+// Actor vtable slots (1.26.x, Itanium ABI, indices from the address point).
+// attack(Actor&) is a virtual on Actor overridden by Player.
+constexpr size_t kActorAttackVtableSlot = 141;
+// Mob::swing() is a virtual on Mob; Player/LocalPlayer inherit it.
 constexpr size_t kMobSwingVtableSlot = 176;
 
 constexpr float kEyeHeight = 1.62f;
@@ -75,20 +69,15 @@ constexpr float kLegitDeadzoneDegrees = 1.5f;
 constexpr float kMaxTurnSpeedDegreesPerSecond = 1800.0f;
 constexpr float kLegitTurnSpeedMin = 340.0f;
 constexpr float kLegitTurnSpeedMax = 520.0f;
-constexpr float kTriggerFovDegrees = 2.5f;
-constexpr float kTriggerMaxDistance = 4.5f;
-constexpr int kTriggerDefaultDelayMs = 280;
+constexpr float kTriggerFovDegrees = 4.0f;
+constexpr float kTriggerMaxDistance = 5.0f;
+constexpr int kTriggerDefaultDelayMs = 250;
 constexpr int kTriggerMinDelayMs = 120;
 constexpr int kTriggerMaxDelayMs = 400;
 constexpr int kActorTypeMob = 0x100;
 
 struct Vec2 {
   float pitch;
-  float yaw;
-};
-
-struct TurnDelta {
-  float pitchUp;
   float yaw;
 };
 
@@ -113,24 +102,23 @@ struct ActorVec {
 using NormalTickFn = void (*)(void *);
 using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
-using ApplyTurnDeltaFn = void (*)(void *, const TurnDelta &);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
+using ActorAttackFn = bool (*)(void *, void *);
 using MobSwingFn = void (*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientInstanceUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
-ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
+ActorAttackFn g_actorAttack = nullptr;
 MobSwingFn g_mobSwing = nullptr;
 
 std::atomic_bool g_enabled{false};
 std::atomic_bool g_legitMode{true};
 std::atomic_bool g_triggerBotEnabled{false};
 std::atomic<int> g_triggerDelayMs{kTriggerDefaultDelayMs};
-std::atomic_bool g_onTarget{false};
 std::atomic_bool g_triggerReady{false};
 std::atomic<float> g_range{kDefaultRange};
 std::atomic<float> g_strength{100.0f};
@@ -144,8 +132,21 @@ bool g_installed = false;
 std::chrono::steady_clock::time_point g_lastInitAttempt{};
 
 std::atomic<void *> g_lockedTarget{nullptr};
+std::atomic<void *> g_lastTarget{nullptr};
+std::atomic<void *> g_triggerTarget{nullptr};
 std::chrono::steady_clock::time_point g_targetLockUntil{};
 std::chrono::steady_clock::time_point g_lastAimTime{};
+std::chrono::steady_clock::time_point g_reactionUntil{};
+std::chrono::steady_clock::time_point g_onTargetSince{};
+std::chrono::steady_clock::time_point g_nextAttackAt{};
+
+float g_turnSpeed = kLegitTurnSpeedMax;
+float g_aimGain = 0.25f;
+float g_smoothedPitch = 0.0f;
+float g_smoothedYaw = 0.0f;
+bool g_hasSmoothed = false;
+bool g_aimSettled = false;
+std::chrono::steady_clock::time_point g_aimSettledSince{};
 
 thread_local std::mt19937 g_rng{std::random_device{}()};
 
@@ -165,28 +166,12 @@ int randomRangeInt(int min, int max) {
   return dist(g_rng);
 }
 
-std::atomic<void *> g_lastTarget{nullptr};
-
 void clearTargetState() {
   g_lockedTarget.store(nullptr, std::memory_order_relaxed);
-  g_onTarget.store(false, std::memory_order_relaxed);
   g_triggerReady.store(false, std::memory_order_relaxed);
   g_lastTarget.store(nullptr, std::memory_order_relaxed);
+  g_triggerTarget.store(nullptr, std::memory_order_relaxed);
 }
-
-std::chrono::steady_clock::time_point g_reactionUntil{};
-std::chrono::steady_clock::time_point g_onTargetSince{};
-float g_turnSpeed = kLegitTurnSpeedMax;
-float g_aimGain = 0.25f;
-float g_smoothedPitch = 0.0f;
-float g_smoothedYaw = 0.0f;
-bool g_hasSmoothed = false;
-bool g_aimSettled = false;
-std::chrono::steady_clock::time_point g_aimSettledSince{};
-
-// Trigger bot native attack state
-std::chrono::steady_clock::time_point g_nextAttackAt{};
-std::atomic<void *> g_pendingSwingTarget{nullptr};
 
 void logInfo(const char *message) {
   __android_log_print(ANDROID_LOG_INFO, kTag, "%s", message);
@@ -242,9 +227,10 @@ bool readRotation(void *actor, Vec2 *out) {
   return true;
 }
 
-// Direct rotation write into the actor's rotation component.
-// This bypasses applyTurnDelta's per-tick accumulation and avoids the
-// packet-rotation desync that causes screen shake and server flags.
+// Camera-only aim: write the final rotation straight into the actor's rotation
+// component. One consistent value per tick is serialized into PlayerAuthInput,
+// so the server sees vanilla-looking movement and the client never fights
+// itself (no shake).
 bool writeRotation(void *actor, float pitch, float yaw) {
   if (!actor) {
     return false;
@@ -258,7 +244,6 @@ bool writeRotation(void *actor, float pitch, float yaw) {
   if (!std::isfinite(pitch) || !std::isfinite(yaw)) {
     return false;
   }
-  // Clamp pitch to vanilla limits to avoid server-side invalid rotation kicks.
   if (pitch > 90.0f) pitch = 90.0f;
   if (pitch < -90.0f) pitch = -90.0f;
   values[0] = pitch;
@@ -266,39 +251,59 @@ bool writeRotation(void *actor, float pitch, float yaw) {
   return true;
 }
 
-// Resolve Mob::swing from the local player's vtable. LocalPlayer is a Player,
-// which is a Mob, so its primary vtable contains the swing slot.
-bool resolveSwingFromPlayer(void *localPlayer) {
-  if (g_mobSwing || !localPlayer) {
-    return g_mobSwing != nullptr;
-  }
-  auto **vtable = *reinterpret_cast<void ***>(localPlayer);
-  if (!vtable) {
-    return false;
-  }
-  void *fn = vtable[kMobSwingVtableSlot];
-  if (!fn) {
+bool isMinecraftAddress(uintptr_t address) {
+  if (!address) {
     return false;
   }
   Dl_info info{};
-  if (dladdr(fn, &info) == 0 || !info.dli_fname) {
+  if (dladdr(reinterpret_cast<void *>(address), &info) == 0 || !info.dli_fname) {
     return false;
   }
   const char *name = info.dli_fname;
-  bool fromGame = false;
   for (const char *p = name; *p; ++p) {
-    if (p[0] == 'l' && p[1] == 'i' && p[2] == 'b' && p[3] == 'm') {
-      fromGame = true;
-      break;
+    if (p[0] == 'l' && p[1] == 'i' && p[2] == 'b' && p[3] == 'm' &&
+        p[4] == 'i' && p[5] == 'n' && p[6] == 'e') {
+      return true;
     }
   }
-  if (!fromGame) {
-    return false;
+  return false;
+}
+
+void *resolveVtableSlot(void *instance, size_t slot) {
+  if (!instance) {
+    return nullptr;
   }
-  g_mobSwing = reinterpret_cast<MobSwingFn>(fn);
-  __android_log_print(ANDROID_LOG_INFO, kTag, "Mob::swing resolved=%p slot=%zu",
-                      fn, kMobSwingVtableSlot);
-  return true;
+  auto **vtable = *reinterpret_cast<void ***>(instance);
+  if (!vtable) {
+    return nullptr;
+  }
+  void *fn = vtable[slot];
+  if (!isMinecraftAddress(reinterpret_cast<uintptr_t>(fn))) {
+    return nullptr;
+  }
+  return fn;
+}
+
+void resolveAttackFunctions(void *localPlayer) {
+  if (!localPlayer || (g_actorAttack && g_mobSwing)) {
+    return;
+  }
+  if (!g_actorAttack) {
+    void *fn = resolveVtableSlot(localPlayer, kActorAttackVtableSlot);
+    if (fn) {
+      g_actorAttack = reinterpret_cast<ActorAttackFn>(fn);
+      __android_log_print(ANDROID_LOG_INFO, kTag, "Player::attack resolved=%p slot=%zu",
+                          fn, kActorAttackVtableSlot);
+    }
+  }
+  if (!g_mobSwing) {
+    void *fn = resolveVtableSlot(localPlayer, kMobSwingVtableSlot);
+    if (fn) {
+      g_mobSwing = reinterpret_cast<MobSwingFn>(fn);
+      __android_log_print(ANDROID_LOG_INFO, kTag, "Mob::swing resolved=%p slot=%zu",
+                          fn, kMobSwingVtableSlot);
+    }
+  }
 }
 
 struct AimCandidate {
@@ -311,14 +316,17 @@ struct AimCandidate {
 
 void aimAtLocalPlayer(void *localPlayer) {
   if (!localPlayer || localPlayer != g_localPlayer.load(std::memory_order_acquire) ||
-      !g_enabled.load(std::memory_order_relaxed) ||
       !g_fetchNearbyActors || !g_actorIsPlayer) {
     return;
   }
 
-  if (!g_mobSwing) {
-    resolveSwingFromPlayer(localPlayer);
+  const bool aimEnabled = g_enabled.load(std::memory_order_relaxed);
+  const bool triggerEnabled = g_triggerBotEnabled.load(std::memory_order_relaxed);
+  if (!aimEnabled && !triggerEnabled) {
+    return;
   }
+
+  resolveAttackFunctions(localPlayer);
 
   Vec3 eye{};
   if (!readPosition(localPlayer, &eye)) {
@@ -438,7 +446,6 @@ void aimAtLocalPlayer(void *localPlayer) {
 
   if (target->actor != g_lastTarget.load(std::memory_order_relaxed)) {
     g_lastTarget.store(target->actor, std::memory_order_relaxed);
-    g_onTarget.store(false, std::memory_order_relaxed);
     g_triggerReady.store(false, std::memory_order_relaxed);
     g_smoothedPitch = current.pitch;
     g_smoothedYaw = current.yaw;
@@ -478,37 +485,43 @@ void aimAtLocalPlayer(void *localPlayer) {
     g_aimSettled = false;
   }
 
+  // --- Trigger bot: native attack through the game's own attack/swing path ---
   const bool onTarget =
       targetAngular <= kTriggerFovDegrees && target->distance <= kTriggerMaxDistance;
   const bool settled = g_aimSettled &&
                        now - g_aimSettledSince >= std::chrono::milliseconds(150);
-  if (g_triggerBotEnabled.load(std::memory_order_relaxed) && onTarget && settled) {
-    if (!g_onTarget.exchange(true, std::memory_order_relaxed)) {
+
+  if (triggerEnabled && onTarget && (aimEnabled ? settled : true)) {
+    g_triggerTarget.store(target->actor, std::memory_order_relaxed);
+    if (g_onTargetSince.time_since_epoch().count() == 0) {
       g_onTargetSince = now;
     }
     const int delayMs = g_triggerDelayMs.load(std::memory_order_relaxed);
-    g_triggerReady.store(now - g_onTargetSince >= std::chrono::milliseconds(delayMs),
-                         std::memory_order_relaxed);
-  } else {
-    g_onTarget.store(false, std::memory_order_relaxed);
-    g_triggerReady.store(false, std::memory_order_relaxed);
-  }
+    const bool ready = now - g_onTargetSince >= std::chrono::milliseconds(delayMs);
+    g_triggerReady.store(ready, std::memory_order_relaxed);
 
-  // Trigger bot native attack: schedule a swing + attack when ready.
-  // We call Mob::swing directly on the local player so the game produces the
-  // vanilla animation + InventoryTransaction attack packet. No Java input.
-  if (g_triggerBotEnabled.load(std::memory_order_relaxed) && onTarget &&
-      settled && g_mobSwing) {
-    const int delayMs = g_triggerDelayMs.load(std::memory_order_relaxed);
-    if (now >= g_nextAttackAt &&
-        now - g_onTargetSince >= std::chrono::milliseconds(delayMs)) {
-      // Randomized cooldown: base delay + up to base jitter, occasional skip.
-      const int jitter = randomRangeInt(0, std::max(120, delayMs));
+    if (ready && now >= g_nextAttackAt) {
+      const int jitter = randomRangeInt(40, std::max(120, delayMs));
       g_nextAttackAt = now + std::chrono::milliseconds(delayMs + jitter);
-      if (randomRangeInt(0, 99) >= 18) {
-        g_mobSwing(localPlayer);
+      if (randomRangeInt(0, 99) >= 15) {
+        // Real attack: the game emits the InventoryTransaction attack packet and
+        // the vanilla arm swing animation itself. No synthetic input events.
+        if (g_mobSwing) {
+          g_mobSwing(localPlayer);
+        }
+        if (g_actorAttack) {
+          g_actorAttack(localPlayer, target->actor);
+        }
       }
     }
+  } else {
+    g_triggerReady.store(false, std::memory_order_relaxed);
+    g_triggerTarget.store(nullptr, std::memory_order_relaxed);
+    g_onTargetSince = std::chrono::steady_clock::time_point{};
+  }
+
+  if (!aimEnabled) {
+    return;
   }
 
   if (legit && now < g_reactionUntil) {
@@ -555,9 +568,6 @@ void aimAtLocalPlayer(void *localPlayer) {
     return;
   }
 
-  // Write rotation directly into the actor component instead of applyTurnDelta.
-  // This produces a single, consistent rotation per tick that matches what the
-  // game serializes into PlayerAuthInput, eliminating shake and server flags.
   const float newPitch = current.pitch + stepPitch;
   const float newYaw = wrapDegrees(current.yaw + stepYaw);
   writeRotation(localPlayer, newPitch, newYaw);
@@ -596,7 +606,7 @@ void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
       void *previous = g_localPlayer.exchange(localPlayer, std::memory_order_acq_rel);
       if (previous != localPlayer) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "local player=%p", localPlayer);
-        resolveSwingFromPlayer(localPlayer);
+        resolveAttackFunctions(localPlayer);
       }
     }
   }
@@ -623,32 +633,28 @@ bool initialize() {
       pl::memory::resolveSignature(kClientInstanceUpdateSignature, kMinecraftLibrary);
   const uintptr_t localPlayerAddress =
       pl::memory::resolveSignature(kClientInstanceGetLocalPlayerSignature, kMinecraftLibrary);
-  const uintptr_t applyTurnDeltaAddress =
-      pl::memory::resolveSignature(kApplyTurnDeltaSignature, kMinecraftLibrary);
   const uintptr_t fetchNearbyActorsAddress =
       pl::memory::resolveSignature(kFetchNearbyActorsSignature, kMinecraftLibrary);
   const uintptr_t actorIsPlayerAddress =
       pl::memory::resolveSignature(kActorIsPlayerSignature, kMinecraftLibrary);
 
   if (!normalTickAddress || !clientUpdateAddress || !localPlayerAddress ||
-      !applyTurnDeltaAddress || !fetchNearbyActorsAddress || !actorIsPlayerAddress) {
+      !fetchNearbyActorsAddress || !actorIsPlayerAddress) {
     logWarning("Unable to resolve required Minecraft signatures");
     return false;
   }
 
   g_getLocalPlayer = reinterpret_cast<GetLocalPlayerFn>(localPlayerAddress);
-  g_applyTurnDelta = reinterpret_cast<ApplyTurnDeltaFn>(applyTurnDeltaAddress);
   g_fetchNearbyActors = reinterpret_cast<FetchNearbyActorsFn>(fetchNearbyActorsAddress);
   g_actorIsPlayer = reinterpret_cast<ActorIsPlayerFn>(actorIsPlayerAddress);
 
   __android_log_print(
       ANDROID_LOG_INFO, kTag,
       "1.26.60 signatures: normalTick=%p clientUpdate=%p getLocalPlayer=%p "
-      "applyTurnDelta=%p fetchNearby=%p isPlayer=%p",
+      "fetchNearby=%p isPlayer=%p",
       reinterpret_cast<void *>(normalTickAddress),
       reinterpret_cast<void *>(clientUpdateAddress),
       reinterpret_cast<void *>(localPlayerAddress),
-      reinterpret_cast<void *>(applyTurnDeltaAddress),
       reinterpret_cast<void *>(fetchNearbyActorsAddress),
       reinterpret_cast<void *>(actorIsPlayerAddress));
 
@@ -736,8 +742,9 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTrigg
     JNIEnv *, jclass, jboolean enabled) {
   g_triggerBotEnabled.store(enabled == JNI_TRUE, std::memory_order_relaxed);
   if (enabled != JNI_TRUE) {
-    g_onTarget.store(false, std::memory_order_relaxed);
     g_triggerReady.store(false, std::memory_order_relaxed);
+    g_triggerTarget.store(nullptr, std::memory_order_relaxed);
+    g_onTargetSince = std::chrono::steady_clock::time_point{};
   }
 }
 

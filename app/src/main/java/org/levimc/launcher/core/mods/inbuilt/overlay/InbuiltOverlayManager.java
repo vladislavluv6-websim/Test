@@ -265,6 +265,7 @@ public class InbuiltOverlayManager {
             case ModIds.AUTO_SPRINT: controller = new AutoSprintOverlay(activity); break;
             case ModIds.SPEED: controller = new SpeedOverlay(activity); break;
             case ModIds.AIM_ASSIST: controller = new AimAssistOverlay(activity); break;
+            case ModIds.TRIGGER_BOT: controller = new TriggerBotOverlay(activity); break;
             case ModIds.VIRTUAL_CURSOR: controller = new VirtualCursorOverlay(activity); break;
             case ModIds.ZOOM:
                 if (zoomOverlay == null) zoomOverlay = new ZoomOverlay(activity);

@@ -32,7 +32,6 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_RANGE = "aim_assist_range";
     private static final String CFG_AIM_ASSIST_STRENGTH = "aim_assist_strength";
     private static final String CFG_AIM_ASSIST_LEGIT = "aim_assist_legit";
-    private static final String CFG_TRIGGER_BOT = "trigger_bot";
     private static final String CFG_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
@@ -77,6 +76,9 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.AIM_ASSIST,
                 R.string.inbuilt_mod_aim_assist, R.string.inbuilt_mod_aim_assist_desc,
+                groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.TRIGGER_BOT,
+                R.string.inbuilt_mod_trigger_bot, R.string.inbuilt_mod_trigger_bot_desc,
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.CHICK_PET,
                 R.string.inbuilt_mod_chick_pet, R.string.inbuilt_mod_chick_pet_desc,
@@ -338,16 +340,12 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "true", "", "",
                     String.valueOf(manager.isAimAssistLegitMode())));
-            configs.add(config(CFG_TRIGGER_BOT,
-                    context.getString(R.string.mod_config_trigger_bot),
-                    UnifiedMod.ConfigType.TOGGLE,
-                    "true", "", "",
-                    String.valueOf(manager.isTriggerBotEnabled())));
+        } else if (ModIds.TRIGGER_BOT.equals(modId)) {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "280", "120", "400",
-                    String.valueOf(manager.getTriggerBotDelay()), CFG_TRIGGER_BOT));
+                    "250", "120", "400",
+                    String.valueOf(manager.getTriggerBotDelay())));
         } else if (ModIds.VIRTUAL_CURSOR.equals(modId)) {
             configs.add(config(CFG_CURSOR_SENSITIVITY,
                     context.getString(R.string.mod_config_cursor_sensitivity_percent),
@@ -488,9 +486,6 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_LEGIT:
                 manager.setAimAssistLegitMode(parseBoolean(value));
-                break;
-            case CFG_TRIGGER_BOT:
-                manager.setTriggerBotEnabled(parseBoolean(value));
                 break;
             case CFG_TRIGGER_BOT_DELAY:
                 manager.setTriggerBotDelay(parseInt(value, manager.getTriggerBotDelay()));
