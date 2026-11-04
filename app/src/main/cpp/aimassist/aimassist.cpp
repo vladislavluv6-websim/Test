@@ -34,6 +34,10 @@ constexpr const char *kClientInstanceGetLocalPlayerSignature =
     "? ? ? ? E0 03 1F AA ? ? ? F9 ? ? ? F8 1F 01 09 EB ? ? ? 54 ? ? ? A9 ? ? ? F9 "
     "? ? ? 91 C0 03 5F D6 ? ? ? ? C0 03 5F D6";
 
+constexpr const char *kApplyTurnDeltaSignature =
+    "? ? ? D1 ? ? ? FD ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 56 D0 3B D5 "
+    "F3 03 00 AA F4 03 01 AA ? ? ? F9 ? ? ? F8 ? ? ? F9 ? ? ? F9";
+
 constexpr const char *kFetchNearbyActorsSignature =
     "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 "
     "5B D0 3B D5 F3 03 08 AA F5 03 02 2A";
@@ -75,6 +79,11 @@ struct Vec2 {
   float yaw;
 };
 
+struct TurnDelta {
+  float pitchUp;
+  float yaw;
+};
+
 struct Vec3 {
   float x;
   float y;
@@ -96,12 +105,14 @@ struct ActorVec {
 using NormalTickFn = void (*)(void *);
 using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
+using ApplyTurnDeltaFn = void (*)(void *, const TurnDelta &);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientInstanceUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
+ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 
@@ -131,6 +142,13 @@ std::chrono::steady_clock::time_point g_humanPauseUntil{};
 
 float g_turnSpeed = kLegitTurnSpeedMax;
 float g_aimResponsiveness = 7.0f;
+float g_velYaw = 0.0f;
+float g_velPitch = 0.0f;
+float g_virtualPitch = 0.0f;
+float g_virtualYaw = 0.0f;
+float g_lastReadPitch = 0.0f;
+float g_lastReadYaw = 0.0f;
+bool g_hasVirtual = false;
 float g_humanOffsetPitch = 0.0f;
 float g_humanOffsetYaw = 0.0f;
 float g_noiseFreqX = 0.55f;
@@ -222,30 +240,6 @@ bool readRotation(void *actor, Vec2 *out) {
   return true;
 }
 
-// Camera-only aim: write the final rotation straight into the actor's rotation
-// component. One consistent value per tick is serialized into PlayerAuthInput,
-// so the server sees vanilla-looking movement and the client never fights
-// itself (no shake).
-bool writeRotation(void *actor, float pitch, float yaw) {
-  if (!actor) {
-    return false;
-  }
-  auto *base = reinterpret_cast<char *>(actor);
-  auto rotation = *reinterpret_cast<uintptr_t *>(base + kActorRotationComponent);
-  if (rotation < 0x1000 || (rotation & 0x7) != 0) {
-    return false;
-  }
-  auto *values = reinterpret_cast<float *>(rotation);
-  if (!std::isfinite(pitch) || !std::isfinite(yaw)) {
-    return false;
-  }
-  if (pitch > 90.0f) pitch = 90.0f;
-  if (pitch < -90.0f) pitch = -90.0f;
-  values[0] = pitch;
-  values[1] = yaw;
-  return true;
-}
-
 struct AimCandidate {
   void *actor = nullptr;
   float distance = 0.0f;
@@ -276,6 +270,27 @@ void aimAtLocalPlayer(void *localPlayer) {
     clearTargetState();
     return;
   }
+
+  // The view rotation can live in the component we just read, or only in the
+  // camera when applyTurnDelta is used. Track a virtual view that follows our
+  // applied steps and resynchronises whenever the component itself changes.
+  Vec2 aimCurrent = current;
+  if (!g_hasVirtual) {
+    g_virtualPitch = current.pitch;
+    g_virtualYaw = current.yaw;
+    g_hasVirtual = true;
+  } else {
+    const float readPitch = std::fabs(current.pitch - g_lastReadPitch);
+    const float readYaw = std::fabs(wrapDegrees(current.yaw - g_lastReadYaw));
+    if (readPitch > 0.001f || readYaw > 0.001f) {
+      g_virtualPitch = current.pitch;
+      g_virtualYaw = current.yaw;
+    }
+  }
+  g_lastReadPitch = current.pitch;
+  g_lastReadYaw = current.yaw;
+  aimCurrent.pitch = g_virtualPitch;
+  aimCurrent.yaw = g_virtualYaw;
   eye.y += kEyeHeight;
 
   const float range = g_range.load(std::memory_order_relaxed);
@@ -328,8 +343,8 @@ void aimAtLocalPlayer(void *localPlayer) {
       continue;
     }
 
-    const float deltaYaw = wrapDegrees(desiredYaw - current.yaw);
-    const float deltaPitch = wrapDegrees(desiredPitch - current.pitch);
+    const float deltaYaw = wrapDegrees(desiredYaw - aimCurrent.yaw);
+    const float deltaPitch = wrapDegrees(desiredPitch - aimCurrent.pitch);
     const float angular = std::sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
 
     AimCandidate candidate{};
@@ -391,8 +406,15 @@ void aimAtLocalPlayer(void *localPlayer) {
     g_aimSettled = false;
     g_turnSpeed = legit ? randomRange(kLegitTurnSpeedMin, kLegitTurnSpeedMax)
                         : kMaxTurnSpeedDegreesPerSecond;
-    g_aimResponsiveness = legit ? randomRange(5.0f, 7.5f)
-                                : randomRange(18.0f, 24.0f);
+    g_aimResponsiveness = legit ? randomRange(4.5f, 6.5f)
+                                : randomRange(14.0f, 19.0f);
+    g_velYaw = 0.0f;
+    g_velPitch = 0.0f;
+    g_virtualPitch = current.pitch;
+    g_virtualYaw = current.yaw;
+    g_lastReadPitch = current.pitch;
+    g_lastReadYaw = current.yaw;
+    g_hasVirtual = true;
     g_humanOffsetPitch = randomRange(-0.06f, 0.06f);
     g_humanOffsetYaw = randomRange(-0.06f, 0.06f);
     g_noiseFreqX = randomRange(0.35f, 0.8f);
@@ -424,10 +446,10 @@ void aimAtLocalPlayer(void *localPlayer) {
   desiredPitch += g_humanOffsetPitch + swayPitch;
   desiredYaw += g_humanOffsetYaw + swayYaw;
 
-  const float deltaYaw = wrapDegrees(desiredYaw - current.yaw);
-  const float deltaPitch = wrapDegrees(desiredPitch - current.pitch);
-  const float targetDeltaYaw = wrapDegrees(target->desiredYaw - current.yaw);
-  const float targetDeltaPitch = wrapDegrees(target->desiredPitch - current.pitch);
+  const float deltaYaw = wrapDegrees(desiredYaw - aimCurrent.yaw);
+  const float deltaPitch = wrapDegrees(desiredPitch - aimCurrent.pitch);
+  const float targetDeltaYaw = wrapDegrees(target->desiredYaw - aimCurrent.yaw);
+  const float targetDeltaPitch = wrapDegrees(target->desiredPitch - aimCurrent.pitch);
   const float targetAngular =
       std::sqrt(targetDeltaYaw * targetDeltaYaw + targetDeltaPitch * targetDeltaPitch);
   const float settleThreshold = 1.5f;
@@ -492,16 +514,18 @@ void aimAtLocalPlayer(void *localPlayer) {
     return;
   }
 
-  // Exponential ease-out: fast when far, gentle when close. This is the smooth
-  // "Java cheat" camera feel instead of a snap.
-  float alpha = 1.0f - std::exp(-g_aimResponsiveness * dt);
-  alpha = std::clamp(alpha, 0.0f, 1.0f);
-  const float speedScale = legit ? strength : 1.0f;
+  // Critically-damped velocity controller: eases in, caps speed and never
+  // overshoots, so the camera does not oscillate (the old shake).
+  const float targetVelYaw = deltaYaw * g_aimResponsiveness * strength;
+  const float targetVelPitch = deltaPitch * g_aimResponsiveness * strength;
+  const float damping = 1.0f - std::exp(-12.0f * dt);
+  g_velYaw += (targetVelYaw - g_velYaw) * damping;
+  g_velPitch += (targetVelPitch - g_velPitch) * damping;
 
   const float maxStep =
       (legit ? g_turnSpeed : kMaxTurnSpeedDegreesPerSecond) * strength * dt;
-  float stepYaw = std::clamp(deltaYaw * alpha * speedScale, -maxStep, maxStep);
-  float stepPitch = std::clamp(deltaPitch * alpha * speedScale, -maxStep, maxStep);
+  float stepYaw = std::clamp(g_velYaw * dt, -maxStep, maxStep);
+  float stepPitch = std::clamp(g_velPitch * dt, -maxStep, maxStep);
 
   // Quantize to a tiny grid and add sub-step noise so the yaw/pitch deltas do
   // not share a detectable GCD (Polar checks for that).
@@ -515,9 +539,13 @@ void aimAtLocalPlayer(void *localPlayer) {
     return;
   }
 
-  const float newPitch = current.pitch + stepPitch;
-  const float newYaw = wrapDegrees(current.yaw + stepYaw);
-  writeRotation(localPlayer, newPitch, newYaw);
+  if (!g_applyTurnDelta) {
+    return;
+  }
+  const TurnDelta turnDelta{-stepPitch, stepYaw};
+  g_applyTurnDelta(localPlayer, turnDelta);
+  g_virtualPitch = std::clamp(g_virtualPitch + stepPitch, -89.9f, 89.9f);
+  g_virtualYaw = wrapDegrees(g_virtualYaw + stepYaw);
 
   uint32_t count = g_targetLogCounter.fetch_add(1, std::memory_order_relaxed);
   if (count % 30 == 0) {
@@ -526,9 +554,11 @@ void aimAtLocalPlayer(void *localPlayer) {
     __android_log_print(
         ANDROID_LOG_INFO, kTag,
         "target=%p dist=%.2f desired=(pitch %.2f, yaw %.2f) current=(pitch %.2f, yaw %.2f) "
-        "step=(pitchUp %.2f, yaw %.2f) after=(pitch %.2f, yaw %.2f) strength=%.0f",
+        "virtual=(pitch %.2f, yaw %.2f) step=(pitchUp %.2f, yaw %.2f) "
+        "after=(pitch %.2f, yaw %.2f) strength=%.0f",
         target->actor, target->distance, target->desiredPitch, target->desiredYaw,
-        current.pitch, current.yaw, -stepPitch, stepYaw, after.pitch, after.yaw,
+        current.pitch, current.yaw, g_virtualPitch, g_virtualYaw,
+        -stepPitch, stepYaw, after.pitch, after.yaw,
         g_strength.load(std::memory_order_relaxed));
   }
 }
@@ -579,28 +609,32 @@ bool initialize() {
       pl::memory::resolveSignature(kClientInstanceUpdateSignature, kMinecraftLibrary);
   const uintptr_t localPlayerAddress =
       pl::memory::resolveSignature(kClientInstanceGetLocalPlayerSignature, kMinecraftLibrary);
+  const uintptr_t applyTurnDeltaAddress =
+      pl::memory::resolveSignature(kApplyTurnDeltaSignature, kMinecraftLibrary);
   const uintptr_t fetchNearbyActorsAddress =
       pl::memory::resolveSignature(kFetchNearbyActorsSignature, kMinecraftLibrary);
   const uintptr_t actorIsPlayerAddress =
       pl::memory::resolveSignature(kActorIsPlayerSignature, kMinecraftLibrary);
 
   if (!normalTickAddress || !clientUpdateAddress || !localPlayerAddress ||
-      !fetchNearbyActorsAddress || !actorIsPlayerAddress) {
+      !applyTurnDeltaAddress || !fetchNearbyActorsAddress || !actorIsPlayerAddress) {
     logWarning("Unable to resolve required Minecraft signatures");
     return false;
   }
 
   g_getLocalPlayer = reinterpret_cast<GetLocalPlayerFn>(localPlayerAddress);
+  g_applyTurnDelta = reinterpret_cast<ApplyTurnDeltaFn>(applyTurnDeltaAddress);
   g_fetchNearbyActors = reinterpret_cast<FetchNearbyActorsFn>(fetchNearbyActorsAddress);
   g_actorIsPlayer = reinterpret_cast<ActorIsPlayerFn>(actorIsPlayerAddress);
 
   __android_log_print(
       ANDROID_LOG_INFO, kTag,
       "1.26.60 signatures: normalTick=%p clientUpdate=%p getLocalPlayer=%p "
-      "fetchNearby=%p isPlayer=%p",
+      "applyTurnDelta=%p fetchNearby=%p isPlayer=%p",
       reinterpret_cast<void *>(normalTickAddress),
       reinterpret_cast<void *>(clientUpdateAddress),
       reinterpret_cast<void *>(localPlayerAddress),
+      reinterpret_cast<void *>(applyTurnDeltaAddress),
       reinterpret_cast<void *>(fetchNearbyActorsAddress),
       reinterpret_cast<void *>(actorIsPlayerAddress));
 
