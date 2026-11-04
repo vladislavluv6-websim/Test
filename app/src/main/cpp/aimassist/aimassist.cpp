@@ -59,16 +59,16 @@ constexpr float kMinRange = 3.0f;
 constexpr float kMaxRange = 16.0f;
 constexpr float kRadiansToDegrees = 57.2957795f;
 constexpr float kFovPreferenceDegrees = 100.0f;
-constexpr float kLegitFovDegrees = 28.0f;
+constexpr float kLegitFovDegrees = 35.0f;
 constexpr float kAimDeadzoneDegrees = 0.05f;
-constexpr float kLegitDeadzoneDegrees = 2.5f;
+constexpr float kLegitDeadzoneDegrees = 1.5f;
 constexpr float kMaxTurnSpeedDegreesPerSecond = 1800.0f;
-constexpr float kLegitTurnSpeedMin = 280.0f;
-constexpr float kLegitTurnSpeedMax = 480.0f;
-constexpr float kTriggerFovDegrees = 5.0f;
+constexpr float kLegitTurnSpeedMin = 340.0f;
+constexpr float kLegitTurnSpeedMax = 520.0f;
+constexpr float kTriggerFovDegrees = 2.5f;
 constexpr float kTriggerMaxDistance = 4.5f;
 constexpr int kTriggerDefaultDelayMs = 280;
-constexpr int kTriggerMinDelayMs = 40;
+constexpr int kTriggerMinDelayMs = 120;
 constexpr int kTriggerMaxDelayMs = 400;
 constexpr int kActorTypeMob = 0x100;
 
@@ -166,6 +166,11 @@ std::chrono::steady_clock::time_point g_reactionUntil{};
 std::chrono::steady_clock::time_point g_onTargetSince{};
 float g_turnSpeed = kLegitTurnSpeedMax;
 float g_aimGain = 0.25f;
+float g_smoothedPitch = 0.0f;
+float g_smoothedYaw = 0.0f;
+bool g_hasSmoothed = false;
+bool g_aimSettled = false;
+std::chrono::steady_clock::time_point g_aimSettledSince{};
 
 void logInfo(const char *message) {
   __android_log_print(ANDROID_LOG_INFO, kTag, "%s", message);
@@ -347,6 +352,8 @@ void aimAtLocalPlayer(void *localPlayer) {
 
   if (!target) {
     clearTargetState();
+    g_hasSmoothed = false;
+    g_aimSettled = false;
     return;
   }
 
@@ -354,16 +361,49 @@ void aimAtLocalPlayer(void *localPlayer) {
     g_lastTarget.store(target->actor, std::memory_order_relaxed);
     g_onTarget.store(false, std::memory_order_relaxed);
     g_triggerReady.store(false, std::memory_order_relaxed);
+    g_smoothedPitch = current.pitch;
+    g_smoothedYaw = current.yaw;
+    g_hasSmoothed = true;
+    g_aimSettled = false;
     g_turnSpeed = legit ? randomRange(kLegitTurnSpeedMin, kLegitTurnSpeedMax)
                         : kMaxTurnSpeedDegreesPerSecond;
-    g_aimGain = legit ? randomRange(0.08f, 0.12f) : 1.0f;
+    g_aimGain = legit ? randomRange(0.16f, 0.22f) : 1.0f;
     g_reactionUntil = now + std::chrono::milliseconds(
-        legit ? randomRangeInt(180, 340) : 0);
+        legit ? randomRangeInt(140, 280) : 0);
   }
 
-  const bool onTarget = target->angular <= kTriggerFovDegrees &&
-                        target->distance <= kTriggerMaxDistance;
-  if (g_triggerBotEnabled.load(std::memory_order_relaxed) && onTarget) {
+  float desiredPitch = target->desiredPitch;
+  float desiredYaw = target->desiredYaw;
+  if (legit && g_hasSmoothed) {
+    const float alpha = 0.45f;
+    g_smoothedPitch += wrapDegrees(desiredPitch - g_smoothedPitch) * alpha;
+    g_smoothedYaw += wrapDegrees(desiredYaw - g_smoothedYaw) * alpha;
+    desiredPitch = g_smoothedPitch;
+    desiredYaw = g_smoothedYaw;
+  }
+
+  const float deltaYaw = wrapDegrees(desiredYaw - current.yaw);
+  const float deltaPitch = wrapDegrees(desiredPitch - current.pitch);
+  const float targetDeltaYaw = wrapDegrees(target->desiredYaw - current.yaw);
+  const float targetDeltaPitch = wrapDegrees(target->desiredPitch - current.pitch);
+  const float targetAngular =
+      std::sqrt(targetDeltaYaw * targetDeltaYaw + targetDeltaPitch * targetDeltaPitch);
+  const float settleThreshold = 1.5f;
+  if (std::fabs(targetDeltaYaw) <= settleThreshold &&
+      std::fabs(targetDeltaPitch) <= settleThreshold) {
+    if (!g_aimSettled) {
+      g_aimSettled = true;
+      g_aimSettledSince = now;
+    }
+  } else {
+    g_aimSettled = false;
+  }
+
+  const bool onTarget =
+      targetAngular <= kTriggerFovDegrees && target->distance <= kTriggerMaxDistance;
+  const bool settled = g_aimSettled &&
+                       now - g_aimSettledSince >= std::chrono::milliseconds(150);
+  if (g_triggerBotEnabled.load(std::memory_order_relaxed) && onTarget && settled) {
     if (!g_onTarget.exchange(true, std::memory_order_relaxed)) {
       g_onTargetSince = now;
     }
@@ -379,20 +419,19 @@ void aimAtLocalPlayer(void *localPlayer) {
     return;
   }
 
-  float deltaYaw = wrapDegrees(target->desiredYaw - current.yaw);
-  float deltaPitch = wrapDegrees(target->desiredPitch - current.pitch);
+  if (legit && now < g_reactionUntil) {
+    return;
+  }
+
   const float deadzone = legit ? kLegitDeadzoneDegrees : kAimDeadzoneDegrees;
   if (std::fabs(deltaYaw) < deadzone && std::fabs(deltaPitch) < deadzone) {
     return;
   }
 
-  if (legit && now < g_reactionUntil) {
-    return;
-  }
-
-  const float strength = g_strength.load(std::memory_order_relaxed) / 100.0f;
-  if (strength <= 0.0f) {
-    return;
+  float strength = std::max(
+      0.05f, g_strength.load(std::memory_order_relaxed) / 100.0f);
+  if (legit) {
+    strength = std::max(strength, 0.35f);
   }
 
   float dt = 0.05f;
@@ -412,8 +451,8 @@ void aimAtLocalPlayer(void *localPlayer) {
     const float maxStep = g_turnSpeed * strength * dt;
     stepYaw = std::clamp(deltaYaw * g_aimGain, -maxStep, maxStep);
     stepPitch = std::clamp(deltaPitch * g_aimGain, -maxStep, maxStep);
-    if (std::fabs(stepYaw) < 0.01f) stepYaw = 0.0f;
-    if (std::fabs(stepPitch) < 0.01f) stepPitch = 0.0f;
+    if (std::fabs(stepYaw) < 0.02f) stepYaw = 0.0f;
+    if (std::fabs(stepPitch) < 0.02f) stepPitch = 0.0f;
   } else {
     const float maxStep = kMaxTurnSpeedDegreesPerSecond * strength * dt;
     stepYaw = std::clamp(deltaYaw, -maxStep, maxStep);
@@ -442,11 +481,11 @@ void aimAtLocalPlayer(void *localPlayer) {
 }
 
 void normalTickDetour(void *actor) {
-  if (actor && actor == g_localPlayer.load(std::memory_order_acquire)) {
-    aimAtLocalPlayer(actor);
-  }
   if (g_normalTickOriginal) {
     g_normalTickOriginal(actor);
+  }
+  if (actor && actor == g_localPlayer.load(std::memory_order_acquire)) {
+    aimAtLocalPlayer(actor);
   }
 }
 

@@ -429,27 +429,27 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         val metrics = resources.displayMetrics
         val x = metrics.widthPixels / 2f
         val y = metrics.heightPixels / 2f
-        val downEvent = MotionEvent.obtain(
-            SystemClock.uptimeMillis(),
-            SystemClock.uptimeMillis(),
-            MotionEvent.ACTION_DOWN,
-            x, y, 0
-        )
-        val dispatched = dispatchTouchEvent(downEvent)
-        downEvent.recycle()
-        if (dispatched) {
-            window.decorView.postDelayed({
-                val upEvent = MotionEvent.obtain(
-                    SystemClock.uptimeMillis(),
-                    SystemClock.uptimeMillis(),
-                    MotionEvent.ACTION_UP,
-                    x, y, 0
-                )
-                dispatchTouchEvent(upEvent)
-                upEvent.recycle()
-            }, 45L)
+        val now = SystemClock.uptimeMillis()
+        val downEvent = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
+        val downHandled = try {
+            dispatchTouchEventToGame(downEvent)
+        } catch (throwable: Throwable) {
+            false
+        } finally {
+            downEvent.recycle()
         }
-        return dispatched
+        if (!downHandled) return false
+        window.decorView.postDelayed({
+            val upTime = SystemClock.uptimeMillis()
+            val upEvent = MotionEvent.obtain(upTime, upTime, MotionEvent.ACTION_UP, x, y, 0)
+            try {
+                dispatchTouchEventToGame(upEvent)
+            } catch (ignored: Throwable) {
+            } finally {
+                upEvent.recycle()
+            }
+        }, 45L)
+        return true
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {

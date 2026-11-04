@@ -61,7 +61,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_AIM_ASSIST_STRENGTH = 100;
     private static final boolean DEFAULT_AIM_ASSIST_LEGIT = true;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
-    private static final int DEFAULT_TRIGGER_BOT_DELAY = 160;
+    private static final int DEFAULT_TRIGGER_BOT_DELAY = 280;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
@@ -148,13 +148,17 @@ public class InbuiltModManager {
     }
 
     public int getTriggerBotDelay() {
-        return Math.max(40, Math.min(400,
-                prefs.getInt(KEY_TRIGGER_BOT_DELAY, DEFAULT_TRIGGER_BOT_DELAY)));
+        int value = prefs.getInt(KEY_TRIGGER_BOT_DELAY, DEFAULT_TRIGGER_BOT_DELAY);
+        if (value < 120) {
+            value = 280;
+            prefs.edit().putInt(KEY_TRIGGER_BOT_DELAY, value).apply();
+        }
+        return Math.max(120, Math.min(400, value));
     }
 
     public void setTriggerBotDelay(int delayMs) {
         prefs.edit().putInt(KEY_TRIGGER_BOT_DELAY,
-                Math.max(40, Math.min(400, delayMs))).apply();
+                Math.max(120, Math.min(400, delayMs))).apply();
     }
 
     public int getDefaultInbuiltModKeybind(String modId) {

@@ -346,7 +346,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "160", "40", "400",
+                    "280", "120", "400",
                     String.valueOf(manager.getTriggerBotDelay()), CFG_TRIGGER_BOT));
         } else if (ModIds.VIRTUAL_CURSOR.equals(modId)) {
             configs.add(config(CFG_CURSOR_SENSITIVITY,
