@@ -1,6 +1,7 @@
 #include <jni.h>
 
 #include <android/log.h>
+#include <dlfcn.h>
 
 #include <algorithm>
 #include <atomic>
@@ -48,9 +49,18 @@ constexpr const char *kActorIsPlayerSignature =
     "? ? ? 92 ? ? ? B8 28 01 08 4A ? ? ? 12 1F 01 09 6B E0 27 9F 1A C0 03 5F D6 "
     "E0 03 1F 2A C0 03 5F D6 ? ? ? D1 ? ? ? FD";
 
+// Mob::swing signature (1.26.x): sub SP, MOV X19,X0, then body; we hook vtable slot too.
+constexpr const char *kMobSwingSignature =
+    "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? 91 F3 03 00 AA ? ? ? 94 ? ? ? B9";
+
 constexpr uintptr_t kActorStateVectorComponent = 0x228;
 constexpr uintptr_t kActorRotationComponent = 0x238;
 constexpr uintptr_t kStatePosition = 0;
+
+// Vtable slots (Itanium, from vtable address point)
+// Mob::swing is a virtual on Mob; LocalPlayer inherits Player->Mob->Actor.
+// We resolve it from the local player's own vtable at runtime.
+constexpr size_t kMobSwingVtableSlot = 176;
 
 constexpr float kEyeHeight = 1.62f;
 constexpr float kTargetCenterOffset = 0.9f;
@@ -106,6 +116,7 @@ using GetLocalPlayerFn = void *(*)(void *);
 using ApplyTurnDeltaFn = void (*)(void *, const TurnDelta &);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
+using MobSwingFn = void (*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientInstanceUpdateOriginal = nullptr;
@@ -113,6 +124,7 @@ GetLocalPlayerFn g_getLocalPlayer = nullptr;
 ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
+MobSwingFn g_mobSwing = nullptr;
 
 std::atomic_bool g_enabled{false};
 std::atomic_bool g_legitMode{true};
@@ -172,6 +184,10 @@ bool g_hasSmoothed = false;
 bool g_aimSettled = false;
 std::chrono::steady_clock::time_point g_aimSettledSince{};
 
+// Trigger bot native attack state
+std::chrono::steady_clock::time_point g_nextAttackAt{};
+std::atomic<void *> g_pendingSwingTarget{nullptr};
+
 void logInfo(const char *message) {
   __android_log_print(ANDROID_LOG_INFO, kTag, "%s", message);
 }
@@ -226,6 +242,65 @@ bool readRotation(void *actor, Vec2 *out) {
   return true;
 }
 
+// Direct rotation write into the actor's rotation component.
+// This bypasses applyTurnDelta's per-tick accumulation and avoids the
+// packet-rotation desync that causes screen shake and server flags.
+bool writeRotation(void *actor, float pitch, float yaw) {
+  if (!actor) {
+    return false;
+  }
+  auto *base = reinterpret_cast<char *>(actor);
+  auto rotation = *reinterpret_cast<uintptr_t *>(base + kActorRotationComponent);
+  if (rotation < 0x1000 || (rotation & 0x7) != 0) {
+    return false;
+  }
+  auto *values = reinterpret_cast<float *>(rotation);
+  if (!std::isfinite(pitch) || !std::isfinite(yaw)) {
+    return false;
+  }
+  // Clamp pitch to vanilla limits to avoid server-side invalid rotation kicks.
+  if (pitch > 90.0f) pitch = 90.0f;
+  if (pitch < -90.0f) pitch = -90.0f;
+  values[0] = pitch;
+  values[1] = yaw;
+  return true;
+}
+
+// Resolve Mob::swing from the local player's vtable. LocalPlayer is a Player,
+// which is a Mob, so its primary vtable contains the swing slot.
+bool resolveSwingFromPlayer(void *localPlayer) {
+  if (g_mobSwing || !localPlayer) {
+    return g_mobSwing != nullptr;
+  }
+  auto **vtable = *reinterpret_cast<void ***>(localPlayer);
+  if (!vtable) {
+    return false;
+  }
+  void *fn = vtable[kMobSwingVtableSlot];
+  if (!fn) {
+    return false;
+  }
+  Dl_info info{};
+  if (dladdr(fn, &info) == 0 || !info.dli_fname) {
+    return false;
+  }
+  const char *name = info.dli_fname;
+  bool fromGame = false;
+  for (const char *p = name; *p; ++p) {
+    if (p[0] == 'l' && p[1] == 'i' && p[2] == 'b' && p[3] == 'm') {
+      fromGame = true;
+      break;
+    }
+  }
+  if (!fromGame) {
+    return false;
+  }
+  g_mobSwing = reinterpret_cast<MobSwingFn>(fn);
+  __android_log_print(ANDROID_LOG_INFO, kTag, "Mob::swing resolved=%p slot=%zu",
+                      fn, kMobSwingVtableSlot);
+  return true;
+}
+
 struct AimCandidate {
   void *actor = nullptr;
   float distance = 0.0f;
@@ -239,6 +314,10 @@ void aimAtLocalPlayer(void *localPlayer) {
       !g_enabled.load(std::memory_order_relaxed) ||
       !g_fetchNearbyActors || !g_actorIsPlayer) {
     return;
+  }
+
+  if (!g_mobSwing) {
+    resolveSwingFromPlayer(localPlayer);
   }
 
   Vec3 eye{};
@@ -415,8 +494,21 @@ void aimAtLocalPlayer(void *localPlayer) {
     g_triggerReady.store(false, std::memory_order_relaxed);
   }
 
-  if (!g_applyTurnDelta) {
-    return;
+  // Trigger bot native attack: schedule a swing + attack when ready.
+  // We call Mob::swing directly on the local player so the game produces the
+  // vanilla animation + InventoryTransaction attack packet. No Java input.
+  if (g_triggerBotEnabled.load(std::memory_order_relaxed) && onTarget &&
+      settled && g_mobSwing) {
+    const int delayMs = g_triggerDelayMs.load(std::memory_order_relaxed);
+    if (now >= g_nextAttackAt &&
+        now - g_onTargetSince >= std::chrono::milliseconds(delayMs)) {
+      // Randomized cooldown: base delay + up to base jitter, occasional skip.
+      const int jitter = randomRangeInt(0, std::max(120, delayMs));
+      g_nextAttackAt = now + std::chrono::milliseconds(delayMs + jitter);
+      if (randomRangeInt(0, 99) >= 18) {
+        g_mobSwing(localPlayer);
+      }
+    }
   }
 
   if (legit && now < g_reactionUntil) {
@@ -463,8 +555,12 @@ void aimAtLocalPlayer(void *localPlayer) {
     return;
   }
 
-  const TurnDelta delta{-stepPitch, stepYaw};
-  g_applyTurnDelta(localPlayer, delta);
+  // Write rotation directly into the actor component instead of applyTurnDelta.
+  // This produces a single, consistent rotation per tick that matches what the
+  // game serializes into PlayerAuthInput, eliminating shake and server flags.
+  const float newPitch = current.pitch + stepPitch;
+  const float newYaw = wrapDegrees(current.yaw + stepYaw);
+  writeRotation(localPlayer, newPitch, newYaw);
 
   uint32_t count = g_targetLogCounter.fetch_add(1, std::memory_order_relaxed);
   if (count % 30 == 0) {
@@ -500,6 +596,7 @@ void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
       void *previous = g_localPlayer.exchange(localPlayer, std::memory_order_acq_rel);
       if (previous != localPlayer) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "local player=%p", localPlayer);
+        resolveSwingFromPlayer(localPlayer);
       }
     }
   }

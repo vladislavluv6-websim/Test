@@ -46,19 +46,9 @@ public class AimAssistOverlay extends BaseOverlayButton {
                 triggerHandler.postDelayed(this, 80L);
                 return;
             }
-            long now = SystemClock.uptimeMillis();
-            if (now >= nextTriggerAt && AimAssistMod.isOnTarget()) {
-                int baseDelay = manager.getTriggerBotDelay();
-                int jitter = triggerRandom.nextInt(Math.max(120, baseDelay));
-                nextTriggerAt = now + baseDelay + jitter;
-                if (triggerRandom.nextFloat() >= 0.18f && activity instanceof MinecraftActivity) {
-                    boolean attacked = ((MinecraftActivity) activity).performInbuiltAttack();
-                    if (!attacked) {
-                        Log.d(TAG, "Trigger Bot attack was not consumed");
-                    }
-                }
-            }
-            triggerHandler.postDelayed(this, 35L);
+            // Attack is handled natively by the aimassist module via Mob::swing.
+            // The Java loop only keeps settings in sync and the overlay alive.
+            triggerHandler.postDelayed(this, 100L);
         }
     };
 
