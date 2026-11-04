@@ -16,6 +16,9 @@ public class InbuiltModManager {
     private static final String KEY_SPEED_MULTIPLIER = "speed_multiplier";
     private static final String KEY_AIM_ASSIST_RANGE = "aim_assist_range";
     private static final String KEY_AIM_ASSIST_STRENGTH = "aim_assist_strength";
+    private static final String KEY_AIM_ASSIST_LEGIT = "aim_assist_legit";
+    private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
+    private static final String KEY_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
     private static final String KEY_OVERLAY_BUTTON_SIZE_PREFIX = "overlay_button_size_";
     private static final String KEY_OVERLAY_OPACITY_PREFIX = "overlay_opacity_";
@@ -56,6 +59,9 @@ public class InbuiltModManager {
     private static final int DEFAULT_SPEED_MULTIPLIER = 200;
     private static final int DEFAULT_AIM_ASSIST_RANGE = 8;
     private static final int DEFAULT_AIM_ASSIST_STRENGTH = 100;
+    private static final boolean DEFAULT_AIM_ASSIST_LEGIT = true;
+    private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
+    private static final int DEFAULT_TRIGGER_BOT_DELAY = 160;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
@@ -123,6 +129,32 @@ public class InbuiltModManager {
     public void setAimAssistStrength(int strength) {
         prefs.edit().putInt(KEY_AIM_ASSIST_STRENGTH,
                 Math.max(0, Math.min(100, strength))).apply();
+    }
+
+    public boolean isAimAssistLegitMode() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_LEGIT, DEFAULT_AIM_ASSIST_LEGIT);
+    }
+
+    public void setAimAssistLegitMode(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_LEGIT, enabled).apply();
+    }
+
+    public boolean isTriggerBotEnabled() {
+        return prefs.getBoolean(KEY_TRIGGER_BOT_ENABLED, DEFAULT_TRIGGER_BOT_ENABLED);
+    }
+
+    public void setTriggerBotEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_TRIGGER_BOT_ENABLED, enabled).apply();
+    }
+
+    public int getTriggerBotDelay() {
+        return Math.max(40, Math.min(400,
+                prefs.getInt(KEY_TRIGGER_BOT_DELAY, DEFAULT_TRIGGER_BOT_DELAY)));
+    }
+
+    public void setTriggerBotDelay(int delayMs) {
+        prefs.edit().putInt(KEY_TRIGGER_BOT_DELAY,
+                Math.max(40, Math.min(400, delayMs))).apply();
     }
 
     public int getDefaultInbuiltModKeybind(String modId) {

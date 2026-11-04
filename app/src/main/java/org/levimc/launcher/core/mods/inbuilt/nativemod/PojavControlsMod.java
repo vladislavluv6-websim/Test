@@ -3,6 +3,7 @@ package org.levimc.launcher.core.mods.inbuilt.nativemod;
 public final class PojavControlsMod {
     private static boolean initialized;
     private static boolean initAttempted;
+    private static volatile boolean enabled;
 
     private PojavControlsMod() {}
 
@@ -18,7 +19,12 @@ public final class PojavControlsMod {
     public static boolean setEnabled(boolean enabled) {
         if (enabled && !initialize()) return false;
         if (initialized) nativeSetEnabled(enabled);
+        PojavControlsMod.enabled = enabled && initialized;
         return !enabled || initialized;
+    }
+
+    public static boolean isEnabled() {
+        return initialized && enabled;
     }
 
     public static native void nativeSendKey(int keyCode, boolean down);

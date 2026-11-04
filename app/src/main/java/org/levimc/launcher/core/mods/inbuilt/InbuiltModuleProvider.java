@@ -31,6 +31,9 @@ public final class InbuiltModuleProvider {
     private static final String CFG_SPEED_MULTIPLIER = "speed_multiplier";
     private static final String CFG_AIM_ASSIST_RANGE = "aim_assist_range";
     private static final String CFG_AIM_ASSIST_STRENGTH = "aim_assist_strength";
+    private static final String CFG_AIM_ASSIST_LEGIT = "aim_assist_legit";
+    private static final String CFG_TRIGGER_BOT = "trigger_bot";
+    private static final String CFG_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
     private static final String CFG_ZOOM_TRANSITION = "zoom_transition";
@@ -330,6 +333,21 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "100", "0", "100",
                     String.valueOf(manager.getAimAssistStrength())));
+            configs.add(config(CFG_AIM_ASSIST_LEGIT,
+                    context.getString(R.string.mod_config_aim_assist_legit),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isAimAssistLegitMode())));
+            configs.add(config(CFG_TRIGGER_BOT,
+                    context.getString(R.string.mod_config_trigger_bot),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isTriggerBotEnabled())));
+            configs.add(config(CFG_TRIGGER_BOT_DELAY,
+                    context.getString(R.string.mod_config_trigger_bot_delay),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "160", "40", "400",
+                    String.valueOf(manager.getTriggerBotDelay()), CFG_TRIGGER_BOT));
         } else if (ModIds.VIRTUAL_CURSOR.equals(modId)) {
             configs.add(config(CFG_CURSOR_SENSITIVITY,
                     context.getString(R.string.mod_config_cursor_sensitivity_percent),
@@ -467,6 +485,15 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_STRENGTH:
                 manager.setAimAssistStrength(parseInt(value, manager.getAimAssistStrength()));
+                break;
+            case CFG_AIM_ASSIST_LEGIT:
+                manager.setAimAssistLegitMode(parseBoolean(value));
+                break;
+            case CFG_TRIGGER_BOT:
+                manager.setTriggerBotEnabled(parseBoolean(value));
+                break;
+            case CFG_TRIGGER_BOT_DELAY:
+                manager.setTriggerBotDelay(parseInt(value, manager.getTriggerBotDelay()));
                 break;
             case CFG_CURSOR_SENSITIVITY:
                 manager.setCursorSensitivity(parseInt(value, manager.getCursorSensitivity()));

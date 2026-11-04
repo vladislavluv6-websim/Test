@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <mutex>
+#include <random>
 
 #include "pl/memory/Hook.hpp"
 #include "pl/memory/Signature.hpp"
@@ -58,8 +59,17 @@ constexpr float kMinRange = 3.0f;
 constexpr float kMaxRange = 16.0f;
 constexpr float kRadiansToDegrees = 57.2957795f;
 constexpr float kFovPreferenceDegrees = 100.0f;
+constexpr float kLegitFovDegrees = 40.0f;
 constexpr float kAimDeadzoneDegrees = 0.05f;
+constexpr float kLegitDeadzoneDegrees = 0.8f;
 constexpr float kMaxTurnSpeedDegreesPerSecond = 1800.0f;
+constexpr float kLegitTurnSpeedMin = 360.0f;
+constexpr float kLegitTurnSpeedMax = 620.0f;
+constexpr float kTriggerFovDegrees = 5.0f;
+constexpr float kTriggerMaxDistance = 4.5f;
+constexpr int kTriggerDefaultDelayMs = 160;
+constexpr int kTriggerMinDelayMs = 40;
+constexpr int kTriggerMaxDelayMs = 400;
 constexpr int kActorTypeMob = 0x100;
 
 struct Vec2 {
@@ -105,6 +115,11 @@ FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 
 std::atomic_bool g_enabled{false};
+std::atomic_bool g_legitMode{true};
+std::atomic_bool g_triggerBotEnabled{false};
+std::atomic<int> g_triggerDelayMs{kTriggerDefaultDelayMs};
+std::atomic_bool g_onTarget{false};
+std::atomic_bool g_triggerReady{false};
 std::atomic<float> g_range{kDefaultRange};
 std::atomic<float> g_strength{100.0f};
 std::atomic<void *> g_localPlayer{nullptr};
@@ -119,6 +134,38 @@ std::chrono::steady_clock::time_point g_lastInitAttempt{};
 std::atomic<void *> g_lockedTarget{nullptr};
 std::chrono::steady_clock::time_point g_targetLockUntil{};
 std::chrono::steady_clock::time_point g_lastAimTime{};
+
+thread_local std::mt19937 g_rng{std::random_device{}()};
+
+float randomRange(float min, float max) {
+  if (max <= min) {
+    return min;
+  }
+  std::uniform_real_distribution<float> dist(min, max);
+  return dist(g_rng);
+}
+
+int randomRangeInt(int min, int max) {
+  if (max <= min) {
+    return min;
+  }
+  std::uniform_int_distribution<int> dist(min, max);
+  return dist(g_rng);
+}
+
+std::atomic<void *> g_lastTarget{nullptr};
+
+void clearTargetState() {
+  g_lockedTarget.store(nullptr, std::memory_order_relaxed);
+  g_onTarget.store(false, std::memory_order_relaxed);
+  g_triggerReady.store(false, std::memory_order_relaxed);
+  g_lastTarget.store(nullptr, std::memory_order_relaxed);
+}
+
+std::chrono::steady_clock::time_point g_reactionUntil{};
+std::chrono::steady_clock::time_point g_onTargetSince{};
+float g_turnSpeed = kLegitTurnSpeedMax;
+float g_aimGain = 0.25f;
 
 void logInfo(const char *message) {
   __android_log_print(ANDROID_LOG_INFO, kTag, "%s", message);
@@ -185,16 +232,18 @@ struct AimCandidate {
 void aimAtLocalPlayer(void *localPlayer) {
   if (!localPlayer || localPlayer != g_localPlayer.load(std::memory_order_acquire) ||
       !g_enabled.load(std::memory_order_relaxed) ||
-      !g_applyTurnDelta || !g_fetchNearbyActors || !g_actorIsPlayer) {
+      !g_fetchNearbyActors || !g_actorIsPlayer) {
     return;
   }
 
   Vec3 eye{};
   if (!readPosition(localPlayer, &eye)) {
+    clearTargetState();
     return;
   }
   Vec2 current{};
   if (!readRotation(localPlayer, &current)) {
+    clearTargetState();
     return;
   }
   eye.y += kEyeHeight;
@@ -203,7 +252,7 @@ void aimAtLocalPlayer(void *localPlayer) {
   Vec3 extent{range, range, range};
   ActorVec nearby = g_fetchNearbyActors(localPlayer, &extent, kActorTypeMob);
   if (!nearby.begin || !nearby.end || nearby.end <= nearby.begin) {
-    g_lockedTarget.store(nullptr, std::memory_order_relaxed);
+    clearTargetState();
     return;
   }
   if (nearby.end - nearby.begin > 512) {
@@ -217,6 +266,8 @@ void aimAtLocalPlayer(void *localPlayer) {
   bool haveNear = false;
   bool haveLocked = false;
   void *lockedTarget = g_lockedTarget.load(std::memory_order_relaxed);
+  const bool legit = g_legitMode.load(std::memory_order_relaxed);
+  const float selectionFov = legit ? kLegitFovDegrees : kFovPreferenceDegrees;
 
   for (DistanceSortedActor *it = nearby.begin; it < nearby.end; ++it) {
     void *actor = it->actor;
@@ -262,7 +313,7 @@ void aimAtLocalPlayer(void *localPlayer) {
       bestNear = candidate;
       haveNear = true;
     }
-    if (angular <= kFovPreferenceDegrees && (!haveFov || angular < bestFov.angular)) {
+    if (angular <= selectionFov && (!haveFov || angular < bestFov.angular)) {
       bestFov = candidate;
       haveFov = true;
     }
@@ -273,33 +324,69 @@ void aimAtLocalPlayer(void *localPlayer) {
   }
 
   const auto now = std::chrono::steady_clock::now();
+  const float switchMargin = legit ? 12.0f : 8.0f;
+  const auto lockDuration = std::chrono::milliseconds(legit ? 900 : 600);
   const AimCandidate *target = nullptr;
-  if (haveLocked && now < g_targetLockUntil) {
+  if (haveLocked && now < g_targetLockUntil &&
+      (!legit || lockedCandidate.angular <= kLegitFovDegrees)) {
     target = &lockedCandidate;
-    if (haveFov && bestFov.angular + 8.0f < lockedCandidate.angular) {
+    if (haveFov && bestFov.angular + switchMargin < lockedCandidate.angular) {
       target = &bestFov;
       g_lockedTarget.store(bestFov.actor, std::memory_order_relaxed);
-      g_targetLockUntil = now + std::chrono::milliseconds(600);
+      g_targetLockUntil = now + lockDuration;
     }
   } else if (haveFov) {
     target = &bestFov;
     g_lockedTarget.store(bestFov.actor, std::memory_order_relaxed);
-    g_targetLockUntil = now + std::chrono::milliseconds(600);
-  } else if (haveNear) {
+    g_targetLockUntil = now + lockDuration;
+  } else if (!legit && haveNear) {
     target = &bestNear;
     g_lockedTarget.store(bestNear.actor, std::memory_order_relaxed);
-    g_targetLockUntil = now + std::chrono::milliseconds(600);
+    g_targetLockUntil = now + lockDuration;
   }
 
   if (!target) {
-    g_lockedTarget.store(nullptr, std::memory_order_relaxed);
+    clearTargetState();
+    return;
+  }
+
+  if (target->actor != g_lastTarget.load(std::memory_order_relaxed)) {
+    g_lastTarget.store(target->actor, std::memory_order_relaxed);
+    g_onTarget.store(false, std::memory_order_relaxed);
+    g_triggerReady.store(false, std::memory_order_relaxed);
+    g_turnSpeed = legit ? randomRange(kLegitTurnSpeedMin, kLegitTurnSpeedMax)
+                        : kMaxTurnSpeedDegreesPerSecond;
+    g_aimGain = legit ? randomRange(0.14f, 0.22f) : 1.0f;
+    g_reactionUntil = now + std::chrono::milliseconds(
+        legit ? randomRangeInt(110, 240) : 0);
+  }
+
+  const bool onTarget = target->angular <= kTriggerFovDegrees &&
+                        target->distance <= kTriggerMaxDistance;
+  if (g_triggerBotEnabled.load(std::memory_order_relaxed) && onTarget) {
+    if (!g_onTarget.exchange(true, std::memory_order_relaxed)) {
+      g_onTargetSince = now;
+    }
+    const int delayMs = g_triggerDelayMs.load(std::memory_order_relaxed);
+    g_triggerReady.store(now - g_onTargetSince >= std::chrono::milliseconds(delayMs),
+                         std::memory_order_relaxed);
+  } else {
+    g_onTarget.store(false, std::memory_order_relaxed);
+    g_triggerReady.store(false, std::memory_order_relaxed);
+  }
+
+  if (!g_applyTurnDelta) {
     return;
   }
 
   float deltaYaw = wrapDegrees(target->desiredYaw - current.yaw);
   float deltaPitch = wrapDegrees(target->desiredPitch - current.pitch);
-  if (std::fabs(deltaYaw) < kAimDeadzoneDegrees &&
-      std::fabs(deltaPitch) < kAimDeadzoneDegrees) {
+  const float deadzone = legit ? kLegitDeadzoneDegrees : kAimDeadzoneDegrees;
+  if (std::fabs(deltaYaw) < deadzone && std::fabs(deltaPitch) < deadzone) {
+    return;
+  }
+
+  if (legit && now < g_reactionUntil) {
     return;
   }
 
@@ -319,9 +406,23 @@ void aimAtLocalPlayer(void *localPlayer) {
     dt = 0.1f;
   }
 
-  const float maxStep = kMaxTurnSpeedDegreesPerSecond * strength * dt;
-  const float stepYaw = std::clamp(deltaYaw, -maxStep, maxStep);
-  const float stepPitch = std::clamp(deltaPitch, -maxStep, maxStep);
+  float stepYaw = 0.0f;
+  float stepPitch = 0.0f;
+  if (legit) {
+    const float maxStep = g_turnSpeed * strength * dt;
+    stepYaw = std::clamp(deltaYaw * g_aimGain, -maxStep, maxStep);
+    stepPitch = std::clamp(deltaPitch * g_aimGain, -maxStep, maxStep);
+    if (std::fabs(stepYaw) < 0.01f) stepYaw = 0.0f;
+    if (std::fabs(stepPitch) < 0.01f) stepPitch = 0.0f;
+  } else {
+    const float maxStep = kMaxTurnSpeedDegreesPerSecond * strength * dt;
+    stepYaw = std::clamp(deltaYaw, -maxStep, maxStep);
+    stepPitch = std::clamp(deltaPitch, -maxStep, maxStep);
+  }
+
+  if (stepYaw == 0.0f && stepPitch == 0.0f) {
+    return;
+  }
 
   const TurnDelta delta{-stepPitch, stepYaw};
   g_applyTurnDelta(localPlayer, delta);
@@ -454,7 +555,7 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetEnabl
   const bool value = enabled == JNI_TRUE;
   g_enabled.store(value, std::memory_order_relaxed);
   if (!value) {
-    g_lockedTarget.store(nullptr, std::memory_order_relaxed);
+    clearTargetState();
   }
   __android_log_print(ANDROID_LOG_INFO, kTag, "enabled=%d", value ? 1 : 0);
 }
@@ -485,4 +586,35 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetStren
   if (strength < 0.0f) strength = 0.0f;
   if (strength > 100.0f) strength = 100.0f;
   g_strength.store(strength, std::memory_order_relaxed);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetLegitMode(
+    JNIEnv *, jclass, jboolean enabled) {
+  g_legitMode.store(enabled == JNI_TRUE, std::memory_order_relaxed);
+  clearTargetState();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerBot(
+    JNIEnv *, jclass, jboolean enabled) {
+  g_triggerBotEnabled.store(enabled == JNI_TRUE, std::memory_order_relaxed);
+  if (enabled != JNI_TRUE) {
+    g_onTarget.store(false, std::memory_order_relaxed);
+    g_triggerReady.store(false, std::memory_order_relaxed);
+  }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerDelay(
+    JNIEnv *, jclass, jint delayMs) {
+  if (delayMs < kTriggerMinDelayMs) delayMs = kTriggerMinDelayMs;
+  if (delayMs > kTriggerMaxDelayMs) delayMs = kTriggerMaxDelayMs;
+  g_triggerDelayMs.store(static_cast<int>(delayMs), std::memory_order_relaxed);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeIsOnTarget(
+    JNIEnv *, jclass) {
+  return g_triggerReady.load(std::memory_order_relaxed) ? JNI_TRUE : JNI_FALSE;
 }

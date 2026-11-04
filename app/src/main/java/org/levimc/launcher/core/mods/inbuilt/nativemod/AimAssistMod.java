@@ -45,6 +45,22 @@ public final class AimAssistMod {
         if (initialized) nativeSetStrength(strength);
     }
 
+    public static void setLegitMode(boolean enabled) {
+        if (initialized) nativeSetLegitMode(enabled);
+    }
+
+    public static void setTriggerBot(boolean enabled) {
+        if (initialized) nativeSetTriggerBot(enabled);
+    }
+
+    public static void setTriggerDelay(int delayMs) {
+        if (initialized) nativeSetTriggerDelay(delayMs);
+    }
+
+    public static boolean isOnTarget() {
+        return initialized && nativeIsOnTarget();
+    }
+
     public static boolean isEnabled() {
         return initialized && nativeIsEnabled();
     }
@@ -58,4 +74,8 @@ public final class AimAssistMod {
     private static native boolean nativeIsEnabled();
     private static native void nativeSetRange(float range);
     private static native void nativeSetStrength(float strength);
+    private static native void nativeSetLegitMode(boolean enabled);
+    private static native void nativeSetTriggerBot(boolean enabled);
+    private static native void nativeSetTriggerDelay(int delayMs);
+    private static native boolean nativeIsOnTarget();
 }

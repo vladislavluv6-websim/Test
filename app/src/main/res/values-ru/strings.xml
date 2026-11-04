@@ -662,9 +662,12 @@
     <string name="mod_config_speed_multiplier">Множитель скорости (%)</string>
     <string name="speed_mod_unavailable">Speed hack недоступен для этой версии игры</string>
     <string name="inbuilt_mod_aim_assist">Аим-ассист</string>
-    <string name="inbuilt_mod_aim_assist_desc">Автоматически наводится на ближайшего игрока</string>
+    <string name="inbuilt_mod_aim_assist_desc">Плавный аим-ассист с Trigger Bot</string>
     <string name="mod_config_aim_assist_range">Дальность наведения (блоки)</string>
     <string name="mod_config_aim_assist_strength">Скорость наведения (%)</string>
+    <string name="mod_config_aim_assist_legit">Humanized-наведение (плавнее и менее заметно)</string>
+    <string name="mod_config_trigger_bot">Trigger Bot (автоудар, когда прицел на игроке)</string>
+    <string name="mod_config_trigger_bot_delay">Задержка Trigger Bot (мс)</string>
     <string name="aim_assist_mod_unavailable">Аим-ассист недоступен для этой версии игры</string>
     <string name="inbuilt_mod_chick_pet">Питомец-цыплёнок</string>
     <string name="inbuilt_mod_chick_pet_desc">Милый пиксельный цыплёнок, который гуляет, спит и убегает при касании!</string>
