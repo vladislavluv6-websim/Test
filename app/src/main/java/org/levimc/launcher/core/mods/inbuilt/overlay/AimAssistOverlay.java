@@ -48,8 +48,8 @@ public class AimAssistOverlay extends BaseOverlayButton {
             }
             long now = SystemClock.uptimeMillis();
             if (now >= nextTriggerAt && AimAssistMod.isOnTarget()) {
-                nextTriggerAt = now + manager.getTriggerBotDelay() + triggerRandom.nextInt(120);
-                if (triggerRandom.nextFloat() >= 0.08f && activity instanceof MinecraftActivity) {
+                nextTriggerAt = now + manager.getTriggerBotDelay() + triggerRandom.nextInt(240);
+                if (triggerRandom.nextFloat() >= 0.12f && activity instanceof MinecraftActivity) {
                     boolean attacked = ((MinecraftActivity) activity).performInbuiltAttack();
                     if (!attacked) {
                         Log.d(TAG, "Trigger Bot attack was not consumed");

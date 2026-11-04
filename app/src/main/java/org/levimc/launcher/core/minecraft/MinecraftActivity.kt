@@ -425,89 +425,31 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
     }
 
     fun performInbuiltAttack(): Boolean {
-        val now = SystemClock.uptimeMillis()
+        if (!::gameManager.isInitialized) return false
         val metrics = resources.displayMetrics
         val x = metrics.widthPixels / 2f
         val y = metrics.heightPixels / 2f
-        if (x <= 0f || y <= 0f) return false
-
-        val nativeHandled = try {
-            if (PojavControlsMod.isEnabled()) {
-                PojavControlsMod.nativeSendMouseButton(MotionEvent.BUTTON_PRIMARY, true)
-                window.decorView.postDelayed({
-                    try {
-                        PojavControlsMod.nativeSendMouseButton(MotionEvent.BUTTON_PRIMARY, false)
-                    } catch (ignored: Throwable) {
-                    }
-                }, 45L)
-                true
-            } else {
-                false
-            }
-        } catch (throwable: Throwable) {
-            false
-        }
-        if (nativeHandled) return true
-
-        val properties = MotionEvent.PointerProperties().apply {
-            id = 0
-            toolType = MotionEvent.TOOL_TYPE_MOUSE
-        }
-        val coords = MotionEvent.PointerCoords().apply {
-            this.x = x
-            this.y = y
-            pressure = 1f
-            size = 1f
-        }
-        val down = MotionEvent.obtain(
-            now, now, MotionEvent.ACTION_BUTTON_PRESS, 1,
-            arrayOf(properties), arrayOf(coords), 0,
-            MotionEvent.BUTTON_PRIMARY, 1f, 1f, 0, 0,
-            InputDevice.SOURCE_MOUSE, 0
+        val downEvent = MotionEvent.obtain(
+            SystemClock.uptimeMillis(),
+            SystemClock.uptimeMillis(),
+            MotionEvent.ACTION_DOWN,
+            x, y, 0
         )
-        val up = MotionEvent.obtain(
-            now, now, MotionEvent.ACTION_BUTTON_RELEASE, 1,
-            arrayOf(properties), arrayOf(coords), 0,
-            0, 1f, 1f, 0, 0,
-            InputDevice.SOURCE_MOUSE, 0
-        )
-        val mouseHandled = try {
-            val downHandled = dispatchGenericMotionEventToGame(down)
-            val upHandled = dispatchGenericMotionEventToGame(up)
-            downHandled || upHandled
-        } catch (throwable: Throwable) {
-            false
-        } finally {
-            down.recycle()
-            up.recycle()
+        val dispatched = dispatchTouchEvent(downEvent)
+        downEvent.recycle()
+        if (dispatched) {
+            window.decorView.postDelayed({
+                val upEvent = MotionEvent.obtain(
+                    SystemClock.uptimeMillis(),
+                    SystemClock.uptimeMillis(),
+                    MotionEvent.ACTION_UP,
+                    x, y, 0
+                )
+                dispatchTouchEvent(upEvent)
+                upEvent.recycle()
+            }, 45L)
         }
-        if (mouseHandled) return true
-
-        val touchDown = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
-        val touchUp = MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, x, y, 0)
-        val touchHandled = try {
-            val downHandled = dispatchTouchEventToGame(touchDown)
-            val upHandled = dispatchTouchEventToGame(touchUp)
-            downHandled || upHandled
-        } catch (throwable: Throwable) {
-            false
-        } finally {
-            touchDown.recycle()
-            touchUp.recycle()
-        }
-        if (touchHandled) return true
-
-        val keyDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_1, 0)
-        keyDown.source = InputDevice.SOURCE_MOUSE
-        val keyUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_1, 0)
-        keyUp.source = InputDevice.SOURCE_MOUSE
-        return try {
-            val downHandled = dispatchKeyEventToGame(keyDown)
-            val upHandled = dispatchKeyEventToGame(keyUp)
-            downHandled || upHandled
-        } catch (throwable: Throwable) {
-            false
-        }
+        return dispatched
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {

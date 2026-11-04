@@ -59,15 +59,15 @@ constexpr float kMinRange = 3.0f;
 constexpr float kMaxRange = 16.0f;
 constexpr float kRadiansToDegrees = 57.2957795f;
 constexpr float kFovPreferenceDegrees = 100.0f;
-constexpr float kLegitFovDegrees = 40.0f;
+constexpr float kLegitFovDegrees = 28.0f;
 constexpr float kAimDeadzoneDegrees = 0.05f;
-constexpr float kLegitDeadzoneDegrees = 0.8f;
+constexpr float kLegitDeadzoneDegrees = 2.5f;
 constexpr float kMaxTurnSpeedDegreesPerSecond = 1800.0f;
-constexpr float kLegitTurnSpeedMin = 360.0f;
-constexpr float kLegitTurnSpeedMax = 620.0f;
+constexpr float kLegitTurnSpeedMin = 280.0f;
+constexpr float kLegitTurnSpeedMax = 480.0f;
 constexpr float kTriggerFovDegrees = 5.0f;
 constexpr float kTriggerMaxDistance = 4.5f;
-constexpr int kTriggerDefaultDelayMs = 160;
+constexpr int kTriggerDefaultDelayMs = 280;
 constexpr int kTriggerMinDelayMs = 40;
 constexpr int kTriggerMaxDelayMs = 400;
 constexpr int kActorTypeMob = 0x100;
@@ -356,9 +356,9 @@ void aimAtLocalPlayer(void *localPlayer) {
     g_triggerReady.store(false, std::memory_order_relaxed);
     g_turnSpeed = legit ? randomRange(kLegitTurnSpeedMin, kLegitTurnSpeedMax)
                         : kMaxTurnSpeedDegreesPerSecond;
-    g_aimGain = legit ? randomRange(0.14f, 0.22f) : 1.0f;
+    g_aimGain = legit ? randomRange(0.08f, 0.12f) : 1.0f;
     g_reactionUntil = now + std::chrono::milliseconds(
-        legit ? randomRangeInt(110, 240) : 0);
+        legit ? randomRangeInt(180, 340) : 0);
   }
 
   const bool onTarget = target->angular <= kTriggerFovDegrees &&
