@@ -65,6 +65,14 @@ public final class AimAssistMod {
         return initialized && nativeIsEnabled();
     }
 
+    public static void setTouchActive(boolean active) {
+        if (initialized) nativeSetTouchActive(active);
+    }
+
+    public static void setActivationHeld(boolean held) {
+        if (initialized) nativeSetActivationHeld(held);
+    }
+
     public static boolean isInitialized() {
         return initialized;
     }
@@ -78,4 +86,6 @@ public final class AimAssistMod {
     private static native void nativeSetTriggerBot(boolean enabled);
     private static native void nativeSetTriggerDelay(int delayMs);
     private static native boolean nativeIsOnTarget();
+    private static native void nativeSetTouchActive(boolean active);
+    private static native void nativeSetActivationHeld(boolean held);
 }
