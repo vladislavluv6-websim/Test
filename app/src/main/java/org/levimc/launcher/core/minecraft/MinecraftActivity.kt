@@ -426,8 +426,9 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
 
     fun performInbuiltAttack(): Boolean {
         val now = SystemClock.uptimeMillis()
-        val x = width / 2f
-        val y = height / 2f
+        val metrics = resources.displayMetrics
+        val x = metrics.widthPixels / 2f
+        val y = metrics.heightPixels / 2f
         if (x <= 0f || y <= 0f) return false
 
         val nativeHandled = try {
