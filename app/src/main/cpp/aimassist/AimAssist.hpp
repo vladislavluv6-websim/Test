@@ -43,22 +43,24 @@ struct Settings {
 
   float fovDeg = 360.0f;
   float range = 11.68f;
-  float smoothingSpeed = 11.5f;
-  float maxDegPerSecond = 190.0f;
-  float maxAccelDegPerSecond2 = 850.0f;
-  float deadzoneDeg = 0.45f;
-  float fullSpeedRangeDeg = 7.0f;
+  float aimHeightOffset = 0.0f;
+  float smoothingSpeed = 16.0f;
+  float maxDegPerSecond = 320.0f;
+  float maxAccelDegPerSecond2 = 1800.0f;
+  float deadzoneDeg = 0.35f;
+  float fullSpeedRangeDeg = 8.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
   TargetBone targetBone = TargetBone::Head;
 
-  int stickyTicks = 10;
-  float switchHysteresisDeg = 4.0f;
-  int targetSmoothFrames = 4;
+  int stickyTicks = 4;
+  float switchHysteresisDeg = 2.5f;
+  int targetSmoothFrames = 2;
+  int targetGraceFrames = 8;
 
   float randomJitterDeg = 0.0f;
   int randomJitterIntervalMs = 150;
-  int humanizePauseMs = 120;
+  int humanizePauseMs = 100;
 
   bool visibleCheck = true;
   bool ignoreInvisible = true;
@@ -122,6 +124,7 @@ public:
   void setRange(float range);
   void setStrength(float strength);
   void setFov(float fovDeg);
+  void setAimHeightOffset(float offset);
   void setBodyPart(int bodyPart);
   void setWallCheck(bool enabled);
   void setTargetPlayers(bool enabled);
@@ -155,7 +158,8 @@ private:
   bool isPauseActive(const Settings &settings) const;
   bool isInvisible(void *actor) const;
   bool isSameTeam(void *local, void *other) const;
-  Vec3 getTargetPoint(void *actor, TargetBone bone) const;
+  Vec3 getTargetPoint(void *actor, TargetBone bone,
+                      float heightOffset = 0.0f) const;
   Angles calculateAnglesToPoint(const Vec3 &point) const;
   void findTargetInternal(void *player, const Settings &settings);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,
@@ -188,6 +192,7 @@ private:
 
   int m_frameCounter = 0;
   int m_stickyLeft = 0;
+  int m_targetGrace = 0;
   std::atomic<int64_t> m_humanPauseUntilMs{0};
   int64_t m_lastJitterMs = 0;
   float m_jitterYaw = 0.0f;

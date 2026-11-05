@@ -670,6 +670,7 @@
     <string name="mod_config_aim_assist_legit">Humanized-наведение (плавнее и менее заметно)</string>
     <string name="mod_config_aim_assist_fov">Угол обзора (°)</string>
     <string name="mod_config_aim_assist_body_part">Часть тела</string>
+    <string name="mod_config_aim_assist_height">Смещение высоты прицела (м)</string>
     <string name="mod_config_aim_assist_wall_check">Проверка стен</string>
     <string name="mod_config_aim_assist_target_players">Игроки</string>
     <string name="mod_config_aim_assist_target_mobs">Мобы</string>

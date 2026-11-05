@@ -60,6 +60,7 @@ void AimAssist::onEnable() {
   m_targetHistory.clear();
   m_historyActor = nullptr;
   m_stickyLeft = 0;
+  m_targetGrace = 0;
   m_frameCounter = 0;
   m_lastStepYaw = 0.0f;
   m_lastStepPitch = 0.0f;
@@ -139,6 +140,11 @@ void AimAssist::setFov(float fovDeg) {
   m_settings.fovDeg = clampf(fovDeg, 1.0f, 360.0f);
 }
 
+void AimAssist::setAimHeightOffset(float offset) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.aimHeightOffset = clampf(offset, -2.0f, 2.0f);
+}
+
 void AimAssist::setBodyPart(int bodyPart) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   const int value = std::max(0, std::min(2, bodyPart));
@@ -164,19 +170,19 @@ void AimAssist::setLegitMode(bool legit) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.legit = legit;
   if (legit) {
-    // Codex-подобный плавный довод: ниже скорость и ускорение, шире зона
-    // мягкого торможения. Значение strength=70 соответствует speed 0.70.
-    m_settings.smoothingSpeed = 11.5f;
-    m_settings.maxDegPerSecond = 190.0f;
-    m_settings.maxAccelDegPerSecond2 = 850.0f;
-    m_settings.deadzoneDeg = 0.45f;
-    m_settings.fullSpeedRangeDeg = 7.0f;
+    // Codex-подобный плавный довод, но быстрее прежнего: выше скорость
+    // и ускорение, при этом пружина остаётся критически задемпфированной.
+    m_settings.smoothingSpeed = 16.0f;
+    m_settings.maxDegPerSecond = 320.0f;
+    m_settings.maxAccelDegPerSecond2 = 1800.0f;
+    m_settings.deadzoneDeg = 0.35f;
+    m_settings.fullSpeedRangeDeg = 8.0f;
   } else {
-    m_settings.smoothingSpeed = 18.0f;
-    m_settings.maxDegPerSecond = 360.0f;
-    m_settings.maxAccelDegPerSecond2 = 2400.0f;
-    m_settings.deadzoneDeg = 0.25f;
-    m_settings.fullSpeedRangeDeg = 10.0f;
+    m_settings.smoothingSpeed = 24.0f;
+    m_settings.maxDegPerSecond = 500.0f;
+    m_settings.maxAccelDegPerSecond2 = 3200.0f;
+    m_settings.deadzoneDeg = 0.2f;
+    m_settings.fullSpeedRangeDeg = 11.0f;
   }
 }
 
@@ -330,11 +336,10 @@ void AimAssist::updateVisual(float dt) {
     return;
   }
 
-  // Поиск цели не каждый кадр: дорогой обход entity list.
+  // Поиск цели каждый кадр: иначе цель, прошедшая рядом/сбоку, теряется
+  // на несколько кадров. Список актёров переиспользует capacity.
   m_frameCounter++;
-  if (!m_target.valid || (m_frameCounter % 3) == 0) {
-    findTargetInternal(player, settings);
-  }
+  findTargetInternal(player, settings);
 
   if (!m_target.valid) {
     // Цели нет: не двигаем камеру вообще. Скорость гасим плавно,
@@ -364,6 +369,7 @@ void AimAssist::updateVisual(float dt) {
     m_target.point.y += offsets::kNearestOffset;
     break;
   }
+  m_target.point.y += settings.aimHeightOffset;
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -372,6 +378,10 @@ void AimAssist::updateVisual(float dt) {
   const float dzTarget = m_target.point.z - m_eye.z;
   m_target.distance = std::sqrt(dxTarget * dxTarget + dyTarget * dyTarget +
                                 dzTarget * dzTarget);
+  if (m_target.distance > settings.range + 1.5f) {
+    clearTarget();
+    return;
+  }
 
   const Vec3 point = smoothedPoint(m_target, settings);
   Angles aim = calculateAnglesToPoint(point);
@@ -495,8 +505,15 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
   bestAngle.angle = FLT_MAX;
   bestDistance.distance = FLT_MAX;
 
-  const float localYaw = m_localYaw.load(std::memory_order_relaxed);
-  const float localPitch = m_localPitch.load(std::memory_order_relaxed);
+  // Для выбора цели берём фактический view, а не local: если applyTurnDelta
+  // и компонент камеры разошлись, старая логика «не видела» игрока прямо
+  // под прицелом и теряла цель при проходе сбоку/сзади.
+  ViewAngles view{};
+  const bool hasView = m_bridge.getViewAngles(player, view);
+  const float localYaw =
+      hasView ? view.yaw : m_localYaw.load(std::memory_order_relaxed);
+  const float localPitch =
+      hasView ? view.pitch : m_localPitch.load(std::memory_order_relaxed);
 
   Target current = m_target;
   bool currentStillValid = false;
@@ -511,7 +528,8 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
     Vec3 targetPosition{};
     if (!m_bridge.getPosition(actor, targetPosition)) continue;
 
-    const Vec3 point = getTargetPoint(actor, settings.targetBone);
+    const Vec3 point = getTargetPoint(actor, settings.targetBone,
+                                      settings.aimHeightOffset);
     const Angles angles = calculateAnglesToPoint(point);
 
     const float deltaYaw = shortestDelta(localYaw, angles.yaw);
@@ -524,7 +542,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
     const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
 
     if (distance > settings.range) continue;
-    if (angular > settings.fovDeg) continue;
+    if (settings.fovDeg < 359.5f && angular > settings.fovDeg) continue;
 
     if (settings.visibleCheck &&
         !m_bridge.hasLineOfSight(player, eye, point)) {
@@ -557,26 +575,33 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
                       ? bestAngle
                       : bestDistance;
 
-  // Sticky target: пока тики не вышли, держим текущую цель.
-  if (currentStillValid && m_stickyLeft > 0) {
-    m_target = current;
-    m_target.valid = true;
-    return;
-  }
-
   bool better = false;
   if (currentStillValid && chosen.valid) {
+    const bool directHit = chosen.actor != current.actor &&
+                           chosen.angle <= 1.5f;
     if (settings.targetPriority == TargetPriority::Angle) {
-      better = chosen.angle + settings.switchHysteresisDeg < current.angle;
+      better = directHit ||
+               chosen.angle + settings.switchHysteresisDeg < current.angle;
     } else {
-      better = chosen.distance + 1.0f < current.distance &&
-               chosen.angle <= current.angle + 10.0f;
+      better = directHit ||
+               (chosen.distance + 1.0f < current.distance &&
+                chosen.angle <= current.angle + 10.0f);
     }
+  }
+
+  // Sticky target: пока тики не вышли, держим текущую цель, но игрок,
+  // оказавшийся прямо под прицелом, перехватывает цель сразу.
+  if (currentStillValid && m_stickyLeft > 0 && !better) {
+    m_target = current;
+    m_target.valid = true;
+    m_targetGrace = settings.targetGraceFrames;
+    return;
   }
 
   if (currentStillValid && !better) {
     m_target = current;
     m_target.valid = true;
+    m_targetGrace = settings.targetGraceFrames;
     return;
   }
 
@@ -592,9 +617,21 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
     }
     m_stickyLeft = std::max(0, settings.stickyTicks);
     m_target.valid = true;
+    m_targetGrace = settings.targetGraceFrames;
   } else if (currentStillValid) {
     m_target = current;
     m_target.valid = true;
+    m_targetGrace = settings.targetGraceFrames;
+  } else if (m_target.valid && m_targetGrace > 0) {
+    // Актёр мог выпасть из nearby-списка на кадр при проходе рядом/сзади.
+    // Держим последнюю цель ещё несколько кадров, пока позиция читается.
+    Vec3 stillThere{};
+    if (m_bridge.getPosition(m_target.actor, stillThere)) {
+      --m_targetGrace;
+      m_target.valid = true;
+    } else {
+      clearTarget();
+    }
   } else {
     clearTarget();
   }
@@ -610,7 +647,8 @@ Angles AimAssist::calculateAngles(void *entity) const {
   eye.y += offsets::kEyeHeight;
 
   const Settings settings = getSettings();
-  const Vec3 point = getTargetPoint(entity, settings.targetBone);
+  const Vec3 point = getTargetPoint(entity, settings.targetBone,
+                                    settings.aimHeightOffset);
   const float dx = point.x - eye.x;
   const float dy = point.y - eye.y;
   const float dz = point.z - eye.z;
@@ -735,7 +773,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 // ============================================================
 // Вспомогательное
 // ============================================================
-Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
+Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone,
+                                float heightOffset) const {
   Vec3 position{};
   if (!m_bridge.getPosition(actor, position)) {
     return position;
@@ -753,6 +792,7 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
     position.y += offsets::kNearestOffset;
     break;
   }
+  position.y += heightOffset;
   return position;
 }
 
@@ -802,6 +842,7 @@ void AimAssist::clearTarget() {
   m_targetHistory.clear();
   m_historyActor = nullptr;
   m_stickyLeft = 0;
+  m_targetGrace = 0;
   m_velYaw = 0.0f;
   m_velPitch = 0.0f;
   m_onTarget.store(false, std::memory_order_release);
