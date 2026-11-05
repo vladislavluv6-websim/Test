@@ -269,13 +269,15 @@ void AimAssist::updateVisual(float dt) {
 
   const Settings settings = getSettings();
 
-  // Всегда синхронизируем локальные углы с фактическим head view.
-  // Раньше local жил своей жизнью и после движения камеры/ходьбы
-  // applyTurnDelta начинал считать дельту от устаревшего угла — отсюда
-  // редкие рывки и ощущение, что наведение не работает.
-  m_localPitch.store(current.pitch, std::memory_order_relaxed);
-  m_localYaw.store(current.yaw, std::memory_order_relaxed);
-  m_hasLocal = true;
+  // Синхронизируем локальные углы с фактическим head view. Если настоящий
+  // head getter недоступен, rotation-компонент может отставать от камеры —
+  // тогда сохраняем накопленный local, иначе каждый кадр считали бы дельту
+  // от устаревшего угла и камера уезжала/дергалась.
+  if (m_bridge.hasHeadRotation() || !m_hasLocal) {
+    m_localPitch.store(current.pitch, std::memory_order_relaxed);
+    m_localYaw.store(current.yaw, std::memory_order_relaxed);
+    m_hasLocal = true;
+  }
 
   if (!isActive(settings)) {
     clearTarget();

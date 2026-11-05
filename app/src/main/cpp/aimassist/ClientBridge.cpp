@@ -269,6 +269,8 @@ void *ClientBridge::getLocalPlayer() const {
   return player;
 }
 
+bool ClientBridge::hasHeadRotation() const { return g_getHeadRotation != nullptr; }
+
 bool ClientBridge::getViewAngles(void *player, ViewAngles &out) const {
   if (!player) return false;
 

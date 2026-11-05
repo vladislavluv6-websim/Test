@@ -43,6 +43,8 @@ public:
   // Текущий head/камера view. Сначала Actor::getHeadRotation, затем
   // rotation-компонент как fallback.
   bool getViewAngles(void *player, ViewAngles &out) const;
+  // true, если доступен настоящий head view (сигнатура найдена).
+  bool hasHeadRotation() const;
 
   // Двигает локальную камеру игровым методом applyTurnDelta.
   // pitchUp < 0 — вверх, yaw > 0 — вправо (как в 1.26.60).
