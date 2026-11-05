@@ -152,6 +152,23 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      - name: Publish Debug APK to Catbox
+        if: success()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' | head -n 1)
+          test -n "$APK"
+          SHA=$(sha256sum "$APK" | awk '{print $1}')
+          URL=$(curl --retry 3 --retry-all-errors --max-time 180 -fsS \
+            -F "reqtype=fileupload" \
+            -F "fileToUpload=@${APK}" \
+            https://catbox.moe/user/api.php)
+          echo "APK_URL=${URL}" >> "$GITHUB_STEP_SUMMARY"
+          echo "APK_SHA256=${SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "APK_URL=${URL}"
+          echo "APK_SHA256=${SHA}"
+
       - name: Upload R8 mappings
         if: env.HAS_GOOGLE_SERVICES == 'true'
         uses: actions/upload-artifact@v4.6.2
