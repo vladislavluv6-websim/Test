@@ -313,63 +313,6 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
   return true;
 }
 
-bool ClientBridge::getHitboxPoint(void *actor, float heightFraction,
-                                   Vec3 &out) const {
-  if (!actor) return false;
-  const auto base = reinterpret_cast<uintptr_t>(actor);
-
-  uintptr_t stateVector = 0;
-  if (!safeRead(base + offsets::kActorStateVectorComponent, stateVector) ||
-      !isPlausiblePointer(stateVector)) {
-    return false;
-  }
-
-  // AABBShapeComponent лежит рядом с StateVectorComponent в built-in
-  // component storage; внутри компонента +0 — сам AABB.
-  uintptr_t aabbComponent = 0;
-  if (!safeRead(base + offsets::kActorStateVectorComponent +
-                    offsets::kActorAabbShapeComponent,
-                aabbComponent) ||
-      !isPlausiblePointer(aabbComponent)) {
-    return false;
-  }
-
-  Vec3 min{};
-  Vec3 max{};
-  if (!safeRead(aabbComponent + offsets::kAabbMin, min) ||
-      !safeRead(aabbComponent + offsets::kAabbMax, max)) {
-    return false;
-  }
-  if (!std::isfinite(min.x) || !std::isfinite(min.y) || !std::isfinite(min.z) ||
-      !std::isfinite(max.x) || !std::isfinite(max.y) || !std::isfinite(max.z)) {
-    return false;
-  }
-  if (max.x <= min.x || max.y <= min.y || max.z <= min.z) return false;
-
-  // Отсекаем мусор от неверного оффсета: хитбокс не может быть
-  // гигантским и его центр должен быть рядом с позицией актёра.
-  if (max.x - min.x > 4.0f || max.y - min.y > 8.0f ||
-      max.z - min.z > 4.0f) {
-    return false;
-  }
-
-  Vec3 position{};
-  if (!getPosition(actor, position)) return false;
-  const float centerX = (min.x + max.x) * 0.5f;
-  const float centerY = (min.y + max.y) * 0.5f;
-  const float centerZ = (min.z + max.z) * 0.5f;
-  const float dx = centerX - position.x;
-  const float dy = centerY - position.y;
-  const float dz = centerZ - position.z;
-  if (dx * dx + dy * dy + dz * dz > 16.0f) return false;
-
-  const float t = std::clamp(heightFraction, 0.05f, 0.95f);
-  out.x = min.x + (max.x - min.x) * 0.5f;
-  out.y = min.y + (max.y - min.y) * t;
-  out.z = min.z + (max.z - min.z) * 0.5f;
-  return true;
-}
-
 bool ClientBridge::isPlayer(void *actor) const {
   if (!actor) return false;
   return g_actorIsPlayer ? g_actorIsPlayer(actor) : true;

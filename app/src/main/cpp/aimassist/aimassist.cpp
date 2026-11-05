@@ -76,9 +76,9 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetLegit
   aimbot::AimAssist::instance().setLegitMode(enabled == JNI_TRUE);
 }
 extern "C" JNIEXPORT void JNICALL
-Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetHeight(
-    JNIEnv *, jclass, jfloat fraction) {
-  aimbot::AimAssist::instance().setTargetHeight(fraction);
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetBodyPart(
+    JNIEnv *, jclass, jint bodyPart) {
+  aimbot::AimAssist::instance().setBodyPart(bodyPart);
 }
 
 extern "C" JNIEXPORT void JNICALL

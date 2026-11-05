@@ -36,7 +36,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String CFG_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String CFG_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
-    private static final String CFG_AIM_ASSIST_TARGET_HEIGHT = "aim_assist_target_height";
+    private static final String CFG_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
     private static final String CFG_AIM_ASSIST_MAX_SPEED = "aim_assist_max_speed";
     private static final String CFG_AIM_ASSIST_SMOOTHING = "aim_assist_smoothing";
     private static final String CFG_AIM_ASSIST_ACCEL = "aim_assist_accel";
@@ -257,6 +257,8 @@ public final class InbuiltModuleProvider {
             case TOGGLE: type = "toggle"; break;
             case KEYBIND: type = "keybind"; break;
             case BUTTON: type = "button"; break;
+            case RADIO: type = "choice"; break;
+            case SLIDER_FLOAT: type = "slider_float"; break;
             default: type = "slider_int"; break;
         }
         JSONObject node = new JSONObject().put("id", key).put("key", key)
@@ -264,6 +266,16 @@ public final class InbuiltModuleProvider {
                 .put("type", type)
                 .put("default_value", config.defaultValue)
                 .put("min_value", config.minValue).put("max_value", config.maxValue);
+        if (config.type == UnifiedMod.ConfigType.RADIO) {
+            node.put("style", "radio");
+            JSONArray options = new JSONArray();
+            String[] labels = config.minValue.split(",");
+            for (int i = 0; i < labels.length; i++) {
+                options.put(new JSONObject().put("value", String.valueOf(i))
+                        .put("label", labels[i].trim()));
+            }
+            node.put("options", options);
+        }
         if (!config.dependsOn.isEmpty()) {
             node.put("enabled_when", new JSONArray().put(new JSONObject()
                     .put("key", config.dependsOn).put("op", "truthy")));
@@ -372,11 +384,15 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "360", "30", "360",
                     String.valueOf(manager.getAimAssistFov())));
-            configs.add(config(CFG_AIM_ASSIST_TARGET_HEIGHT,
-                    context.getString(R.string.mod_config_aim_assist_target_height),
-                    UnifiedMod.ConfigType.SLIDER_INT,
-                    "70", "35", "95",
-                    String.valueOf(manager.getAimAssistTargetHeight())));
+            configs.add(config(CFG_AIM_ASSIST_BODY_PART,
+                    context.getString(R.string.mod_config_aim_assist_body_part),
+                    UnifiedMod.ConfigType.RADIO,
+                    "0",
+                    context.getString(R.string.mod_config_aim_assist_head) + ","
+                            + context.getString(R.string.mod_config_aim_assist_chest) + ","
+                            + context.getString(R.string.mod_config_aim_assist_legs),
+                    "",
+                    String.valueOf(manager.getAimAssistBodyPart())));
             configs.add(config(CFG_AIM_ASSIST_TARGET_PLAYERS,
                     context.getString(R.string.mod_config_aim_assist_target_players),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -598,8 +614,8 @@ public final class InbuiltModuleProvider {
             case CFG_AIM_ASSIST_TARGET_MOBS:
                 manager.setAimAssistTargetMobs(parseBoolean(value));
                 break;
-            case CFG_AIM_ASSIST_TARGET_HEIGHT:
-                manager.setAimAssistTargetHeight(parseInt(value, manager.getAimAssistTargetHeight()));
+            case CFG_AIM_ASSIST_BODY_PART:
+                manager.setAimAssistBodyPart(parseInt(value, manager.getAimAssistBodyPart()));
                 break;
             case CFG_AIM_ASSIST_MAX_SPEED:
                 manager.setAimAssistMaxSpeed(parseInt(value, manager.getAimAssistMaxSpeed()));

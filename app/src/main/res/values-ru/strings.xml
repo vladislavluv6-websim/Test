@@ -672,7 +672,10 @@
     <string name="mod_config_aim_assist_wall_check">Проверка стен</string>
     <string name="mod_config_aim_assist_target_players">Игроки</string>
     <string name="mod_config_aim_assist_target_mobs">Мобы</string>
-    <string name="mod_config_aim_assist_target_height">Высота цели (0–100, 70 = грудь)</string>
+    <string name="mod_config_aim_assist_body_part">Часть тела для наведения</string>
+    <string name="mod_config_aim_assist_head">Голова</string>
+    <string name="mod_config_aim_assist_chest">Грудь</string>
+    <string name="mod_config_aim_assist_legs">Ноги</string>
     <string name="mod_config_aim_assist_prefer_closest">Приоритет ближайшей цели</string>
     <string name="mod_config_aim_assist_sticky">Удержание цели (тики)</string>
     <string name="mod_config_aim_assist_grace">Запас удержания (кадры)</string>

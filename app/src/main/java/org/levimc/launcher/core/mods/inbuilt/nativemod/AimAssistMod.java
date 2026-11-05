@@ -49,8 +49,8 @@ public final class AimAssistMod {
         if (initialized) nativeSetLegitMode(enabled);
     }
 
-    public static void setTargetHeight(float fraction) {
-        if (initialized) nativeSetTargetHeight(fraction);
+    public static void setBodyPart(int bodyPart) {
+        if (initialized) nativeSetBodyPart(bodyPart);
     }
 
     public static void setMaxSpeed(float degPerSecond) {
@@ -143,7 +143,7 @@ public final class AimAssistMod {
     private static native void nativeSetTargetPlayers(boolean enabled);
     private static native void nativeSetTargetMobs(boolean enabled);
     private static native void nativeSetLegitMode(boolean enabled);
-    private static native void nativeSetTargetHeight(float fraction);
+    private static native void nativeSetBodyPart(int bodyPart);
     private static native void nativeSetMaxSpeed(float degPerSecond);
     private static native void nativeSetSmoothing(float speed);
     private static native void nativeSetAcceleration(float degPerSecond2);

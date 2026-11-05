@@ -30,7 +30,7 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setWallCheck(manager.isAimAssistWallCheck());
         AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
         AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
-        AimAssistMod.setTargetHeight(manager.getAimAssistTargetHeight() / 100.0f);
+        AimAssistMod.setBodyPart(manager.getAimAssistBodyPart());
         AimAssistMod.setMaxSpeed(manager.getAimAssistMaxSpeed());
         AimAssistMod.setSmoothing(manager.getAimAssistSmoothing());
         AimAssistMod.setAcceleration(manager.getAimAssistAcceleration());

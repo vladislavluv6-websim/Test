@@ -52,11 +52,7 @@ inline constexpr uintptr_t kStatePosition = 0;
 // applyTurnDelta двигает именно этот компонент; читаем его каждый кадр.
 inline constexpr uintptr_t kActorRotationComponent = 0x238;
 
-// Если известен AABB / flags / team — заполни. 0 = фича отключена.
-// AABBShapeComponent is the built-in component next to StateVectorComponent.
-inline constexpr uintptr_t kActorAabbShapeComponent = 8;
-inline constexpr uintptr_t kAabbMin = 0;
-inline constexpr uintptr_t kAabbMax = 12;
+// Если известны flags / team — заполни. 0 = фича отключена.
 inline constexpr uintptr_t kActorFlags = 0;
 inline constexpr uintptr_t kActorTeam = 0;
 
@@ -69,7 +65,8 @@ inline constexpr int kActorTypeMob = 0x100;
 // КОНСТАНТЫ ЦЕЛИ
 // ============================================================
 inline constexpr float kEyeHeight = 1.62f;
-// Fallback: средний рост игрока, если AABBShapeComponent недоступен.
-inline constexpr float kFallbackActorHeight = 1.80f;
+inline constexpr float kHeadOffset = 1.62f;
+inline constexpr float kChestOffset = 1.20f;
+inline constexpr float kLegsOffset = 0.45f;
 
 } // namespace aimbot::offsets

@@ -21,7 +21,7 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
-    private static final String KEY_AIM_ASSIST_TARGET_HEIGHT = "aim_assist_target_height";
+    private static final String KEY_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
     private static final String KEY_AIM_ASSIST_MAX_SPEED = "aim_assist_max_speed";
     private static final String KEY_AIM_ASSIST_SMOOTHING = "aim_assist_smoothing";
     private static final String KEY_AIM_ASSIST_ACCEL = "aim_assist_accel";
@@ -77,7 +77,7 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_WALL_CHECK = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
-    private static final int DEFAULT_AIM_ASSIST_TARGET_HEIGHT = 70;
+    private static final int DEFAULT_AIM_ASSIST_BODY_PART = 0;
     private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 650;
     private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 18;
     private static final int DEFAULT_AIM_ASSIST_ACCEL = 2600;
@@ -181,14 +181,14 @@ public class InbuiltModManager {
         prefs.edit().putBoolean(KEY_AIM_ASSIST_TARGET_MOBS, enabled).apply();
     }
 
-    public int getAimAssistTargetHeight() {
-        return Math.max(35, Math.min(95,
-                prefs.getInt(KEY_AIM_ASSIST_TARGET_HEIGHT, DEFAULT_AIM_ASSIST_TARGET_HEIGHT)));
+    public int getAimAssistBodyPart() {
+        return Math.max(0, Math.min(2,
+                prefs.getInt(KEY_AIM_ASSIST_BODY_PART, DEFAULT_AIM_ASSIST_BODY_PART)));
     }
 
-    public void setAimAssistTargetHeight(int percent) {
-        prefs.edit().putInt(KEY_AIM_ASSIST_TARGET_HEIGHT,
-                Math.max(35, Math.min(95, percent))).apply();
+    public void setAimAssistBodyPart(int bodyPart) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_BODY_PART,
+                Math.max(0, Math.min(2, bodyPart))).apply();
     }
 
     public int getAimAssistMaxSpeed() {

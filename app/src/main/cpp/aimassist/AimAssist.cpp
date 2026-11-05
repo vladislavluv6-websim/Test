@@ -155,9 +155,19 @@ void AimAssist::setTargetMobs(bool enabled) {
   m_settings.targetMobs = enabled;
 }
 
-void AimAssist::setTargetHeight(float fraction) {
+void AimAssist::setBodyPart(int bodyPart) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
-  m_settings.targetHeight = clampf(fraction, 0.35f, 0.95f);
+  switch (std::max(0, std::min(2, bodyPart))) {
+  case 1:
+    m_settings.targetBone = TargetBone::Chest;
+    break;
+  case 2:
+    m_settings.targetBone = TargetBone::Legs;
+    break;
+  default:
+    m_settings.targetBone = TargetBone::Head;
+    break;
+  }
 }
 
 void AimAssist::setMaxSpeed(float degPerSecond) {
@@ -340,8 +350,8 @@ void AimAssist::updateVisual(float dt) {
     return;
   }
 
-  // Точка на реальном AABB каждый кадр: по умолчанию грудь (70% высоты).
-  m_target.point = getTargetPoint(m_target.actor, settings.targetHeight);
+  // Высота цели задаётся режимом: голова / грудь / ноги.
+  m_target.point = getTargetPoint(m_target.actor, settings.targetBone);
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -500,7 +510,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
     Vec3 targetPosition{};
     if (!m_bridge.getPosition(actor, targetPosition)) continue;
 
-    const Vec3 point = getTargetPoint(actor, settings.targetHeight);
+    const Vec3 point = getTargetPoint(actor, settings.targetBone);
     const Angles angles = calculateAnglesToPoint(point);
 
     const float deltaYaw = shortestDelta(localYaw, angles.yaw);
@@ -618,7 +628,7 @@ Angles AimAssist::calculateAngles(void *entity) const {
   eye.y += offsets::kEyeHeight;
 
   const Settings settings = getSettings();
-  const Vec3 point = getTargetPoint(entity, settings.targetHeight);
+  const Vec3 point = getTargetPoint(entity, settings.targetBone);
   const float dx = point.x - eye.x;
   const float dy = point.y - eye.y;
   const float dz = point.z - eye.z;
@@ -743,19 +753,26 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 // ============================================================
 // Вспомогательное
 // ============================================================
-Vec3 AimAssist::getTargetPoint(void *actor, float heightFraction) const {
-  Vec3 point{};
-  if (m_bridge.getHitboxPoint(actor, heightFraction, point)) {
-    return point;
-  }
-
+Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
   Vec3 position{};
   if (!m_bridge.getPosition(actor, position)) {
     return position;
   }
-  // Fallback: StateVector position — это ноги.
-  position.y += offsets::kFallbackActorHeight *
-                clampf(heightFraction, 0.35f, 0.95f);
+
+  // StateVector position — это ноги. Смещения считаем от них, не доверяя
+  // AABB-компоненту: при неверном чтении он уводил прицел вниз.
+  switch (bone) {
+  case TargetBone::Chest:
+    position.y += offsets::kChestOffset;
+    break;
+  case TargetBone::Legs:
+    position.y += offsets::kLegsOffset;
+    break;
+  case TargetBone::Head:
+  default:
+    position.y += offsets::kHeadOffset;
+    break;
+  }
   return position;
 }
 

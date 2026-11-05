@@ -29,6 +29,12 @@ enum class TargetPriority : int {
   Distance = 1,
 };
 
+enum class TargetBone : int {
+  Head = 0,
+  Chest = 1,
+  Legs = 2,
+};
+
 struct Settings {
   bool enabled = false;
 
@@ -37,8 +43,6 @@ struct Settings {
 
   float fovDeg = 360.0f;
   float range = 11.68f;
-  // 0 = ноги, 1 = макушка AABB. 0.70 — грудь игрока.
-  float targetHeight = 0.70f;
   float smoothingSpeed = 18.0f;
   float maxDegPerSecond = 650.0f;
   float maxAccelDegPerSecond2 = 2600.0f;
@@ -46,6 +50,7 @@ struct Settings {
   float fullSpeedRangeDeg = 12.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
+  TargetBone targetBone = TargetBone::Head;
 
   int stickyTicks = 4;
   float switchHysteresisDeg = 3.0f;
@@ -120,7 +125,7 @@ public:
   void setWallCheck(bool enabled);
   void setTargetPlayers(bool enabled);
   void setTargetMobs(bool enabled);
-  void setTargetHeight(float fraction);
+  void setBodyPart(int bodyPart);
   void setMaxSpeed(float degPerSecond);
   void setSmoothing(float speed);
   void setAcceleration(float degPerSecond2);
@@ -157,7 +162,7 @@ private:
   bool isActive(const Settings &settings) const;
   bool isInvisible(void *actor) const;
   bool isSameTeam(void *local, void *other) const;
-  Vec3 getTargetPoint(void *actor, float heightFraction) const;
+  Vec3 getTargetPoint(void *actor, TargetBone bone) const;
   Angles calculateAnglesToPoint(const Vec3 &point) const;
   void findTargetInternal(void *player, const Settings &settings);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,

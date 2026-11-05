@@ -51,9 +51,6 @@ public:
   bool setBodyYaw(void *player, float yaw);
 
   bool getPosition(void *actor, Vec3 &out) const;
-  // Точка на реальном AABB: heightFraction 0 — ноги, 1 — макушка.
-  // false — компонент недоступен.
-  bool getHitboxPoint(void *actor, float heightFraction, Vec3 &out) const;
   bool isPlayer(void *actor) const;
   int getActorType(void *actor) const;
   uint64_t getActorFlags(void *actor) const;

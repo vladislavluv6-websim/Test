@@ -665,7 +665,10 @@
     <string name="mod_config_aim_assist_wall_check">Wall check</string>
     <string name="mod_config_aim_assist_target_players">Target players</string>
     <string name="mod_config_aim_assist_target_mobs">Target mobs</string>
-    <string name="mod_config_aim_assist_target_height">Target height (0-100, 70 = chest)</string>
+    <string name="mod_config_aim_assist_body_part">Aim body part</string>
+    <string name="mod_config_aim_assist_head">Head</string>
+    <string name="mod_config_aim_assist_chest">Chest</string>
+    <string name="mod_config_aim_assist_legs">Legs</string>
     <string name="mod_config_aim_assist_prefer_closest">Prefer closest target</string>
     <string name="mod_config_aim_assist_sticky">Target stickiness (ticks)</string>
     <string name="mod_config_aim_assist_grace">Target grace (frames)</string>
