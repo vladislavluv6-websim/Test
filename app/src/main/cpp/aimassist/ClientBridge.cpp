@@ -42,6 +42,7 @@ using NormalTickFn = void (*)(void *);
 using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
 using ApplyTurnDeltaFn = void (*)(void *, const Rotation &);
+using GetHeadRotationFn = Rotation (*)(void *);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
 
@@ -49,6 +50,7 @@ NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
 ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
+GetHeadRotationFn g_getHeadRotation = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 
@@ -178,6 +180,9 @@ bool ClientBridge::initialize() {
   const uintptr_t applyTurnDelta =
       pl::memory::resolveSignature(offsets::kApplyTurnDeltaSignature,
                                    offsets::kMinecraftLibrary);
+  const uintptr_t getHeadRotation =
+      pl::memory::resolveSignature(offsets::kActorGetHeadRotationSignature,
+                                   offsets::kMinecraftLibrary);
   const uintptr_t fetchNearbyActors =
       pl::memory::resolveSignature(offsets::kFetchNearbyActorsSignature,
                                    offsets::kMinecraftLibrary);
@@ -201,6 +206,7 @@ bool ClientBridge::initialize() {
 
   g_getLocalPlayer = reinterpret_cast<GetLocalPlayerFn>(getLocalPlayer);
   g_applyTurnDelta = reinterpret_cast<ApplyTurnDeltaFn>(applyTurnDelta);
+  g_getHeadRotation = reinterpret_cast<GetHeadRotationFn>(getHeadRotation);
   g_fetchNearbyActors =
       reinterpret_cast<FetchNearbyActorsFn>(fetchNearbyActors);
   g_actorIsPlayer = reinterpret_cast<ActorIsPlayerFn>(actorIsPlayer);
@@ -228,10 +234,12 @@ bool ClientBridge::initialize() {
 
   g_initialized.store(true, std::memory_order_release);
   __android_log_print(ANDROID_LOG_INFO, kTag,
-                      "bridge initialized: tick=%p update=%p delta=%p",
+                      "bridge initialized: tick=%p update=%p delta=%p "
+                      "headGet=%p",
                       reinterpret_cast<void *>(normalTick),
                       reinterpret_cast<void *>(clientUpdate),
-                      reinterpret_cast<void *>(applyTurnDelta));
+                      reinterpret_cast<void *>(applyTurnDelta),
+                      reinterpret_cast<void *>(getHeadRotation));
   return true;
 }
 
@@ -262,6 +270,19 @@ void *ClientBridge::getLocalPlayer() const {
 }
 
 bool ClientBridge::getViewAngles(void *player, ViewAngles &out) const {
+  if (!player) return false;
+
+  // Для локального игрока head rotation — это реальный угол камеры.
+  // Rotation-компонент ниже остаётся body/legacy fallback.
+  if (g_getHeadRotation) {
+    const Rotation head = g_getHeadRotation(player);
+    if (std::isfinite(head.pitch) && std::isfinite(head.yaw)) {
+      out.pitch = head.pitch;
+      out.yaw = head.yaw;
+      return true;
+    }
+  }
+
   Rotation rotation{};
   if (!readRotationComponent(player, rotation)) {
     return false;
@@ -306,6 +327,61 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
   out.x = position[0];
   out.y = position[1];
   out.z = position[2];
+  return true;
+}
+
+bool ClientBridge::getHitboxCenter(void *actor, Vec3 &out) const {
+  if (!actor) return false;
+  const auto base = reinterpret_cast<uintptr_t>(actor);
+
+  uintptr_t stateVector = 0;
+  if (!safeRead(base + offsets::kActorStateVectorComponent, stateVector) ||
+      !isPlausiblePointer(stateVector)) {
+    return false;
+  }
+
+  // AABBShapeComponent лежит рядом с StateVectorComponent в built-in
+  // component storage; внутри компонента +0 — сам AABB.
+  uintptr_t aabbComponent = 0;
+  if (!safeRead(base + offsets::kActorStateVectorComponent +
+                    offsets::kActorAabbShapeComponent,
+                aabbComponent) ||
+      !isPlausiblePointer(aabbComponent)) {
+    return false;
+  }
+
+  Vec3 min{};
+  Vec3 max{};
+  if (!safeRead(aabbComponent + offsets::kAabbMin, min) ||
+      !safeRead(aabbComponent + offsets::kAabbMax, max)) {
+    return false;
+  }
+  if (!std::isfinite(min.x) || !std::isfinite(min.y) || !std::isfinite(min.z) ||
+      !std::isfinite(max.x) || !std::isfinite(max.y) || !std::isfinite(max.z)) {
+    return false;
+  }
+  if (max.x <= min.x || max.y <= min.y || max.z <= min.z) return false;
+
+  // Отсекаем мусор от неверного оффсета: хитбокс не может быть
+  // гигантским и его центр должен быть рядом с позицией актёра.
+  if (max.x - min.x > 4.0f || max.y - min.y > 8.0f ||
+      max.z - min.z > 4.0f) {
+    return false;
+  }
+
+  Vec3 position{};
+  if (!getPosition(actor, position)) return false;
+  const float centerX = (min.x + max.x) * 0.5f;
+  const float centerY = (min.y + max.y) * 0.5f;
+  const float centerZ = (min.z + max.z) * 0.5f;
+  const float dx = centerX - position.x;
+  const float dy = centerY - position.y;
+  const float dz = centerZ - position.z;
+  if (dx * dx + dy * dy + dz * dz > 16.0f) return false;
+
+  out.x = centerX;
+  out.y = centerY;
+  out.z = centerZ;
   return true;
 }
 

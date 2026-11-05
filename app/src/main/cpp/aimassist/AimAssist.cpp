@@ -159,18 +159,18 @@ void AimAssist::setLegitMode(bool legit) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.legit = legit;
   if (legit) {
-    // Центр цели по обеим осям, быстрый критически задемпфированный довод.
-    m_settings.smoothingSpeed = 24.0f;
-    m_settings.maxDegPerSecond = 520.0f;
-    m_settings.maxAccelDegPerSecond2 = 3000.0f;
-    m_settings.deadzoneDeg = 0.25f;
-    m_settings.fullSpeedRangeDeg = 10.0f;
-  } else {
-    m_settings.smoothingSpeed = 32.0f;
-    m_settings.maxDegPerSecond = 720.0f;
-    m_settings.maxAccelDegPerSecond2 = 4200.0f;
-    m_settings.deadzoneDeg = 0.15f;
+    // Плавный, но быстрый критически задемпфированный довод.
+    m_settings.smoothingSpeed = 18.0f;
+    m_settings.maxDegPerSecond = 650.0f;
+    m_settings.maxAccelDegPerSecond2 = 2600.0f;
+    m_settings.deadzoneDeg = 0.10f;
     m_settings.fullSpeedRangeDeg = 12.0f;
+  } else {
+    m_settings.smoothingSpeed = 24.0f;
+    m_settings.maxDegPerSecond = 850.0f;
+    m_settings.maxAccelDegPerSecond2 = 3600.0f;
+    m_settings.deadzoneDeg = 0.08f;
+    m_settings.fullSpeedRangeDeg = 14.0f;
   }
 }
 
@@ -187,25 +187,14 @@ void AimAssist::setTriggerDelay(int delayMs) {
   m_settings.triggerDelayMs = std::max(120, std::min(400, delayMs));
 }
 
-void AimAssist::setTouchActive(bool active) {
-  m_touchActive.store(active, std::memory_order_release);
-  const Settings settings = getSettings();
-  m_humanPauseUntilMs.store(
-      nowMs() + std::max(0, settings.humanizePauseMs),
-      std::memory_order_release);
-  if (!active) {
-    // После отпускания обязательно перечитываем фактический view.
-    m_resyncRequested.store(true, std::memory_order_release);
-  }
+void AimAssist::setTouchActive(bool) {
+  // Ручной look больше не ставит наведение на паузу. View всё равно
+  // перечитывается каждый кадр, поэтому цель не теряется.
 }
 
 void AimAssist::notifyCameraLook() {
-  const Settings settings = getSettings();
-  m_humanPauseUntilMs.store(
-      nowMs() + std::max(0, settings.humanizePauseMs),
-      std::memory_order_release);
-  // local пересинхронизируется в render-потоке, без гонки за m_hasLocal.
-  m_resyncRequested.store(true, std::memory_order_release);
+  // Наведение не должно замолкать, пока игрок двигает камеру.
+  // Фактический head view читается в updateVisual каждый кадр.
 }
 
 void AimAssist::setActivationHeld(bool held) {
@@ -251,13 +240,6 @@ bool AimAssist::isActive(const Settings &settings) const {
   return false;
 }
 
-bool AimAssist::isPauseActive(const Settings &) const {
-  if (m_touchActive.load(std::memory_order_acquire)) {
-    return true;
-  }
-  return nowMs() < m_humanPauseUntilMs.load(std::memory_order_acquire);
-}
-
 // ============================================================
 // Основной визуальный апдейт (каждый кадр)
 // ============================================================
@@ -287,40 +269,16 @@ void AimAssist::updateVisual(float dt) {
 
   const Settings settings = getSettings();
 
-  // Камера двигалась извне (палец/мышь): заново берём фактический view
-  // и сбрасываем скорость, чтобы не было рывка при возобновлении.
-  if (m_resyncRequested.exchange(false, std::memory_order_acq_rel)) {
-    // Сразу берём фактический view, иначе один кадр считаем от старого local.
-    m_localPitch.store(current.pitch, std::memory_order_relaxed);
-    m_localYaw.store(current.yaw, std::memory_order_relaxed);
-    m_hasLocal = true;
-    m_velYaw = 0.0f;
-    m_velPitch = 0.0f;
-  }
-
-  // Пока палец двигает камеру, local всегда равен фактическому view.
-  if (m_touchActive.load(std::memory_order_acquire)) {
-    m_localPitch.store(current.pitch, std::memory_order_relaxed);
-    m_localYaw.store(current.yaw, std::memory_order_relaxed);
-    m_hasLocal = true;
-    m_velYaw = 0.0f;
-    m_velPitch = 0.0f;
-    return;
-  }
-  if (!m_hasLocal) {
-    m_localPitch.store(current.pitch, std::memory_order_relaxed);
-    m_localYaw.store(current.yaw, std::memory_order_relaxed);
-    m_hasLocal = true;
-  }
+  // Всегда синхронизируем локальные углы с фактическим head view.
+  // Раньше local жил своей жизнью и после движения камеры/ходьбы
+  // applyTurnDelta начинал считать дельту от устаревшего угла — отсюда
+  // редкие рывки и ощущение, что наведение не работает.
+  m_localPitch.store(current.pitch, std::memory_order_relaxed);
+  m_localYaw.store(current.yaw, std::memory_order_relaxed);
+  m_hasLocal = true;
 
   if (!isActive(settings)) {
     clearTarget();
-    return;
-  }
-
-  if (isPauseActive(settings)) {
-    m_velYaw = 0.0f;
-    m_velPitch = 0.0f;
     return;
   }
 
@@ -338,15 +296,14 @@ void AimAssist::updateVisual(float dt) {
     return;
   }
 
-  // Обновляем точку текущей цели каждый кадр — это дешёвое чтение позиции.
+  // Центр реального AABB (hitbox) каждый кадр. Если компонент недоступен,
+  // getTargetPoint откатывается на позицию ног + высоту центра.
   Vec3 targetPosition{};
   if (!m_bridge.getPosition(m_target.actor, targetPosition)) {
     clearTarget();
     return;
   }
-  // Всегда центр модели: не голова и не ноги, а середина AABB.
-  m_target.point = targetPosition;
-  m_target.point.y += offsets::kCenterOffset;
+  m_target.point = getTargetPoint(m_target.actor);
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -748,11 +705,16 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 // Вспомогательное
 // ============================================================
 Vec3 AimAssist::getTargetPoint(void *actor) const {
+  Vec3 center{};
+  if (m_bridge.getHitboxCenter(actor, center)) {
+    return center;
+  }
+
   Vec3 position{};
   if (!m_bridge.getPosition(actor, position)) {
     return position;
   }
-  // StateVector position — это ноги; 0.9 м — центр хитбокса игрока.
+  // Fallback: StateVector position — это ноги.
   position.y += offsets::kCenterOffset;
   return position;
 }

@@ -40,8 +40,8 @@ public:
 
   void *getLocalPlayer() const;
 
-  // Текущий view: если kActorHeadRotation != 0 — читаем head,
-  // иначе читаем rotation-компонент (body/текущий угол).
+  // Текущий head/камера view. Сначала Actor::getHeadRotation, затем
+  // rotation-компонент как fallback.
   bool getViewAngles(void *player, ViewAngles &out) const;
 
   // Двигает локальную камеру игровым методом applyTurnDelta.
@@ -52,6 +52,8 @@ public:
   bool setBodyYaw(void *player, float yaw);
 
   bool getPosition(void *actor, Vec3 &out) const;
+  // Центр реального AABB (hitbox). false — компонент недоступен.
+  bool getHitboxCenter(void *actor, Vec3 &out) const;
   bool isPlayer(void *actor) const;
   int getActorType(void *actor) const;
   uint64_t getActorFlags(void *actor) const;

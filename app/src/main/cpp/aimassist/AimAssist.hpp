@@ -37,22 +37,21 @@ struct Settings {
 
   float fovDeg = 360.0f;
   float range = 11.68f;
-  float smoothingSpeed = 24.0f;
-  float maxDegPerSecond = 520.0f;
-  float maxAccelDegPerSecond2 = 3000.0f;
-  float deadzoneDeg = 0.25f;
-  float fullSpeedRangeDeg = 10.0f;
+  float smoothingSpeed = 18.0f;
+  float maxDegPerSecond = 650.0f;
+  float maxAccelDegPerSecond2 = 2600.0f;
+  float deadzoneDeg = 0.10f;
+  float fullSpeedRangeDeg = 12.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
 
-  int stickyTicks = 3;
-  float switchHysteresisDeg = 2.0f;
-  int targetSmoothFrames = 1;
-  int targetGraceFrames = 6;
+  int stickyTicks = 4;
+  float switchHysteresisDeg = 3.0f;
+  int targetSmoothFrames = 0;
+  int targetGraceFrames = 12;
 
   float randomJitterDeg = 0.0f;
   int randomJitterIntervalMs = 150;
-  int humanizePauseMs = 80;
 
   bool visibleCheck = true;
   bool ignoreInvisible = true;
@@ -145,7 +144,6 @@ private:
   AimAssist() = default;
 
   bool isActive(const Settings &settings) const;
-  bool isPauseActive(const Settings &settings) const;
   bool isInvisible(void *actor) const;
   bool isSameTeam(void *local, void *other) const;
   Vec3 getTargetPoint(void *actor) const;
@@ -164,8 +162,6 @@ private:
 
   std::atomic<bool> m_enabled{false};
   std::atomic<bool> m_activationHeld{false};
-  std::atomic<bool> m_touchActive{false};
-  std::atomic<bool> m_resyncRequested{false};
   std::atomic<float> m_localYaw{0.0f};
   std::atomic<float> m_localPitch{0.0f};
   std::atomic<float> m_networkYaw{0.0f};
@@ -182,7 +178,6 @@ private:
   int m_frameCounter = 0;
   int m_stickyLeft = 0;
   int m_targetGrace = 0;
-  std::atomic<int64_t> m_humanPauseUntilMs{0};
   int64_t m_lastJitterMs = 0;
   float m_jitterYaw = 0.0f;
   float m_jitterPitch = 0.0f;

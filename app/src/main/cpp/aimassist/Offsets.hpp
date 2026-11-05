@@ -41,6 +41,15 @@ inline constexpr const char *kActorIsPlayerSignature =
     "? ? ? 92 ? ? ? B8 28 01 08 4A ? ? ? 12 1F 01 09 6B E0 27 9F 1A C0 03 5F D6 "
     "E0 03 1F 2A C0 03 5F D6 ? ? ? D1 ? ? ? FD";
 
+// Actor::getHeadRotation() -> Vec2 {pitch, yaw}; actual camera/head angles.
+inline constexpr const char *kActorGetHeadRotationSignature =
+    "? ? ? F9 ? ? ? 52 00 E4 00 2F ? ? ? 72 ? ? ? A9 08 01 0B CB ? ? ? D3 ? ? ? 51 "
+    "0C 01 0A 8A ? ? ? B9 6B 0D 0C 8B ? ? ? F9 ? ? ? F9 ? ? ? B1 ? ? ? 54 8B 15 0B "
+    "8B ? ? ? B9 BF 01 0A 6B ? ? ? 54 ? ? ? F9 7F 01 09 EB ? ? ? 54 ? ? ? F9 ? ? ? B4 "
+    "? ? ? A9 ? ? ? D3 8C 01 0A CB 7F 0D 8C EB ? ? ? 54 ? ? ? F8 ? ? ? B4 ? ? ? 92 "
+    "? ? ? 12 ? ? ? 92 ? ? ? B8 ? ? ? 32 48 01 08 4A 1F 01 0B 6B ? ? ? 54 ? ? ? D3 "
+    "? ? ? F9 01 E4 00 2F";
+
 // ============================================================
 // OFFSETS (Minecraft Bedrock 1.26.60, ARM64)
 // ============================================================
@@ -52,12 +61,11 @@ inline constexpr uintptr_t kStatePosition = 0;
 // В этой версии поле является body-rotation; камеру двигаем через applyTurnDelta.
 inline constexpr uintptr_t kActorRotationComponent = 0x238;
 
-// Если в твоей сборке есть отдельный head/view-компонент, впиши его сюда.
-// 0 = использовать applyTurnDelta (как в текущей 1.26.60).
-inline constexpr uintptr_t kActorHeadRotation = 0;
-
 // Если известен AABB / flags / team — заполни. 0 = фича отключена.
-inline constexpr uintptr_t kActorAabb = 0;
+// AABBShapeComponent is the built-in component next to StateVectorComponent.
+inline constexpr uintptr_t kActorAabbShapeComponent = 8;
+inline constexpr uintptr_t kAabbMin = 0;
+inline constexpr uintptr_t kAabbMax = 12;
 inline constexpr uintptr_t kActorFlags = 0;
 inline constexpr uintptr_t kActorTeam = 0;
 
@@ -70,7 +78,7 @@ inline constexpr int kActorTypeMob = 0x100;
 // КОНСТАНТЫ ЦЕЛИ
 // ============================================================
 inline constexpr float kEyeHeight = 1.62f;
-// Центр хитбокса игрока над StateVector position (ноги).
+// Fallback-центр, если AABBShapeComponent недоступен.
 inline constexpr float kCenterOffset = 0.90f;
 
 } // namespace aimbot::offsets
