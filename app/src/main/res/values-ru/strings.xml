@@ -666,12 +666,21 @@
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Автоматически бьёт игроков в прицеле</string>
     <string name="mod_config_aim_assist_range">Дальность наведения (блоки)</string>
-    <string name="mod_config_aim_assist_strength">Скорость наведения (%)</string>
+    <string name="mod_config_aim_assist_strength">Сила наведения (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized-наведение (плавнее и менее заметно)</string>
     <string name="mod_config_aim_assist_fov">Угол обзора (°)</string>
     <string name="mod_config_aim_assist_wall_check">Проверка стен</string>
     <string name="mod_config_aim_assist_target_players">Игроки</string>
     <string name="mod_config_aim_assist_target_mobs">Мобы</string>
+    <string name="mod_config_aim_assist_target_height">Высота цели (0–100, 70 = грудь)</string>
+    <string name="mod_config_aim_assist_prefer_closest">Приоритет ближайшей цели</string>
+    <string name="mod_config_aim_assist_sticky">Удержание цели (тики)</string>
+    <string name="mod_config_aim_assist_grace">Запас удержания (кадры)</string>
+    <string name="mod_config_aim_assist_max_speed">Макс. скорость поворота (°/с)</string>
+    <string name="mod_config_aim_assist_smoothing">Плавность (1 = резко, 40 = мягко)</string>
+    <string name="mod_config_aim_assist_accel">Ускорение (°/с²)</string>
+    <string name="mod_config_aim_assist_deadzone">Мёртвая зона (0.01°)</string>
+    <string name="mod_config_aim_assist_full_range">Диапазон полной скорости (°)</string>
     <string name="mod_config_trigger_bot_delay">Задержка Trigger Bot (мс)</string>
     <string name="aim_assist_mod_unavailable">Аим-ассист недоступен для этой версии игры</string>
     <string name="inbuilt_mod_chick_pet">Питомец-цыплёнок</string>
@@ -1073,6 +1082,8 @@
     <string name="news_notification_channel">Новости лаунчера</string>
     <string name="news_notification_channel_description">Новые объявления LeviLauncher и важные уведомления</string>
     <string name="mod_config_category_slots">Слоты</string>
+    <string name="mod_config_category_aim_target">Цель</string>
+    <string name="mod_config_category_aim_motion">Наведение</string>
     <string name="mod_config_category_appearance">Внешний вид</string>
     <string name="mod_config_category_behavior">Поведение</string>
     <string name="mod_config_category_motion">Движение</string>

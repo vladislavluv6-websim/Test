@@ -75,6 +75,60 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetLegit
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::AimAssist::instance().setLegitMode(enabled == JNI_TRUE);
 }
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetHeight(
+    JNIEnv *, jclass, jfloat fraction) {
+  aimbot::AimAssist::instance().setTargetHeight(fraction);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetMaxSpeed(
+    JNIEnv *, jclass, jfloat degPerSecond) {
+  aimbot::AimAssist::instance().setMaxSpeed(degPerSecond);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetSmoothing(
+    JNIEnv *, jclass, jfloat speed) {
+  aimbot::AimAssist::instance().setSmoothing(speed);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetAcceleration(
+    JNIEnv *, jclass, jfloat degPerSecond2) {
+  aimbot::AimAssist::instance().setAcceleration(degPerSecond2);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetDeadzone(
+    JNIEnv *, jclass, jfloat deg) {
+  aimbot::AimAssist::instance().setDeadzone(deg);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetFullSpeedRange(
+    JNIEnv *, jclass, jfloat deg) {
+  aimbot::AimAssist::instance().setFullSpeedRange(deg);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetStickyTicks(
+    JNIEnv *, jclass, jint ticks) {
+  aimbot::AimAssist::instance().setStickyTicks(ticks);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetGrace(
+    JNIEnv *, jclass, jint frames) {
+  aimbot::AimAssist::instance().setTargetGrace(frames);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetPreferClosest(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setPreferClosest(enabled == JNI_TRUE);
+}
+
 
 extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerBot(

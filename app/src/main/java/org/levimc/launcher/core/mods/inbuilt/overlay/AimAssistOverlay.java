@@ -23,13 +23,22 @@ public class AimAssistOverlay extends BaseOverlayButton {
     }
 
     private void applyNativeSettings(InbuiltModManager manager) {
+        AimAssistMod.setLegitMode(manager.isAimAssistLegitMode());
         AimAssistMod.setRange(manager.getAimAssistRange());
         AimAssistMod.setFov(manager.getAimAssistFov());
         AimAssistMod.setStrength(manager.getAimAssistStrength());
         AimAssistMod.setWallCheck(manager.isAimAssistWallCheck());
         AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
         AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
-        AimAssistMod.setLegitMode(manager.isAimAssistLegitMode());
+        AimAssistMod.setTargetHeight(manager.getAimAssistTargetHeight() / 100.0f);
+        AimAssistMod.setMaxSpeed(manager.getAimAssistMaxSpeed());
+        AimAssistMod.setSmoothing(manager.getAimAssistSmoothing());
+        AimAssistMod.setAcceleration(manager.getAimAssistAcceleration());
+        AimAssistMod.setDeadzone(manager.getAimAssistDeadzone() / 100.0f);
+        AimAssistMod.setFullSpeedRange(manager.getAimAssistFullRange());
+        AimAssistMod.setStickyTicks(manager.getAimAssistSticky());
+        AimAssistMod.setTargetGrace(manager.getAimAssistGrace());
+        AimAssistMod.setPreferClosest(manager.isAimAssistPreferClosest());
     }
 
     private boolean isSupportedVersion() {

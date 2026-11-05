@@ -42,7 +42,6 @@ using NormalTickFn = void (*)(void *);
 using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
 using ApplyTurnDeltaFn = void (*)(void *, const Rotation &);
-using GetHeadRotationFn = Rotation (*)(void *);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
 
@@ -50,7 +49,6 @@ NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
 ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
-GetHeadRotationFn g_getHeadRotation = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 
@@ -180,9 +178,6 @@ bool ClientBridge::initialize() {
   const uintptr_t applyTurnDelta =
       pl::memory::resolveSignature(offsets::kApplyTurnDeltaSignature,
                                    offsets::kMinecraftLibrary);
-  const uintptr_t getHeadRotation =
-      pl::memory::resolveSignature(offsets::kActorGetHeadRotationSignature,
-                                   offsets::kMinecraftLibrary);
   const uintptr_t fetchNearbyActors =
       pl::memory::resolveSignature(offsets::kFetchNearbyActorsSignature,
                                    offsets::kMinecraftLibrary);
@@ -206,7 +201,6 @@ bool ClientBridge::initialize() {
 
   g_getLocalPlayer = reinterpret_cast<GetLocalPlayerFn>(getLocalPlayer);
   g_applyTurnDelta = reinterpret_cast<ApplyTurnDeltaFn>(applyTurnDelta);
-  g_getHeadRotation = reinterpret_cast<GetHeadRotationFn>(getHeadRotation);
   g_fetchNearbyActors =
       reinterpret_cast<FetchNearbyActorsFn>(fetchNearbyActors);
   g_actorIsPlayer = reinterpret_cast<ActorIsPlayerFn>(actorIsPlayer);
@@ -234,12 +228,10 @@ bool ClientBridge::initialize() {
 
   g_initialized.store(true, std::memory_order_release);
   __android_log_print(ANDROID_LOG_INFO, kTag,
-                      "bridge initialized: tick=%p update=%p delta=%p "
-                      "headGet=%p",
+                      "bridge initialized: tick=%p update=%p delta=%p",
                       reinterpret_cast<void *>(normalTick),
                       reinterpret_cast<void *>(clientUpdate),
-                      reinterpret_cast<void *>(applyTurnDelta),
-                      reinterpret_cast<void *>(getHeadRotation));
+                      reinterpret_cast<void *>(applyTurnDelta));
   return true;
 }
 
@@ -269,22 +261,11 @@ void *ClientBridge::getLocalPlayer() const {
   return player;
 }
 
-bool ClientBridge::hasHeadRotation() const { return g_getHeadRotation != nullptr; }
-
 bool ClientBridge::getViewAngles(void *player, ViewAngles &out) const {
   if (!player) return false;
 
-  // Для локального игрока head rotation — это реальный угол камеры.
-  // Rotation-компонент ниже остаётся body/legacy fallback.
-  if (g_getHeadRotation) {
-    const Rotation head = g_getHeadRotation(player);
-    if (std::isfinite(head.pitch) && std::isfinite(head.yaw)) {
-      out.pitch = head.pitch;
-      out.yaw = head.yaw;
-      return true;
-    }
-  }
-
+  // ActorRotationComponent — это фактический view камеры. applyTurnDelta
+  // меняет именно его, поэтому не смешиваем его с отдельным head getter.
   Rotation rotation{};
   if (!readRotationComponent(player, rotation)) {
     return false;
@@ -332,7 +313,8 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
   return true;
 }
 
-bool ClientBridge::getHitboxCenter(void *actor, Vec3 &out) const {
+bool ClientBridge::getHitboxPoint(void *actor, float heightFraction,
+                                   Vec3 &out) const {
   if (!actor) return false;
   const auto base = reinterpret_cast<uintptr_t>(actor);
 
@@ -381,9 +363,10 @@ bool ClientBridge::getHitboxCenter(void *actor, Vec3 &out) const {
   const float dz = centerZ - position.z;
   if (dx * dx + dy * dy + dz * dz > 16.0f) return false;
 
-  out.x = centerX;
-  out.y = centerY;
-  out.z = centerZ;
+  const float t = std::clamp(heightFraction, 0.05f, 0.95f);
+  out.x = min.x + (max.x - min.x) * 0.5f;
+  out.y = min.y + (max.y - min.y) * t;
+  out.z = min.z + (max.z - min.z) * 0.5f;
   return true;
 }
 

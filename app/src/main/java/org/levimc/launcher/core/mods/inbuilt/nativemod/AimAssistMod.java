@@ -49,6 +49,42 @@ public final class AimAssistMod {
         if (initialized) nativeSetLegitMode(enabled);
     }
 
+    public static void setTargetHeight(float fraction) {
+        if (initialized) nativeSetTargetHeight(fraction);
+    }
+
+    public static void setMaxSpeed(float degPerSecond) {
+        if (initialized) nativeSetMaxSpeed(degPerSecond);
+    }
+
+    public static void setSmoothing(float speed) {
+        if (initialized) nativeSetSmoothing(speed);
+    }
+
+    public static void setAcceleration(float degPerSecond2) {
+        if (initialized) nativeSetAcceleration(degPerSecond2);
+    }
+
+    public static void setDeadzone(float deg) {
+        if (initialized) nativeSetDeadzone(deg);
+    }
+
+    public static void setFullSpeedRange(float deg) {
+        if (initialized) nativeSetFullSpeedRange(deg);
+    }
+
+    public static void setStickyTicks(int ticks) {
+        if (initialized) nativeSetStickyTicks(ticks);
+    }
+
+    public static void setTargetGrace(int frames) {
+        if (initialized) nativeSetTargetGrace(frames);
+    }
+
+    public static void setPreferClosest(boolean enabled) {
+        if (initialized) nativeSetPreferClosest(enabled);
+    }
+
     public static void setFov(float fovDeg) {
         if (initialized) nativeSetFov(fovDeg);
     }
@@ -107,6 +143,15 @@ public final class AimAssistMod {
     private static native void nativeSetTargetPlayers(boolean enabled);
     private static native void nativeSetTargetMobs(boolean enabled);
     private static native void nativeSetLegitMode(boolean enabled);
+    private static native void nativeSetTargetHeight(float fraction);
+    private static native void nativeSetMaxSpeed(float degPerSecond);
+    private static native void nativeSetSmoothing(float speed);
+    private static native void nativeSetAcceleration(float degPerSecond2);
+    private static native void nativeSetDeadzone(float deg);
+    private static native void nativeSetFullSpeedRange(float deg);
+    private static native void nativeSetStickyTicks(int ticks);
+    private static native void nativeSetTargetGrace(int frames);
+    private static native void nativeSetPreferClosest(boolean enabled);
     private static native void nativeSetTriggerBot(boolean enabled);
     private static native void nativeSetTriggerDelay(int delayMs);
     private static native boolean nativeIsOnTarget();

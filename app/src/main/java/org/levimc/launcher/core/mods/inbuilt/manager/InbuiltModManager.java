@@ -21,6 +21,15 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
+    private static final String KEY_AIM_ASSIST_TARGET_HEIGHT = "aim_assist_target_height";
+    private static final String KEY_AIM_ASSIST_MAX_SPEED = "aim_assist_max_speed";
+    private static final String KEY_AIM_ASSIST_SMOOTHING = "aim_assist_smoothing";
+    private static final String KEY_AIM_ASSIST_ACCEL = "aim_assist_accel";
+    private static final String KEY_AIM_ASSIST_DEADZONE = "aim_assist_deadzone";
+    private static final String KEY_AIM_ASSIST_FULL_RANGE = "aim_assist_full_range";
+    private static final String KEY_AIM_ASSIST_STICKY = "aim_assist_sticky";
+    private static final String KEY_AIM_ASSIST_GRACE = "aim_assist_grace";
+    private static final String KEY_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
     private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
     private static final String KEY_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
@@ -68,6 +77,15 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_WALL_CHECK = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
+    private static final int DEFAULT_AIM_ASSIST_TARGET_HEIGHT = 70;
+    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 650;
+    private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 18;
+    private static final int DEFAULT_AIM_ASSIST_ACCEL = 2600;
+    private static final int DEFAULT_AIM_ASSIST_DEADZONE = 10;
+    private static final int DEFAULT_AIM_ASSIST_FULL_RANGE = 12;
+    private static final int DEFAULT_AIM_ASSIST_STICKY = 4;
+    private static final int DEFAULT_AIM_ASSIST_GRACE = 12;
+    private static final boolean DEFAULT_AIM_ASSIST_PREFER_CLOSEST = false;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
     private static final int DEFAULT_TRIGGER_BOT_DELAY = 280;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
@@ -161,6 +179,94 @@ public class InbuiltModManager {
 
     public void setAimAssistTargetMobs(boolean enabled) {
         prefs.edit().putBoolean(KEY_AIM_ASSIST_TARGET_MOBS, enabled).apply();
+    }
+
+    public int getAimAssistTargetHeight() {
+        return Math.max(35, Math.min(95,
+                prefs.getInt(KEY_AIM_ASSIST_TARGET_HEIGHT, DEFAULT_AIM_ASSIST_TARGET_HEIGHT)));
+    }
+
+    public void setAimAssistTargetHeight(int percent) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_TARGET_HEIGHT,
+                Math.max(35, Math.min(95, percent))).apply();
+    }
+
+    public int getAimAssistMaxSpeed() {
+        return Math.max(100, Math.min(1500,
+                prefs.getInt(KEY_AIM_ASSIST_MAX_SPEED, DEFAULT_AIM_ASSIST_MAX_SPEED)));
+    }
+
+    public void setAimAssistMaxSpeed(int degPerSecond) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_MAX_SPEED,
+                Math.max(100, Math.min(1500, degPerSecond))).apply();
+    }
+
+    public int getAimAssistSmoothing() {
+        return Math.max(1, Math.min(40,
+                prefs.getInt(KEY_AIM_ASSIST_SMOOTHING, DEFAULT_AIM_ASSIST_SMOOTHING)));
+    }
+
+    public void setAimAssistSmoothing(int value) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_SMOOTHING,
+                Math.max(1, Math.min(40, value))).apply();
+    }
+
+    public int getAimAssistAcceleration() {
+        return Math.max(200, Math.min(10000,
+                prefs.getInt(KEY_AIM_ASSIST_ACCEL, DEFAULT_AIM_ASSIST_ACCEL)));
+    }
+
+    public void setAimAssistAcceleration(int value) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_ACCEL,
+                Math.max(200, Math.min(10000, value))).apply();
+    }
+
+    public int getAimAssistDeadzone() {
+        return Math.max(0, Math.min(50,
+                prefs.getInt(KEY_AIM_ASSIST_DEADZONE, DEFAULT_AIM_ASSIST_DEADZONE)));
+    }
+
+    public void setAimAssistDeadzone(int hundredthsDeg) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_DEADZONE,
+                Math.max(0, Math.min(50, hundredthsDeg))).apply();
+    }
+
+    public int getAimAssistFullRange() {
+        return Math.max(1, Math.min(45,
+                prefs.getInt(KEY_AIM_ASSIST_FULL_RANGE, DEFAULT_AIM_ASSIST_FULL_RANGE)));
+    }
+
+    public void setAimAssistFullRange(int deg) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_FULL_RANGE,
+                Math.max(1, Math.min(45, deg))).apply();
+    }
+
+    public int getAimAssistSticky() {
+        return Math.max(0, Math.min(20,
+                prefs.getInt(KEY_AIM_ASSIST_STICKY, DEFAULT_AIM_ASSIST_STICKY)));
+    }
+
+    public void setAimAssistSticky(int ticks) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_STICKY,
+                Math.max(0, Math.min(20, ticks))).apply();
+    }
+
+    public int getAimAssistGrace() {
+        return Math.max(0, Math.min(30,
+                prefs.getInt(KEY_AIM_ASSIST_GRACE, DEFAULT_AIM_ASSIST_GRACE)));
+    }
+
+    public void setAimAssistGrace(int frames) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_GRACE,
+                Math.max(0, Math.min(30, frames))).apply();
+    }
+
+    public boolean isAimAssistPreferClosest() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_PREFER_CLOSEST, DEFAULT_AIM_ASSIST_PREFER_CLOSEST);
+    }
+
+    public void setAimAssistPreferClosest(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_PREFER_CLOSEST, enabled).apply();
     }
 
     public int getAimAssistStrength() {

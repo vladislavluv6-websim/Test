@@ -41,15 +41,6 @@ inline constexpr const char *kActorIsPlayerSignature =
     "? ? ? 92 ? ? ? B8 28 01 08 4A ? ? ? 12 1F 01 09 6B E0 27 9F 1A C0 03 5F D6 "
     "E0 03 1F 2A C0 03 5F D6 ? ? ? D1 ? ? ? FD";
 
-// Actor::getHeadRotation() -> Vec2 {pitch, yaw}; actual camera/head angles.
-inline constexpr const char *kActorGetHeadRotationSignature =
-    "? ? ? F9 ? ? ? 52 00 E4 00 2F ? ? ? 72 ? ? ? A9 08 01 0B CB ? ? ? D3 ? ? ? 51 "
-    "0C 01 0A 8A ? ? ? B9 6B 0D 0C 8B ? ? ? F9 ? ? ? F9 ? ? ? B1 ? ? ? 54 8B 15 0B "
-    "8B ? ? ? B9 BF 01 0A 6B ? ? ? 54 ? ? ? F9 7F 01 09 EB ? ? ? 54 ? ? ? F9 ? ? ? B4 "
-    "? ? ? A9 ? ? ? D3 8C 01 0A CB 7F 0D 8C EB ? ? ? 54 ? ? ? F8 ? ? ? B4 ? ? ? 92 "
-    "? ? ? 12 ? ? ? 92 ? ? ? B8 ? ? ? 32 48 01 08 4A 1F 01 0B 6B ? ? ? 54 ? ? ? D3 "
-    "? ? ? F9 01 E4 00 2F";
-
 // ============================================================
 // OFFSETS (Minecraft Bedrock 1.26.60, ARM64)
 // ============================================================
@@ -58,7 +49,7 @@ inline constexpr uintptr_t kActorStateVectorComponent = 0x228;
 inline constexpr uintptr_t kStatePosition = 0;
 
 // ActorRotationComponent: { pitch, yaw }.
-// В этой версии поле является body-rotation; камеру двигаем через applyTurnDelta.
+// applyTurnDelta двигает именно этот компонент; читаем его каждый кадр.
 inline constexpr uintptr_t kActorRotationComponent = 0x238;
 
 // Если известен AABB / flags / team — заполни. 0 = фича отключена.
@@ -78,7 +69,7 @@ inline constexpr int kActorTypeMob = 0x100;
 // КОНСТАНТЫ ЦЕЛИ
 // ============================================================
 inline constexpr float kEyeHeight = 1.62f;
-// Fallback-центр, если AABBShapeComponent недоступен.
-inline constexpr float kCenterOffset = 0.90f;
+// Fallback: средний рост игрока, если AABBShapeComponent недоступен.
+inline constexpr float kFallbackActorHeight = 1.80f;
 
 } // namespace aimbot::offsets

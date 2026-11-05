@@ -155,6 +155,52 @@ void AimAssist::setTargetMobs(bool enabled) {
   m_settings.targetMobs = enabled;
 }
 
+void AimAssist::setTargetHeight(float fraction) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.targetHeight = clampf(fraction, 0.35f, 0.95f);
+}
+
+void AimAssist::setMaxSpeed(float degPerSecond) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.maxDegPerSecond = clampf(degPerSecond, 60.0f, 2000.0f);
+}
+
+void AimAssist::setSmoothing(float speed) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.smoothingSpeed = clampf(speed, 1.0f, 60.0f);
+}
+
+void AimAssist::setAcceleration(float degPerSecond2) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.maxAccelDegPerSecond2 = clampf(degPerSecond2, 100.0f, 12000.0f);
+}
+
+void AimAssist::setDeadzone(float deg) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.deadzoneDeg = clampf(deg, 0.0f, 5.0f);
+}
+
+void AimAssist::setFullSpeedRange(float deg) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.fullSpeedRangeDeg = clampf(deg, 1.0f, 90.0f);
+}
+
+void AimAssist::setStickyTicks(int ticks) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.stickyTicks = std::max(0, std::min(40, ticks));
+}
+
+void AimAssist::setTargetGrace(int frames) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.targetGraceFrames = std::max(0, std::min(60, frames));
+}
+
+void AimAssist::setPreferClosest(bool preferClosest) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.targetPriority = preferClosest ? TargetPriority::Distance
+                                            : TargetPriority::Angle;
+}
+
 void AimAssist::setLegitMode(bool legit) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.legit = legit;
@@ -194,7 +240,7 @@ void AimAssist::setTouchActive(bool) {
 
 void AimAssist::notifyCameraLook() {
   // Наведение не должно замолкать, пока игрок двигает камеру.
-  // Фактический head view читается в updateVisual каждый кадр.
+  // Фактический view читается в updateVisual каждый кадр.
 }
 
 void AimAssist::setActivationHeld(bool held) {
@@ -269,15 +315,11 @@ void AimAssist::updateVisual(float dt) {
 
   const Settings settings = getSettings();
 
-  // Синхронизируем локальные углы с фактическим head view. Если настоящий
-  // head getter недоступен, rotation-компонент может отставать от камеры —
-  // тогда сохраняем накопленный local, иначе каждый кадр считали бы дельту
-  // от устаревшего угла и камера уезжала/дергалась.
-  if (m_bridge.hasHeadRotation() || !m_hasLocal) {
-    m_localPitch.store(current.pitch, std::memory_order_relaxed);
-    m_localYaw.store(current.yaw, std::memory_order_relaxed);
-    m_hasLocal = true;
-  }
+  // ActorRotationComponent — фактический view камеры. Синхронизируем local
+  // каждый кадр, чтобы ручное движение и ходьба не оставляли устаревший угол.
+  m_localPitch.store(current.pitch, std::memory_order_relaxed);
+  m_localYaw.store(current.yaw, std::memory_order_relaxed);
+  m_hasLocal = true;
 
   if (!isActive(settings)) {
     clearTarget();
@@ -298,14 +340,8 @@ void AimAssist::updateVisual(float dt) {
     return;
   }
 
-  // Центр реального AABB (hitbox) каждый кадр. Если компонент недоступен,
-  // getTargetPoint откатывается на позицию ног + высоту центра.
-  Vec3 targetPosition{};
-  if (!m_bridge.getPosition(m_target.actor, targetPosition)) {
-    clearTarget();
-    return;
-  }
-  m_target.point = getTargetPoint(m_target.actor);
+  // Точка на реальном AABB каждый кадр: по умолчанию грудь (70% высоты).
+  m_target.point = getTargetPoint(m_target.actor, settings.targetHeight);
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -464,7 +500,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
     Vec3 targetPosition{};
     if (!m_bridge.getPosition(actor, targetPosition)) continue;
 
-    const Vec3 point = getTargetPoint(actor);
+    const Vec3 point = getTargetPoint(actor, settings.targetHeight);
     const Angles angles = calculateAnglesToPoint(point);
 
     const float deltaYaw = shortestDelta(localYaw, angles.yaw);
@@ -581,7 +617,8 @@ Angles AimAssist::calculateAngles(void *entity) const {
   if (!m_bridge.getPosition(player, eye)) return angles;
   eye.y += offsets::kEyeHeight;
 
-  const Vec3 point = getTargetPoint(entity);
+  const Settings settings = getSettings();
+  const Vec3 point = getTargetPoint(entity, settings.targetHeight);
   const float dx = point.x - eye.x;
   const float dy = point.y - eye.y;
   const float dz = point.z - eye.z;
@@ -706,10 +743,10 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 // ============================================================
 // Вспомогательное
 // ============================================================
-Vec3 AimAssist::getTargetPoint(void *actor) const {
-  Vec3 center{};
-  if (m_bridge.getHitboxCenter(actor, center)) {
-    return center;
+Vec3 AimAssist::getTargetPoint(void *actor, float heightFraction) const {
+  Vec3 point{};
+  if (m_bridge.getHitboxPoint(actor, heightFraction, point)) {
+    return point;
   }
 
   Vec3 position{};
@@ -717,7 +754,8 @@ Vec3 AimAssist::getTargetPoint(void *actor) const {
     return position;
   }
   // Fallback: StateVector position — это ноги.
-  position.y += offsets::kCenterOffset;
+  position.y += offsets::kFallbackActorHeight *
+                clampf(heightFraction, 0.35f, 0.95f);
   return position;
 }
 

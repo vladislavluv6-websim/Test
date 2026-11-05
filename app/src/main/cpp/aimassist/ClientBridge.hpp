@@ -40,11 +40,8 @@ public:
 
   void *getLocalPlayer() const;
 
-  // Текущий head/камера view. Сначала Actor::getHeadRotation, затем
-  // rotation-компонент как fallback.
+  // Текущий view из ActorRotationComponent: {pitch, yaw}.
   bool getViewAngles(void *player, ViewAngles &out) const;
-  // true, если доступен настоящий head view (сигнатура найдена).
-  bool hasHeadRotation() const;
 
   // Двигает локальную камеру игровым методом applyTurnDelta.
   // pitchUp < 0 — вверх, yaw > 0 — вправо (как в 1.26.60).
@@ -54,8 +51,9 @@ public:
   bool setBodyYaw(void *player, float yaw);
 
   bool getPosition(void *actor, Vec3 &out) const;
-  // Центр реального AABB (hitbox). false — компонент недоступен.
-  bool getHitboxCenter(void *actor, Vec3 &out) const;
+  // Точка на реальном AABB: heightFraction 0 — ноги, 1 — макушка.
+  // false — компонент недоступен.
+  bool getHitboxPoint(void *actor, float heightFraction, Vec3 &out) const;
   bool isPlayer(void *actor) const;
   int getActorType(void *actor) const;
   uint64_t getActorFlags(void *actor) const;

@@ -659,12 +659,21 @@
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players under the crosshair</string>
     <string name="mod_config_aim_assist_range">Aim range (blocks)</string>
-    <string name="mod_config_aim_assist_strength">Aim speed (%)</string>
+    <string name="mod_config_aim_assist_strength">Aim strength (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized aim (slower, smoother, less detectable)</string>
     <string name="mod_config_aim_assist_fov">Aim FOV (degrees)</string>
     <string name="mod_config_aim_assist_wall_check">Wall check</string>
     <string name="mod_config_aim_assist_target_players">Target players</string>
     <string name="mod_config_aim_assist_target_mobs">Target mobs</string>
+    <string name="mod_config_aim_assist_target_height">Target height (0-100, 70 = chest)</string>
+    <string name="mod_config_aim_assist_prefer_closest">Prefer closest target</string>
+    <string name="mod_config_aim_assist_sticky">Target stickiness (ticks)</string>
+    <string name="mod_config_aim_assist_grace">Target grace (frames)</string>
+    <string name="mod_config_aim_assist_max_speed">Max turn speed (°/s)</string>
+    <string name="mod_config_aim_assist_smoothing">Smoothing (1 = sharp, 40 = silky)</string>
+    <string name="mod_config_aim_assist_accel">Acceleration (°/s²)</string>
+    <string name="mod_config_aim_assist_deadzone">Deadzone (0.01°)</string>
+    <string name="mod_config_aim_assist_full_range">Full-speed range (°)</string>
     <string name="mod_config_trigger_bot_delay">Trigger Bot reaction delay (ms)</string>
     <string name="aim_assist_mod_unavailable">Aim assist is unavailable for this game version</string>
     <string name="inbuilt_mod_chick_pet">Chick Pet</string>
@@ -1070,6 +1079,8 @@
     <string name="news_notification_channel">Launcher news</string>
     <string name="news_notification_channel_description">New LeviLauncher announcements and important notices</string>
     <string name="mod_config_category_slots">Slots</string>
+    <string name="mod_config_category_aim_target">Target</string>
+    <string name="mod_config_category_aim_motion">Aim</string>
     <string name="mod_config_category_appearance">Appearance</string>
     <string name="mod_config_category_behavior">Behavior</string>
     <string name="mod_config_category_motion">Motion</string>

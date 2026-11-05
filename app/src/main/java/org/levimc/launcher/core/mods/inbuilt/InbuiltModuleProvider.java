@@ -36,6 +36,15 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String CFG_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String CFG_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
+    private static final String CFG_AIM_ASSIST_TARGET_HEIGHT = "aim_assist_target_height";
+    private static final String CFG_AIM_ASSIST_MAX_SPEED = "aim_assist_max_speed";
+    private static final String CFG_AIM_ASSIST_SMOOTHING = "aim_assist_smoothing";
+    private static final String CFG_AIM_ASSIST_ACCEL = "aim_assist_accel";
+    private static final String CFG_AIM_ASSIST_DEADZONE = "aim_assist_deadzone";
+    private static final String CFG_AIM_ASSIST_FULL_RANGE = "aim_assist_full_range";
+    private static final String CFG_AIM_ASSIST_STICKY = "aim_assist_sticky";
+    private static final String CFG_AIM_ASSIST_GRACE = "aim_assist_grace";
+    private static final String CFG_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
     private static final String CFG_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
@@ -152,6 +161,7 @@ public final class InbuiltModuleProvider {
         boolean zoom = ModIds.ZOOM.equals(modId);
         boolean cursor = ModIds.VIRTUAL_CURSOR.equals(modId);
         boolean pojav = ModIds.POJAV_CONTROLS.equals(modId);
+        boolean aim = ModIds.AIM_ASSIST.equals(modId);
         try {
             JSONArray categories = new JSONArray();
             JSONArray nodes = new JSONArray();
@@ -179,6 +189,14 @@ public final class InbuiltModuleProvider {
                 nodes.put(new JSONObject().put("id", "visible_slots").put("type", "toggle_group")
                         .put("category", "slots").put("title", context.getString(R.string.mod_config_visible_slots))
                         .put("options", slots));
+            } else if (aim) {
+                defaultCategory = "aim_target";
+                categories.put(configCategory(context, "aim_target",
+                        R.string.mod_config_category_aim_target));
+                categories.put(configCategory(context, "aim_motion",
+                        R.string.mod_config_category_aim_motion));
+                categories.put(configCategory(context, "appearance",
+                        R.string.mod_config_category_appearance));
             } else if (!pojav) {
                 if (gyro || cursor || zoom) {
                     defaultCategory = gyro || cursor ? "motion" : "zoom";
@@ -198,6 +216,12 @@ public final class InbuiltModuleProvider {
                 String category = "behavior";
                 if (CFG_OVERLAY_SIZE.equals(config.key) || CFG_OVERLAY_OPACITY.equals(config.key)) {
                     category = "appearance";
+                } else if (aim && isAimMotionKey(config.key)) {
+                    category = "aim_motion";
+                } else if (aim && config.key.startsWith("aim_assist_")
+                        && !CFG_AIM_ASSIST_LEGIT.equals(config.key)
+                        && !CFG_AIM_ASSIST_WALL_CHECK.equals(config.key)) {
+                    category = "aim_target";
                 } else if (config.key.startsWith("gyro_") || CFG_CURSOR_SENSITIVITY.equals(config.key)) {
                     category = "motion";
                 } else if (CFG_ZOOM_LEVEL.equals(config.key) || CFG_ZOOM_TRANSITION.equals(config.key)) {
@@ -211,6 +235,15 @@ public final class InbuiltModuleProvider {
         } catch (JSONException e) {
             throw new IllegalStateException("Unable to build inbuilt config schema", e);
         }
+    }
+
+    private static boolean isAimMotionKey(String key) {
+        return CFG_AIM_ASSIST_STRENGTH.equals(key)
+                || CFG_AIM_ASSIST_MAX_SPEED.equals(key)
+                || CFG_AIM_ASSIST_SMOOTHING.equals(key)
+                || CFG_AIM_ASSIST_ACCEL.equals(key)
+                || CFG_AIM_ASSIST_DEADZONE.equals(key)
+                || CFG_AIM_ASSIST_FULL_RANGE.equals(key);
     }
 
     private static JSONObject configCategory(Context context, String id, int titleRes) throws JSONException {
@@ -339,16 +372,11 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "360", "30", "360",
                     String.valueOf(manager.getAimAssistFov())));
-            configs.add(config(CFG_AIM_ASSIST_STRENGTH,
-                    context.getString(R.string.mod_config_aim_assist_strength),
+            configs.add(config(CFG_AIM_ASSIST_TARGET_HEIGHT,
+                    context.getString(R.string.mod_config_aim_assist_target_height),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "100", "0", "100",
-                    String.valueOf(manager.getAimAssistStrength())));
-            configs.add(config(CFG_AIM_ASSIST_WALL_CHECK,
-                    context.getString(R.string.mod_config_aim_assist_wall_check),
-                    UnifiedMod.ConfigType.TOGGLE,
-                    "true", "", "",
-                    String.valueOf(manager.isAimAssistWallCheck())));
+                    "70", "35", "95",
+                    String.valueOf(manager.getAimAssistTargetHeight())));
             configs.add(config(CFG_AIM_ASSIST_TARGET_PLAYERS,
                     context.getString(R.string.mod_config_aim_assist_target_players),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -359,6 +387,56 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "true", "", "",
                     String.valueOf(manager.isAimAssistTargetMobs())));
+            configs.add(config(CFG_AIM_ASSIST_PREFER_CLOSEST,
+                    context.getString(R.string.mod_config_aim_assist_prefer_closest),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "false", "", "",
+                    String.valueOf(manager.isAimAssistPreferClosest())));
+            configs.add(config(CFG_AIM_ASSIST_STICKY,
+                    context.getString(R.string.mod_config_aim_assist_sticky),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "4", "0", "20",
+                    String.valueOf(manager.getAimAssistSticky())));
+            configs.add(config(CFG_AIM_ASSIST_GRACE,
+                    context.getString(R.string.mod_config_aim_assist_grace),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "12", "0", "30",
+                    String.valueOf(manager.getAimAssistGrace())));
+            configs.add(config(CFG_AIM_ASSIST_MAX_SPEED,
+                    context.getString(R.string.mod_config_aim_assist_max_speed),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "650", "100", "1500",
+                    String.valueOf(manager.getAimAssistMaxSpeed())));
+            configs.add(config(CFG_AIM_ASSIST_SMOOTHING,
+                    context.getString(R.string.mod_config_aim_assist_smoothing),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "18", "1", "40",
+                    String.valueOf(manager.getAimAssistSmoothing())));
+            configs.add(config(CFG_AIM_ASSIST_ACCEL,
+                    context.getString(R.string.mod_config_aim_assist_accel),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "2600", "200", "10000",
+                    String.valueOf(manager.getAimAssistAcceleration())));
+            configs.add(config(CFG_AIM_ASSIST_DEADZONE,
+                    context.getString(R.string.mod_config_aim_assist_deadzone),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "10", "0", "50",
+                    String.valueOf(manager.getAimAssistDeadzone())));
+            configs.add(config(CFG_AIM_ASSIST_FULL_RANGE,
+                    context.getString(R.string.mod_config_aim_assist_full_range),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "12", "1", "45",
+                    String.valueOf(manager.getAimAssistFullRange())));
+            configs.add(config(CFG_AIM_ASSIST_STRENGTH,
+                    context.getString(R.string.mod_config_aim_assist_strength),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "100", "0", "100",
+                    String.valueOf(manager.getAimAssistStrength())));
+            configs.add(config(CFG_AIM_ASSIST_WALL_CHECK,
+                    context.getString(R.string.mod_config_aim_assist_wall_check),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isAimAssistWallCheck())));
             configs.add(config(CFG_AIM_ASSIST_LEGIT,
                     context.getString(R.string.mod_config_aim_assist_legit),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -519,6 +597,33 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_TARGET_MOBS:
                 manager.setAimAssistTargetMobs(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_TARGET_HEIGHT:
+                manager.setAimAssistTargetHeight(parseInt(value, manager.getAimAssistTargetHeight()));
+                break;
+            case CFG_AIM_ASSIST_MAX_SPEED:
+                manager.setAimAssistMaxSpeed(parseInt(value, manager.getAimAssistMaxSpeed()));
+                break;
+            case CFG_AIM_ASSIST_SMOOTHING:
+                manager.setAimAssistSmoothing(parseInt(value, manager.getAimAssistSmoothing()));
+                break;
+            case CFG_AIM_ASSIST_ACCEL:
+                manager.setAimAssistAcceleration(parseInt(value, manager.getAimAssistAcceleration()));
+                break;
+            case CFG_AIM_ASSIST_DEADZONE:
+                manager.setAimAssistDeadzone(parseInt(value, manager.getAimAssistDeadzone()));
+                break;
+            case CFG_AIM_ASSIST_FULL_RANGE:
+                manager.setAimAssistFullRange(parseInt(value, manager.getAimAssistFullRange()));
+                break;
+            case CFG_AIM_ASSIST_STICKY:
+                manager.setAimAssistSticky(parseInt(value, manager.getAimAssistSticky()));
+                break;
+            case CFG_AIM_ASSIST_GRACE:
+                manager.setAimAssistGrace(parseInt(value, manager.getAimAssistGrace()));
+                break;
+            case CFG_AIM_ASSIST_PREFER_CLOSEST:
+                manager.setAimAssistPreferClosest(parseBoolean(value));
                 break;
             case CFG_AIM_ASSIST_LEGIT:
                 manager.setAimAssistLegitMode(parseBoolean(value));

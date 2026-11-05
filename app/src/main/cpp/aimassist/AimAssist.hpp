@@ -37,6 +37,8 @@ struct Settings {
 
   float fovDeg = 360.0f;
   float range = 11.68f;
+  // 0 = ноги, 1 = макушка AABB. 0.70 — грудь игрока.
+  float targetHeight = 0.70f;
   float smoothingSpeed = 18.0f;
   float maxDegPerSecond = 650.0f;
   float maxAccelDegPerSecond2 = 2600.0f;
@@ -118,6 +120,15 @@ public:
   void setWallCheck(bool enabled);
   void setTargetPlayers(bool enabled);
   void setTargetMobs(bool enabled);
+  void setTargetHeight(float fraction);
+  void setMaxSpeed(float degPerSecond);
+  void setSmoothing(float speed);
+  void setAcceleration(float degPerSecond2);
+  void setDeadzone(float deg);
+  void setFullSpeedRange(float deg);
+  void setStickyTicks(int ticks);
+  void setTargetGrace(int frames);
+  void setPreferClosest(bool preferClosest);
   void setLegitMode(bool legit);
   void setTriggerBot(bool enabled);
   void setTriggerDelay(int delayMs);
@@ -146,7 +157,7 @@ private:
   bool isActive(const Settings &settings) const;
   bool isInvisible(void *actor) const;
   bool isSameTeam(void *local, void *other) const;
-  Vec3 getTargetPoint(void *actor) const;
+  Vec3 getTargetPoint(void *actor, float heightFraction) const;
   Angles calculateAnglesToPoint(const Vec3 &point) const;
   void findTargetInternal(void *player, const Settings &settings);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,
