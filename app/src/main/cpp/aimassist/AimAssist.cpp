@@ -390,7 +390,9 @@ void AimAssist::updateVisual(float dt) {
 
   const float stepYaw = shortestDelta(beforeYaw, afterYaw);
   const float stepPitch = afterPitch - beforePitch;
-  if (std::fabs(stepYaw) > 0.0001f || std::fabs(stepPitch) > 0.0001f) {
+  if (std::isfinite(stepYaw) && std::isfinite(stepPitch) &&
+      std::fabs(stepYaw) < 45.0f && std::fabs(stepPitch) < 45.0f &&
+      (std::fabs(stepYaw) > 0.0001f || std::fabs(stepPitch) > 0.0001f)) {
     // Только applyTurnDelta. Никаких записей rotation-компонента в кадре:
     // именно они давали feedback-петлю и дрожание камеры.
     m_bridge.applyTurnDelta(player, -stepPitch, stepYaw);

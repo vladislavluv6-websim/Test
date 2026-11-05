@@ -12,6 +12,7 @@
 #include <type_traits>
 
 #include "AimAssist.hpp"
+#include "Memory.hpp"
 #include "Offsets.hpp"
 #include "pl/memory/Hook.hpp"
 #include "pl/memory/Signature.hpp"
@@ -62,32 +63,20 @@ std::chrono::steady_clock::time_point g_lastFrame{};
 std::atomic<ClientBridge::MovePacketSender> g_movePacketSender{nullptr};
 
 bool isPlausiblePointer(uintptr_t address) {
-  return address >= 0x1000 && (address & 0x3) == 0;
+  return mem::isPlausiblePointer(address);
 }
 
-// Android не даёт MSVC-совместимый __try/__except.
-// Здесь проверяются диапазон/выравнивание, а для полностью безопасного чтения
-// подключи safe-read из SDK клиента (если он есть).
+// process_vm_readv проверяет, что страница реально отображена. Это важно:
+// просто memcpy по «правдоподобному» указателю из компонента актёра роняет игру,
+// если клиент успел пересоздать актёра или оффсет не совпал с версией.
 template <typename T>
 bool safeRead(uintptr_t address, T &out) {
-  static_assert(std::is_trivially_copyable<T>::value,
-                "safeRead requires a trivial type");
-  if (!isPlausiblePointer(address)) {
-    return false;
-  }
-  std::memcpy(&out, reinterpret_cast<const void *>(address), sizeof(T));
-  return true;
+  return mem::read(address, out);
 }
 
 template <typename T>
 bool safeWrite(uintptr_t address, const T &value) {
-  static_assert(std::is_trivially_copyable<T>::value,
-                "safeWrite requires a trivial type");
-  if (!isPlausiblePointer(address)) {
-    return false;
-  }
-  std::memcpy(reinterpret_cast<void *>(address), &value, sizeof(T));
-  return true;
+  return mem::write(address, value);
 }
 
 bool readRotationComponent(void *actor, Rotation &out) {
@@ -98,7 +87,9 @@ bool readRotationComponent(void *actor, Rotation &out) {
       !isPlausiblePointer(component)) {
     return false;
   }
-  return safeRead(component, out);
+  if (!safeRead(component, out)) return false;
+  if (!std::isfinite(out.pitch) || !std::isfinite(out.yaw)) return false;
+  return true;
 }
 
 bool writeRotationComponent(void *actor, const Rotation &value) {
@@ -185,8 +176,13 @@ bool ClientBridge::initialize() {
       pl::memory::resolveSignature(offsets::kActorIsPlayerSignature,
                                    offsets::kMinecraftLibrary);
 
-  if (!normalTick || !clientUpdate || !getLocalPlayer || !applyTurnDelta ||
-      !fetchNearbyActors || !actorIsPlayer) {
+  const auto validGameFn = [](uintptr_t address) {
+    return address != 0 && mem::isGameAddress(
+                                   reinterpret_cast<const void *>(address));
+  };
+  if (!validGameFn(normalTick) || !validGameFn(clientUpdate) ||
+      !validGameFn(getLocalPlayer) || !validGameFn(applyTurnDelta) ||
+      !validGameFn(fetchNearbyActors) || !validGameFn(actorIsPlayer)) {
     __android_log_print(ANDROID_LOG_WARN, kTag,
                         "signature resolve failed: tick=%p update=%p "
                         "local=%p delta=%p nearby=%p isPlayer=%p",
@@ -277,6 +273,8 @@ bool ClientBridge::getViewAngles(void *player, ViewAngles &out) const {
 
 bool ClientBridge::applyTurnDelta(void *player, float pitchUp, float yaw) {
   if (!player || !g_applyTurnDelta) return false;
+  if (!std::isfinite(pitchUp) || !std::isfinite(yaw)) return false;
+  if (std::fabs(pitchUp) > 90.0f || std::fabs(yaw) > 180.0f) return false;
   const Rotation delta{pitchUp, yaw};
   g_applyTurnDelta(player, delta);
   return true;
@@ -336,17 +334,61 @@ void ClientBridge::fillNearbyActors(void *player, float range,
   const Vec3 extent{range, range, range};
   const ActorVec actors = g_fetchNearbyActors(player, &extent,
                                               offsets::kActorTypeMob);
-  if (!actors.begin || !actors.end || actors.end <= actors.begin) {
+  const auto begin = reinterpret_cast<uintptr_t>(actors.begin);
+  const auto end = reinterpret_cast<uintptr_t>(actors.end);
+  if (!isPlausiblePointer(begin) || !isPlausiblePointer(end) || end <= begin) {
     return;
   }
 
-  size_t count = static_cast<size_t>(actors.end - actors.begin);
+  size_t count = static_cast<size_t>(end - begin) /
+                 sizeof(DistanceSortedActor);
+  if (count == 0) return;
   if (count > 512) count = 512;
   out.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    void *actor = actors.begin[i].actor;
-    if (actor) out.push_back(actor);
+    DistanceSortedActor entry{};
+    if (!safeRead(begin + i * sizeof(DistanceSortedActor), entry)) break;
+    if (!entry.actor) continue;
+    // Не отдаём aim assist указатель, у которого уже нет живого
+    // StateVectorComponent: дальнейшие вызовы isPlayer/getPosition по нему
+    // и раньше приводили к падению после респавна/смены измерения.
+    uintptr_t stateVector = 0;
+    if (!safeRead(reinterpret_cast<uintptr_t>(entry.actor) +
+                      offsets::kActorStateVectorComponent,
+                  stateVector) ||
+        !isPlausiblePointer(stateVector)) {
+      continue;
+    }
+    out.push_back(entry.actor);
   }
+}
+
+bool ClientBridge::getActorAabb(void *actor, Aabb &out) const {
+  if (!actor) return false;
+  const auto base = reinterpret_cast<uintptr_t>(actor);
+  uintptr_t aabbComponent = 0;
+  if (!safeRead(base + offsets::kActorAabbComponent, aabbComponent) ||
+      !isPlausiblePointer(aabbComponent)) {
+    return false;
+  }
+  if (!safeRead(aabbComponent, out)) return false;
+  if (!std::isfinite(out.min.x) || !std::isfinite(out.min.y) ||
+      !std::isfinite(out.min.z) || !std::isfinite(out.max.x) ||
+      !std::isfinite(out.max.y) || !std::isfinite(out.max.z)) {
+    return false;
+  }
+  return out.max.x > out.min.x && out.max.y > out.min.y &&
+         out.max.z > out.min.z;
+}
+
+uint32_t ClientBridge::getActorCategories(void *actor) const {
+  if (!actor) return 0;
+  uint32_t categories = 0;
+  if (!safeRead(reinterpret_cast<uintptr_t>(actor) + offsets::kActorCategories,
+                categories)) {
+    return 0;
+  }
+  return categories;
 }
 
 bool ClientBridge::hasLineOfSight(void *player, const Vec3 &, const Vec3 &) const {

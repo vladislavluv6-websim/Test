@@ -42,11 +42,36 @@ inline constexpr const char *kActorIsPlayerSignature =
     "E0 03 1F 2A C0 03 5F D6 ? ? ? D1 ? ? ? FD";
 
 // ============================================================
+// ESP / hitbox render (1.26.60, ARM64)
+// ============================================================
+inline constexpr const char *kRenderLevelSignature =
+    "? ? ? D1 ? ? ? FD ? ? ? 6D ? ? ? 6D ? ? ? 6D ? ? ? A9 ? ? ? A9 ? ? ? A9 "
+    "? ? ? A9 ? ? ? A9 ? ? ? 91 57 D0 3B D5";
+
+inline constexpr const char *kTessellatorBeginSignature =
+    "? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 FD 03 00 91 ? ? ? 39 ? ? ? 39 08 01 09 2A";
+
+inline constexpr const char *kTessellatorColorSignature =
+    "? ? ? 52 ? ? ? 39 04 01 27 1E 00 08 24 1E 21 08 24 1E 42 08 24 1E 63 08 24 1E 08 00 38 1E";
+
+inline constexpr const char *kTessellatorVertexSignature =
+    "? ? ? D1 ? ? ? FD ? ? ? 6D ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 "
+    "? ? ? A9 ? ? ? 91 5B D0 3B D5 ? ? ? F9 ? ? ? F9";
+
+inline constexpr const char *kRenderMeshImmediatelySignature =
+    "? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 FD 03 00 91 ? ? ? D1 57 D0 3B D5 F6 03 00 AA "
+    "E0 03 01 AA ? ? ? F9 F4 03 03 AA";
+
+// ============================================================
 // OFFSETS (Minecraft Bedrock 1.26.60, ARM64)
 // ============================================================
 // Actor -> StateVectorComponent*, внутри StateVectorComponent + 0 -> Vec3.
 inline constexpr uintptr_t kActorStateVectorComponent = 0x228;
+inline constexpr uintptr_t kActorAabbComponent = 0x230;
 inline constexpr uintptr_t kStatePosition = 0;
+
+// Actor::mCategories (uint32).
+inline constexpr uintptr_t kActorCategories = 0x220;
 
 // ActorRotationComponent: { pitch, yaw }.
 // applyTurnDelta двигает именно этот компонент; читаем его каждый кадр.
@@ -68,5 +93,16 @@ inline constexpr float kEyeHeight = 1.62f;
 inline constexpr float kHeadOffset = 1.62f;
 inline constexpr float kChestOffset = 1.20f;
 inline constexpr float kLegsOffset = 0.45f;
+
+// ============================================================
+// ESP RENDER OFFSETS
+// ============================================================
+inline constexpr uintptr_t kScreenContextTessellator = 0xB0;
+inline constexpr uintptr_t kScreenContextColorHolder = 0x30;
+inline constexpr uintptr_t kShaderColorDirty = 0x10;
+inline constexpr uintptr_t kLevelRendererPlayer = 0x430;
+inline constexpr uintptr_t kLevelRendererPlayerCamPos = 0x614;
+inline constexpr uintptr_t kLevelRendererSelectionMaterial = 0x10A0;
+inline constexpr uint32_t kMobCategory = 2;
 
 } // namespace aimbot::offsets

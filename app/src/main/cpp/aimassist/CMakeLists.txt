@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 project(aimassist LANGUAGES CXX)
 
-add_library(aimassist SHARED aimassist.cpp AimAssist.cpp ClientBridge.cpp)
+add_library(aimassist SHARED aimassist.cpp AimAssist.cpp ClientBridge.cpp Esp.cpp)
 
 target_compile_features(aimassist PRIVATE cxx_std_20)
 target_compile_options(aimassist PRIVATE

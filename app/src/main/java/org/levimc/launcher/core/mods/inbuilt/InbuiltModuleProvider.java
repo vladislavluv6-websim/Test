@@ -2,6 +2,7 @@ package org.levimc.launcher.core.mods.inbuilt;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Color;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -45,6 +46,11 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_STICKY = "aim_assist_sticky";
     private static final String CFG_AIM_ASSIST_GRACE = "aim_assist_grace";
     private static final String CFG_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
+    private static final String CFG_ESP_SHOW_PLAYERS = "esp_show_players";
+    private static final String CFG_ESP_SHOW_MOBS = "esp_show_mobs";
+    private static final String CFG_ESP_RANGE = "esp_range";
+    private static final String CFG_ESP_PLAYER_COLOR = "esp_player_color";
+    private static final String CFG_ESP_MOB_COLOR = "esp_mob_color";
     private static final String CFG_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
@@ -89,6 +95,9 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.AIM_ASSIST,
                 R.string.inbuilt_mod_aim_assist, R.string.inbuilt_mod_aim_assist_desc,
+                groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.ESP,
+                R.string.inbuilt_mod_esp, R.string.inbuilt_mod_esp_desc,
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.TRIGGER_BOT,
                 R.string.inbuilt_mod_trigger_bot, R.string.inbuilt_mod_trigger_bot_desc,
@@ -162,6 +171,7 @@ public final class InbuiltModuleProvider {
         boolean cursor = ModIds.VIRTUAL_CURSOR.equals(modId);
         boolean pojav = ModIds.POJAV_CONTROLS.equals(modId);
         boolean aim = ModIds.AIM_ASSIST.equals(modId);
+        boolean esp = ModIds.ESP.equals(modId);
         try {
             JSONArray categories = new JSONArray();
             JSONArray nodes = new JSONArray();
@@ -197,6 +207,10 @@ public final class InbuiltModuleProvider {
                         R.string.mod_config_category_aim_motion));
                 categories.put(configCategory(context, "appearance",
                         R.string.mod_config_category_appearance));
+            } else if (esp) {
+                defaultCategory = "appearance";
+                categories.put(configCategory(context, "appearance",
+                        R.string.mod_config_category_appearance));
             } else if (!pojav) {
                 if (gyro || cursor || zoom) {
                     defaultCategory = gyro || cursor ? "motion" : "zoom";
@@ -222,6 +236,9 @@ public final class InbuiltModuleProvider {
                         && !CFG_AIM_ASSIST_LEGIT.equals(config.key)
                         && !CFG_AIM_ASSIST_WALL_CHECK.equals(config.key)) {
                     category = "aim_target";
+                } else if (esp && (CFG_ESP_PLAYER_COLOR.equals(config.key)
+                        || CFG_ESP_MOB_COLOR.equals(config.key))) {
+                    category = "appearance";
                 } else if (config.key.startsWith("gyro_") || CFG_CURSOR_SENSITIVITY.equals(config.key)) {
                     category = "motion";
                 } else if (CFG_ZOOM_LEVEL.equals(config.key) || CFG_ZOOM_TRANSITION.equals(config.key)) {
@@ -258,6 +275,7 @@ public final class InbuiltModuleProvider {
             case KEYBIND: type = "keybind"; break;
             case BUTTON: type = "button"; break;
             case RADIO: type = "choice"; break;
+            case COLOR: type = "color"; break;
             case SLIDER_FLOAT: type = "slider_float"; break;
             default: type = "slider_int"; break;
         }
@@ -458,6 +476,32 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "true", "", "",
                     String.valueOf(manager.isAimAssistLegitMode())));
+        } else if (ModIds.ESP.equals(modId)) {
+            configs.add(config(CFG_ESP_RANGE,
+                    context.getString(R.string.mod_config_esp_range),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "32", "4", "96",
+                    String.valueOf(manager.getEspRange())));
+            configs.add(config(CFG_ESP_SHOW_PLAYERS,
+                    context.getString(R.string.mod_config_esp_players),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isEspShowPlayers())));
+            configs.add(config(CFG_ESP_SHOW_MOBS,
+                    context.getString(R.string.mod_config_esp_mobs),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isEspShowMobs())));
+            configs.add(config(CFG_ESP_PLAYER_COLOR,
+                    context.getString(R.string.mod_config_esp_player_color),
+                    UnifiedMod.ConfigType.COLOR,
+                    formatColor(manager.getEspPlayerColor()), "", "",
+                    formatColor(manager.getEspPlayerColor())));
+            configs.add(config(CFG_ESP_MOB_COLOR,
+                    context.getString(R.string.mod_config_esp_mob_color),
+                    UnifiedMod.ConfigType.COLOR,
+                    formatColor(manager.getEspMobColor()), "", "",
+                    formatColor(manager.getEspMobColor())));
         } else if (ModIds.TRIGGER_BOT.equals(modId)) {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
@@ -644,6 +688,21 @@ public final class InbuiltModuleProvider {
             case CFG_AIM_ASSIST_LEGIT:
                 manager.setAimAssistLegitMode(parseBoolean(value));
                 break;
+            case CFG_ESP_RANGE:
+                manager.setEspRange(parseInt(value, manager.getEspRange()));
+                break;
+            case CFG_ESP_SHOW_PLAYERS:
+                manager.setEspShowPlayers(parseBoolean(value));
+                break;
+            case CFG_ESP_SHOW_MOBS:
+                manager.setEspShowMobs(parseBoolean(value));
+                break;
+            case CFG_ESP_PLAYER_COLOR:
+                manager.setEspPlayerColor(parseColor(value, manager.getEspPlayerColor()));
+                break;
+            case CFG_ESP_MOB_COLOR:
+                manager.setEspMobColor(parseColor(value, manager.getEspMobColor()));
+                break;
             case CFG_TRIGGER_BOT_DELAY:
                 manager.setTriggerBotDelay(parseInt(value, manager.getTriggerBotDelay()));
                 break;
@@ -705,6 +764,18 @@ public final class InbuiltModuleProvider {
             }
         }
         return false;
+    }
+
+    private static String formatColor(int argb) {
+        return String.format(java.util.Locale.US, "#%08X", argb);
+    }
+
+    private static int parseColor(String value, int fallback) {
+        try {
+            return Color.parseColor(value);
+        } catch (Exception ignored) {
+            return fallback;
+        }
     }
 
     private static int parseInt(String value, int fallback) {

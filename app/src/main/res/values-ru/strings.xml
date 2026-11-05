@@ -663,6 +663,14 @@
     <string name="speed_mod_unavailable">Speed hack недоступен для этой версии игры</string>
     <string name="inbuilt_mod_aim_assist">Аим-ассист</string>
     <string name="inbuilt_mod_aim_assist_desc">Плавная наводка камеры на игроков</string>
+    <string name="inbuilt_mod_esp">ESP (Хитбоксы)</string>
+    <string name="inbuilt_mod_esp_desc">Рисует настраиваемые боксы хитбокса вокруг игроков и мобов</string>
+    <string name="mod_config_esp_range">Дальность ESP (блоки)</string>
+    <string name="mod_config_esp_players">Показывать игроков</string>
+    <string name="mod_config_esp_mobs">Показывать мобов</string>
+    <string name="mod_config_esp_player_color">Цвет бокса игроков</string>
+    <string name="mod_config_esp_mob_color">Цвет бокса мобов</string>
+    <string name="esp_mod_unavailable">ESP недоступен для этой версии игры</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Автоматически бьёт игроков в прицеле</string>
     <string name="mod_config_aim_assist_range">Дальность наведения (блоки)</string>

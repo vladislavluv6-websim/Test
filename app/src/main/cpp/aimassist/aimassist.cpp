@@ -4,6 +4,7 @@
 
 #include "AimAssist.hpp"
 #include "ClientBridge.hpp"
+#include "Esp.hpp"
 
 namespace {
 
@@ -165,4 +166,48 @@ extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetActivationHeld(
     JNIEnv *, jclass, jboolean held) {
   aimbot::AimAssist::instance().setActivationHeld(held == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeInit(
+    JNIEnv *, jclass) {
+  const bool ok = aimbot::Esp::instance().initialize();
+  __android_log_print(ANDROID_LOG_INFO, "AimAssistJni", "espInit=%d", ok ? 1 : 0);
+  return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetEnabled(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::Esp::instance().setEnabled(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetPlayers(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::Esp::instance().setPlayers(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetMobs(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::Esp::instance().setMobs(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetRange(
+    JNIEnv *, jclass, jfloat range) {
+  aimbot::Esp::instance().setRange(range);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetPlayerColor(
+    JNIEnv *, jclass, jint argb) {
+  aimbot::Esp::instance().setPlayerColor(static_cast<uint32_t>(argb));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetMobColor(
+    JNIEnv *, jclass, jint argb) {
+  aimbot::Esp::instance().setMobColor(static_cast<uint32_t>(argb));
 }

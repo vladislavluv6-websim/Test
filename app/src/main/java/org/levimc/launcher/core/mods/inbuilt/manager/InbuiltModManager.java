@@ -30,6 +30,11 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_STICKY = "aim_assist_sticky";
     private static final String KEY_AIM_ASSIST_GRACE = "aim_assist_grace";
     private static final String KEY_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
+    private static final String KEY_ESP_SHOW_PLAYERS = "esp_show_players";
+    private static final String KEY_ESP_SHOW_MOBS = "esp_show_mobs";
+    private static final String KEY_ESP_RANGE = "esp_range";
+    private static final String KEY_ESP_PLAYER_COLOR = "esp_player_color";
+    private static final String KEY_ESP_MOB_COLOR = "esp_mob_color";
     private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
     private static final String KEY_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
@@ -86,6 +91,11 @@ public class InbuiltModManager {
     private static final int DEFAULT_AIM_ASSIST_STICKY = 4;
     private static final int DEFAULT_AIM_ASSIST_GRACE = 12;
     private static final boolean DEFAULT_AIM_ASSIST_PREFER_CLOSEST = false;
+    private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
+    private static final boolean DEFAULT_ESP_SHOW_MOBS = true;
+    private static final int DEFAULT_ESP_RANGE = 32;
+    private static final int DEFAULT_ESP_PLAYER_COLOR = 0xFFFF5555;
+    private static final int DEFAULT_ESP_MOB_COLOR = 0xFFFFAA00;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
     private static final int DEFAULT_TRIGGER_BOT_DELAY = 280;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
@@ -189,6 +199,48 @@ public class InbuiltModManager {
     public void setAimAssistBodyPart(int bodyPart) {
         prefs.edit().putInt(KEY_AIM_ASSIST_BODY_PART,
                 Math.max(0, Math.min(2, bodyPart))).apply();
+    }
+
+    public boolean isEspShowPlayers() {
+        return prefs.getBoolean(KEY_ESP_SHOW_PLAYERS, DEFAULT_ESP_SHOW_PLAYERS);
+    }
+
+    public void setEspShowPlayers(boolean enabled) {
+        prefs.edit().putBoolean(KEY_ESP_SHOW_PLAYERS, enabled).apply();
+    }
+
+    public boolean isEspShowMobs() {
+        return prefs.getBoolean(KEY_ESP_SHOW_MOBS, DEFAULT_ESP_SHOW_MOBS);
+    }
+
+    public void setEspShowMobs(boolean enabled) {
+        prefs.edit().putBoolean(KEY_ESP_SHOW_MOBS, enabled).apply();
+    }
+
+    public int getEspRange() {
+        return Math.max(4, Math.min(96,
+                prefs.getInt(KEY_ESP_RANGE, DEFAULT_ESP_RANGE)));
+    }
+
+    public void setEspRange(int range) {
+        prefs.edit().putInt(KEY_ESP_RANGE,
+                Math.max(4, Math.min(96, range))).apply();
+    }
+
+    public int getEspPlayerColor() {
+        return prefs.getInt(KEY_ESP_PLAYER_COLOR, DEFAULT_ESP_PLAYER_COLOR);
+    }
+
+    public void setEspPlayerColor(int argb) {
+        prefs.edit().putInt(KEY_ESP_PLAYER_COLOR, argb).apply();
+    }
+
+    public int getEspMobColor() {
+        return prefs.getInt(KEY_ESP_MOB_COLOR, DEFAULT_ESP_MOB_COLOR);
+    }
+
+    public void setEspMobColor(int argb) {
+        prefs.edit().putInt(KEY_ESP_MOB_COLOR, argb).apply();
     }
 
     public int getAimAssistMaxSpeed() {
@@ -314,6 +366,7 @@ public class InbuiltModManager {
         if (ModIds.AUTO_SPRINT.equals(modId)) return KeyEvent.KEYCODE_CTRL_LEFT;
         if (ModIds.SPEED.equals(modId)) return KeyEvent.KEYCODE_V;
         if (ModIds.AIM_ASSIST.equals(modId)) return KeyEvent.KEYCODE_B;
+        if (ModIds.ESP.equals(modId)) return KeyEvent.KEYCODE_N;
         if (ModIds.SNAPLOOK.equals(modId)) return KeyEvent.KEYCODE_X;
         return KeyEvent.KEYCODE_UNKNOWN;
     }

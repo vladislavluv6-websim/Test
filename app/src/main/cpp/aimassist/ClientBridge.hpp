@@ -21,6 +21,11 @@ struct ViewAngles {
   float yaw = 0.0f;
 };
 
+struct Aabb {
+  Vec3 min{};
+  Vec3 max{};
+};
+
 // Тонкий слой над SDK клиента.
 // Всё, что зависит от конкретного клиента, находится здесь.
 // Если у тебя есть готовые классы ClientInstance/LocalPlayer/Level,
@@ -51,6 +56,8 @@ public:
   bool setBodyYaw(void *player, float yaw);
 
   bool getPosition(void *actor, Vec3 &out) const;
+  bool getActorAabb(void *actor, Aabb &out) const;
+  uint32_t getActorCategories(void *actor) const;
   bool isPlayer(void *actor) const;
   int getActorType(void *actor) const;
   uint64_t getActorFlags(void *actor) const;
