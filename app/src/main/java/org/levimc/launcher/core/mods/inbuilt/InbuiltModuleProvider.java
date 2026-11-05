@@ -33,8 +33,6 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_STRENGTH = "aim_assist_strength";
     private static final String CFG_AIM_ASSIST_LEGIT = "aim_assist_legit";
     private static final String CFG_AIM_ASSIST_FOV = "aim_assist_fov";
-    private static final String CFG_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
-    private static final String CFG_AIM_ASSIST_HEIGHT = "aim_assist_height";
     private static final String CFG_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String CFG_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String CFG_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
@@ -344,18 +342,8 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_AIM_ASSIST_STRENGTH,
                     context.getString(R.string.mod_config_aim_assist_strength),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "70", "0", "100",
+                    "100", "0", "100",
                     String.valueOf(manager.getAimAssistStrength())));
-            configs.add(config(CFG_AIM_ASSIST_BODY_PART,
-                    context.getString(R.string.mod_config_aim_assist_body_part),
-                    UnifiedMod.ConfigType.RADIO,
-                    "0", "Head,Chest,Nearest", "",
-                    String.valueOf(manager.getAimAssistBodyPart())));
-            configs.add(config(CFG_AIM_ASSIST_HEIGHT,
-                    context.getString(R.string.mod_config_aim_assist_height),
-                    UnifiedMod.ConfigType.SLIDER_FLOAT,
-                    "0.0", "-1.5", "1.5",
-                    String.valueOf(manager.getAimAssistHeight())));
             configs.add(config(CFG_AIM_ASSIST_WALL_CHECK,
                     context.getString(R.string.mod_config_aim_assist_wall_check),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -523,12 +511,6 @@ public final class InbuiltModuleProvider {
             case CFG_AIM_ASSIST_STRENGTH:
                 manager.setAimAssistStrength(parseInt(value, manager.getAimAssistStrength()));
                 break;
-            case CFG_AIM_ASSIST_BODY_PART:
-                manager.setAimAssistBodyPart(parseInt(value, manager.getAimAssistBodyPart()));
-                break;
-            case CFG_AIM_ASSIST_HEIGHT:
-                manager.setAimAssistHeight(parseFloat(value, manager.getAimAssistHeight()));
-                break;
             case CFG_AIM_ASSIST_WALL_CHECK:
                 manager.setAimAssistWallCheck(parseBoolean(value));
                 break;
@@ -607,14 +589,6 @@ public final class InbuiltModuleProvider {
     private static int parseInt(String value, int fallback) {
         try {
             return Integer.parseInt(value);
-        } catch (Exception ignored) {
-            return fallback;
-        }
-    }
-
-    private static float parseFloat(String value, float fallback) {
-        try {
-            return Float.parseFloat(value);
         } catch (Exception ignored) {
             return fallback;
         }

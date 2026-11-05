@@ -29,12 +29,6 @@ enum class TargetPriority : int {
   Distance = 1,
 };
 
-enum class TargetBone : int {
-  Head = 0,
-  Chest = 1,
-  Nearest = 2,
-};
-
 struct Settings {
   bool enabled = false;
 
@@ -43,24 +37,22 @@ struct Settings {
 
   float fovDeg = 360.0f;
   float range = 11.68f;
-  float aimHeightOffset = 0.0f;
-  float smoothingSpeed = 16.0f;
-  float maxDegPerSecond = 320.0f;
-  float maxAccelDegPerSecond2 = 1800.0f;
-  float deadzoneDeg = 0.35f;
-  float fullSpeedRangeDeg = 8.0f;
+  float smoothingSpeed = 24.0f;
+  float maxDegPerSecond = 520.0f;
+  float maxAccelDegPerSecond2 = 3000.0f;
+  float deadzoneDeg = 0.25f;
+  float fullSpeedRangeDeg = 10.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
-  TargetBone targetBone = TargetBone::Head;
 
-  int stickyTicks = 4;
-  float switchHysteresisDeg = 2.5f;
-  int targetSmoothFrames = 2;
-  int targetGraceFrames = 8;
+  int stickyTicks = 3;
+  float switchHysteresisDeg = 2.0f;
+  int targetSmoothFrames = 1;
+  int targetGraceFrames = 6;
 
   float randomJitterDeg = 0.0f;
   int randomJitterIntervalMs = 150;
-  int humanizePauseMs = 100;
+  int humanizePauseMs = 80;
 
   bool visibleCheck = true;
   bool ignoreInvisible = true;
@@ -75,7 +67,7 @@ struct Settings {
 
   // Совместимость с текущим UI клиента.
   bool legit = true;
-  float strength = 70.0f;
+  float strength = 100.0f;
   bool triggerBot = false;
   int triggerDelayMs = 250;
 };
@@ -124,8 +116,6 @@ public:
   void setRange(float range);
   void setStrength(float strength);
   void setFov(float fovDeg);
-  void setAimHeightOffset(float offset);
-  void setBodyPart(int bodyPart);
   void setWallCheck(bool enabled);
   void setTargetPlayers(bool enabled);
   void setTargetMobs(bool enabled);
@@ -158,8 +148,7 @@ private:
   bool isPauseActive(const Settings &settings) const;
   bool isInvisible(void *actor) const;
   bool isSameTeam(void *local, void *other) const;
-  Vec3 getTargetPoint(void *actor, TargetBone bone,
-                      float heightOffset = 0.0f) const;
+  Vec3 getTargetPoint(void *actor) const;
   Angles calculateAnglesToPoint(const Vec3 &point) const;
   void findTargetInternal(void *player, const Settings &settings);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,

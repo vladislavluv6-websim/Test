@@ -18,8 +18,6 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_STRENGTH = "aim_assist_strength";
     private static final String KEY_AIM_ASSIST_LEGIT = "aim_assist_legit";
     private static final String KEY_AIM_ASSIST_FOV = "aim_assist_fov";
-    private static final String KEY_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
-    private static final String KEY_AIM_ASSIST_HEIGHT = "aim_assist_height";
     private static final String KEY_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
@@ -64,11 +62,9 @@ public class InbuiltModManager {
     private static final int DEFAULT_CURSOR_SENSITIVITY = 120;
     private static final int DEFAULT_SPEED_MULTIPLIER = 200;
     private static final int DEFAULT_AIM_ASSIST_RANGE = 12;
-    private static final int DEFAULT_AIM_ASSIST_STRENGTH = 70;
+    private static final int DEFAULT_AIM_ASSIST_STRENGTH = 100;
     private static final boolean DEFAULT_AIM_ASSIST_LEGIT = true;
     private static final int DEFAULT_AIM_ASSIST_FOV = 360;
-    private static final int DEFAULT_AIM_ASSIST_BODY_PART = 0;
-    private static final float DEFAULT_AIM_ASSIST_HEIGHT = 0.0f;
     private static final boolean DEFAULT_AIM_ASSIST_WALL_CHECK = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
@@ -141,26 +137,6 @@ public class InbuiltModManager {
     public void setAimAssistFov(int fov) {
         prefs.edit().putInt(KEY_AIM_ASSIST_FOV,
                 Math.max(30, Math.min(360, fov))).apply();
-    }
-
-    public int getAimAssistBodyPart() {
-        return Math.max(0, Math.min(2,
-                prefs.getInt(KEY_AIM_ASSIST_BODY_PART, DEFAULT_AIM_ASSIST_BODY_PART)));
-    }
-
-    public void setAimAssistBodyPart(int bodyPart) {
-        prefs.edit().putInt(KEY_AIM_ASSIST_BODY_PART,
-                Math.max(0, Math.min(2, bodyPart))).apply();
-    }
-
-    public float getAimAssistHeight() {
-        return Math.max(-1.5f, Math.min(1.5f,
-                prefs.getFloat(KEY_AIM_ASSIST_HEIGHT, DEFAULT_AIM_ASSIST_HEIGHT)));
-    }
-
-    public void setAimAssistHeight(float height) {
-        prefs.edit().putFloat(KEY_AIM_ASSIST_HEIGHT,
-                Math.max(-1.5f, Math.min(1.5f, height))).apply();
     }
 
     public boolean isAimAssistWallCheck() {

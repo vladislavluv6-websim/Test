@@ -140,17 +140,6 @@ void AimAssist::setFov(float fovDeg) {
   m_settings.fovDeg = clampf(fovDeg, 1.0f, 360.0f);
 }
 
-void AimAssist::setAimHeightOffset(float offset) {
-  std::lock_guard<std::mutex> lock(m_settingsMutex);
-  m_settings.aimHeightOffset = clampf(offset, -2.0f, 2.0f);
-}
-
-void AimAssist::setBodyPart(int bodyPart) {
-  std::lock_guard<std::mutex> lock(m_settingsMutex);
-  const int value = std::max(0, std::min(2, bodyPart));
-  m_settings.targetBone = static_cast<TargetBone>(value);
-}
-
 void AimAssist::setWallCheck(bool enabled) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.visibleCheck = enabled;
@@ -170,19 +159,18 @@ void AimAssist::setLegitMode(bool legit) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.legit = legit;
   if (legit) {
-    // Codex-подобный плавный довод, но быстрее прежнего: выше скорость
-    // и ускорение, при этом пружина остаётся критически задемпфированной.
-    m_settings.smoothingSpeed = 16.0f;
-    m_settings.maxDegPerSecond = 320.0f;
-    m_settings.maxAccelDegPerSecond2 = 1800.0f;
-    m_settings.deadzoneDeg = 0.35f;
-    m_settings.fullSpeedRangeDeg = 8.0f;
-  } else {
+    // Центр цели по обеим осям, быстрый критически задемпфированный довод.
     m_settings.smoothingSpeed = 24.0f;
-    m_settings.maxDegPerSecond = 500.0f;
-    m_settings.maxAccelDegPerSecond2 = 3200.0f;
-    m_settings.deadzoneDeg = 0.2f;
-    m_settings.fullSpeedRangeDeg = 11.0f;
+    m_settings.maxDegPerSecond = 520.0f;
+    m_settings.maxAccelDegPerSecond2 = 3000.0f;
+    m_settings.deadzoneDeg = 0.25f;
+    m_settings.fullSpeedRangeDeg = 10.0f;
+  } else {
+    m_settings.smoothingSpeed = 32.0f;
+    m_settings.maxDegPerSecond = 720.0f;
+    m_settings.maxAccelDegPerSecond2 = 4200.0f;
+    m_settings.deadzoneDeg = 0.15f;
+    m_settings.fullSpeedRangeDeg = 12.0f;
   }
 }
 
@@ -356,20 +344,9 @@ void AimAssist::updateVisual(float dt) {
     clearTarget();
     return;
   }
+  // Всегда центр модели: не голова и не ноги, а середина AABB.
   m_target.point = targetPosition;
-  switch (settings.targetBone) {
-  case TargetBone::Head:
-    m_target.point.y += offsets::kHeadOffset;
-    break;
-  case TargetBone::Chest:
-    m_target.point.y += offsets::kChestOffset;
-    break;
-  case TargetBone::Nearest:
-  default:
-    m_target.point.y += offsets::kNearestOffset;
-    break;
-  }
-  m_target.point.y += settings.aimHeightOffset;
+  m_target.point.y += offsets::kCenterOffset;
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -528,8 +505,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
     Vec3 targetPosition{};
     if (!m_bridge.getPosition(actor, targetPosition)) continue;
 
-    const Vec3 point = getTargetPoint(actor, settings.targetBone,
-                                      settings.aimHeightOffset);
+    const Vec3 point = getTargetPoint(actor);
     const Angles angles = calculateAnglesToPoint(point);
 
     const float deltaYaw = shortestDelta(localYaw, angles.yaw);
@@ -646,9 +622,7 @@ Angles AimAssist::calculateAngles(void *entity) const {
   if (!m_bridge.getPosition(player, eye)) return angles;
   eye.y += offsets::kEyeHeight;
 
-  const Settings settings = getSettings();
-  const Vec3 point = getTargetPoint(entity, settings.targetBone,
-                                    settings.aimHeightOffset);
+  const Vec3 point = getTargetPoint(entity);
   const float dx = point.x - eye.x;
   const float dy = point.y - eye.y;
   const float dz = point.z - eye.z;
@@ -773,26 +747,13 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 // ============================================================
 // Вспомогательное
 // ============================================================
-Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone,
-                                float heightOffset) const {
+Vec3 AimAssist::getTargetPoint(void *actor) const {
   Vec3 position{};
   if (!m_bridge.getPosition(actor, position)) {
     return position;
   }
-
-  switch (bone) {
-  case TargetBone::Head:
-    position.y += offsets::kHeadOffset;
-    break;
-  case TargetBone::Chest:
-    position.y += offsets::kChestOffset;
-    break;
-  case TargetBone::Nearest:
-  default:
-    position.y += offsets::kNearestOffset;
-    break;
-  }
-  position.y += heightOffset;
+  // StateVector position — это ноги; 0.9 м — центр хитбокса игрока.
+  position.y += offsets::kCenterOffset;
   return position;
 }
 

@@ -53,18 +53,6 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetFov(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetAimHeightOffset(
-    JNIEnv *, jclass, jfloat offset) {
-  aimbot::AimAssist::instance().setAimHeightOffset(offset);
-}
-
-extern "C" JNIEXPORT void JNICALL
-Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetBodyPart(
-    JNIEnv *, jclass, jint bodyPart) {
-  aimbot::AimAssist::instance().setBodyPart(bodyPart);
-}
-
-extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetWallCheck(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::AimAssist::instance().setWallCheck(enabled == JNI_TRUE);

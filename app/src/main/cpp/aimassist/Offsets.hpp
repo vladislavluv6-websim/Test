@@ -70,8 +70,7 @@ inline constexpr int kActorTypeMob = 0x100;
 // КОНСТАНТЫ ЦЕЛИ
 // ============================================================
 inline constexpr float kEyeHeight = 1.62f;
-inline constexpr float kHeadOffset = 1.55f;
-inline constexpr float kChestOffset = 1.10f;
-inline constexpr float kNearestOffset = 0.90f;
+// Центр хитбокса игрока над StateVector position (ноги).
+inline constexpr float kCenterOffset = 0.90f;
 
 } // namespace aimbot::offsets

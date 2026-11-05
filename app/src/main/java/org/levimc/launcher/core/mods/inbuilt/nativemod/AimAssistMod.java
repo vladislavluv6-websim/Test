@@ -53,14 +53,6 @@ public final class AimAssistMod {
         if (initialized) nativeSetFov(fovDeg);
     }
 
-    public static void setAimHeightOffset(float offset) {
-        if (initialized) nativeSetAimHeightOffset(offset);
-    }
-
-    public static void setBodyPart(int bodyPart) {
-        if (initialized) nativeSetBodyPart(bodyPart);
-    }
-
     public static void setWallCheck(boolean enabled) {
         if (initialized) nativeSetWallCheck(enabled);
     }
@@ -111,8 +103,6 @@ public final class AimAssistMod {
     private static native void nativeSetRange(float range);
     private static native void nativeSetStrength(float strength);
     private static native void nativeSetFov(float fovDeg);
-    private static native void nativeSetAimHeightOffset(float offset);
-    private static native void nativeSetBodyPart(int bodyPart);
     private static native void nativeSetWallCheck(boolean enabled);
     private static native void nativeSetTargetPlayers(boolean enabled);
     private static native void nativeSetTargetMobs(boolean enabled);
