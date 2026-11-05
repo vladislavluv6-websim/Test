@@ -14,6 +14,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -168,6 +170,18 @@ jobs:
           echo "APK_SHA256=${SHA}" >> "$GITHUB_STEP_SUMMARY"
           echo "APK_URL=${URL}"
           echo "APK_SHA256=${SHA}"
+
+      - name: Publish Debug APK Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: esp-debug
+          name: ESP debug build
+          prerelease: true
+          overwrite_files: true
+          body: |
+            Debug APK with crash hardening and configurable ESP.
+          files: app/build/outputs/apk/debug/*.apk
 
       - name: Upload R8 mappings
         if: env.HAS_GOOGLE_SERVICES == 'true'
