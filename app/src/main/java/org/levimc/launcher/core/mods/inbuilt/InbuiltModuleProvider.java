@@ -32,6 +32,11 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_RANGE = "aim_assist_range";
     private static final String CFG_AIM_ASSIST_STRENGTH = "aim_assist_strength";
     private static final String CFG_AIM_ASSIST_LEGIT = "aim_assist_legit";
+    private static final String CFG_AIM_ASSIST_FOV = "aim_assist_fov";
+    private static final String CFG_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
+    private static final String CFG_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
+    private static final String CFG_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
+    private static final String CFG_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
     private static final String CFG_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
@@ -328,13 +333,38 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_AIM_ASSIST_RANGE,
                     context.getString(R.string.mod_config_aim_assist_range),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "8", "3", "16",
+                    "12", "3", "20",
                     String.valueOf(manager.getAimAssistRange())));
+            configs.add(config(CFG_AIM_ASSIST_FOV,
+                    context.getString(R.string.mod_config_aim_assist_fov),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "360", "30", "360",
+                    String.valueOf(manager.getAimAssistFov())));
             configs.add(config(CFG_AIM_ASSIST_STRENGTH,
                     context.getString(R.string.mod_config_aim_assist_strength),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "100", "0", "100",
+                    "70", "0", "100",
                     String.valueOf(manager.getAimAssistStrength())));
+            configs.add(config(CFG_AIM_ASSIST_BODY_PART,
+                    context.getString(R.string.mod_config_aim_assist_body_part),
+                    UnifiedMod.ConfigType.RADIO,
+                    "0", "Head,Chest,Nearest", "",
+                    String.valueOf(manager.getAimAssistBodyPart())));
+            configs.add(config(CFG_AIM_ASSIST_WALL_CHECK,
+                    context.getString(R.string.mod_config_aim_assist_wall_check),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isAimAssistWallCheck())));
+            configs.add(config(CFG_AIM_ASSIST_TARGET_PLAYERS,
+                    context.getString(R.string.mod_config_aim_assist_target_players),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isAimAssistTargetPlayers())));
+            configs.add(config(CFG_AIM_ASSIST_TARGET_MOBS,
+                    context.getString(R.string.mod_config_aim_assist_target_mobs),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isAimAssistTargetMobs())));
             configs.add(config(CFG_AIM_ASSIST_LEGIT,
                     context.getString(R.string.mod_config_aim_assist_legit),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -481,8 +511,23 @@ public final class InbuiltModuleProvider {
             case CFG_AIM_ASSIST_RANGE:
                 manager.setAimAssistRange(parseInt(value, manager.getAimAssistRange()));
                 break;
+            case CFG_AIM_ASSIST_FOV:
+                manager.setAimAssistFov(parseInt(value, manager.getAimAssistFov()));
+                break;
             case CFG_AIM_ASSIST_STRENGTH:
                 manager.setAimAssistStrength(parseInt(value, manager.getAimAssistStrength()));
+                break;
+            case CFG_AIM_ASSIST_BODY_PART:
+                manager.setAimAssistBodyPart(parseInt(value, manager.getAimAssistBodyPart()));
+                break;
+            case CFG_AIM_ASSIST_WALL_CHECK:
+                manager.setAimAssistWallCheck(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_TARGET_PLAYERS:
+                manager.setAimAssistTargetPlayers(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_TARGET_MOBS:
+                manager.setAimAssistTargetMobs(parseBoolean(value));
                 break;
             case CFG_AIM_ASSIST_LEGIT:
                 manager.setAimAssistLegitMode(parseBoolean(value));

@@ -17,6 +17,11 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_RANGE = "aim_assist_range";
     private static final String KEY_AIM_ASSIST_STRENGTH = "aim_assist_strength";
     private static final String KEY_AIM_ASSIST_LEGIT = "aim_assist_legit";
+    private static final String KEY_AIM_ASSIST_FOV = "aim_assist_fov";
+    private static final String KEY_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
+    private static final String KEY_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
+    private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
+    private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
     private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
     private static final String KEY_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
@@ -57,9 +62,14 @@ public class InbuiltModManager {
     private static final int DEFAULT_ZOOM_TRANSITION_DURATION = 150;
     private static final int DEFAULT_CURSOR_SENSITIVITY = 120;
     private static final int DEFAULT_SPEED_MULTIPLIER = 200;
-    private static final int DEFAULT_AIM_ASSIST_RANGE = 8;
-    private static final int DEFAULT_AIM_ASSIST_STRENGTH = 100;
+    private static final int DEFAULT_AIM_ASSIST_RANGE = 12;
+    private static final int DEFAULT_AIM_ASSIST_STRENGTH = 70;
     private static final boolean DEFAULT_AIM_ASSIST_LEGIT = true;
+    private static final int DEFAULT_AIM_ASSIST_FOV = 360;
+    private static final int DEFAULT_AIM_ASSIST_BODY_PART = 0;
+    private static final boolean DEFAULT_AIM_ASSIST_WALL_CHECK = true;
+    private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
+    private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
     private static final int DEFAULT_TRIGGER_BOT_DELAY = 280;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
@@ -112,13 +122,57 @@ public class InbuiltModManager {
     }
 
     public int getAimAssistRange() {
-        return Math.max(3, Math.min(16,
+        return Math.max(3, Math.min(20,
                 prefs.getInt(KEY_AIM_ASSIST_RANGE, DEFAULT_AIM_ASSIST_RANGE)));
     }
 
     public void setAimAssistRange(int range) {
         prefs.edit().putInt(KEY_AIM_ASSIST_RANGE,
-                Math.max(3, Math.min(16, range))).apply();
+                Math.max(3, Math.min(20, range))).apply();
+    }
+
+    public int getAimAssistFov() {
+        return Math.max(30, Math.min(360,
+                prefs.getInt(KEY_AIM_ASSIST_FOV, DEFAULT_AIM_ASSIST_FOV)));
+    }
+
+    public void setAimAssistFov(int fov) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_FOV,
+                Math.max(30, Math.min(360, fov))).apply();
+    }
+
+    public int getAimAssistBodyPart() {
+        return Math.max(0, Math.min(2,
+                prefs.getInt(KEY_AIM_ASSIST_BODY_PART, DEFAULT_AIM_ASSIST_BODY_PART)));
+    }
+
+    public void setAimAssistBodyPart(int bodyPart) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_BODY_PART,
+                Math.max(0, Math.min(2, bodyPart))).apply();
+    }
+
+    public boolean isAimAssistWallCheck() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_WALL_CHECK, DEFAULT_AIM_ASSIST_WALL_CHECK);
+    }
+
+    public void setAimAssistWallCheck(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_WALL_CHECK, enabled).apply();
+    }
+
+    public boolean isAimAssistTargetPlayers() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_TARGET_PLAYERS, DEFAULT_AIM_ASSIST_TARGET_PLAYERS);
+    }
+
+    public void setAimAssistTargetPlayers(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_TARGET_PLAYERS, enabled).apply();
+    }
+
+    public boolean isAimAssistTargetMobs() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_TARGET_MOBS, DEFAULT_AIM_ASSIST_TARGET_MOBS);
+    }
+
+    public void setAimAssistTargetMobs(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_TARGET_MOBS, enabled).apply();
     }
 
     public int getAimAssistStrength() {

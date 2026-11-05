@@ -41,28 +41,30 @@ struct Settings {
   ActivationMode activationMode = ActivationMode::Always;
   int activationKey = 0;
 
-  float fovDeg = 90.0f;
-  float range = 8.0f;
-  float smoothingSpeed = 14.0f;
-  float maxDegPerSecond = 240.0f;
-  float maxAccelDegPerSecond2 = 2000.0f;
-  float deadzoneDeg = 0.5f;
-  float fullSpeedRangeDeg = 8.0f;
+  float fovDeg = 360.0f;
+  float range = 11.68f;
+  float smoothingSpeed = 11.5f;
+  float maxDegPerSecond = 190.0f;
+  float maxAccelDegPerSecond2 = 850.0f;
+  float deadzoneDeg = 0.45f;
+  float fullSpeedRangeDeg = 7.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
   TargetBone targetBone = TargetBone::Head;
 
-  int stickyTicks = 8;
-  float switchHysteresisDeg = 3.0f;
-  int targetSmoothFrames = 3;
+  int stickyTicks = 10;
+  float switchHysteresisDeg = 4.0f;
+  int targetSmoothFrames = 4;
 
   float randomJitterDeg = 0.0f;
   int randomJitterIntervalMs = 150;
   int humanizePauseMs = 120;
 
-  bool visibleCheck = false;
+  bool visibleCheck = true;
   bool ignoreInvisible = true;
   bool teamCheck = false;
+  bool targetPlayers = true;
+  bool targetMobs = true;
   bool debugOverlay = false;
   bool freezeNetwork = false;
   // Синхронизация body yaw на сетевом тике. По умолчанию выключена:
@@ -71,7 +73,7 @@ struct Settings {
 
   // Совместимость с текущим UI клиента.
   bool legit = true;
-  float strength = 100.0f;
+  float strength = 70.0f;
   bool triggerBot = false;
   int triggerDelayMs = 250;
 };
@@ -119,6 +121,11 @@ public:
   bool isEnabled() const;
   void setRange(float range);
   void setStrength(float strength);
+  void setFov(float fovDeg);
+  void setBodyPart(int bodyPart);
+  void setWallCheck(bool enabled);
+  void setTargetPlayers(bool enabled);
+  void setTargetMobs(bool enabled);
   void setLegitMode(bool legit);
   void setTriggerBot(bool enabled);
   void setTriggerDelay(int delayMs);

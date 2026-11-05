@@ -47,6 +47,36 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetStren
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetFov(
+    JNIEnv *, jclass, jfloat fovDeg) {
+  aimbot::AimAssist::instance().setFov(fovDeg);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetBodyPart(
+    JNIEnv *, jclass, jint bodyPart) {
+  aimbot::AimAssist::instance().setBodyPart(bodyPart);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetWallCheck(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setWallCheck(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetPlayers(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setTargetPlayers(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetMobs(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setTargetMobs(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetLegitMode(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::AimAssist::instance().setLegitMode(enabled == JNI_TRUE);

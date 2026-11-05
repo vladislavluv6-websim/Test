@@ -109,6 +109,10 @@ void AimAssist::setSettings(const Settings &settings) {
 }
 
 void AimAssist::setEnabled(bool enabled) {
+  {
+    std::lock_guard<std::mutex> lock(m_settingsMutex);
+    m_settings.enabled = enabled;
+  }
   if (enabled) {
     onEnable();
   } else {
@@ -122,7 +126,7 @@ bool AimAssist::isEnabled() const {
 
 void AimAssist::setRange(float range) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
-  m_settings.range = clampf(range, 3.0f, 16.0f);
+  m_settings.range = clampf(range, 3.0f, 20.0f);
 }
 
 void AimAssist::setStrength(float strength) {
@@ -130,21 +134,49 @@ void AimAssist::setStrength(float strength) {
   m_settings.strength = clampf(strength, 0.0f, 100.0f);
 }
 
+void AimAssist::setFov(float fovDeg) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.fovDeg = clampf(fovDeg, 1.0f, 360.0f);
+}
+
+void AimAssist::setBodyPart(int bodyPart) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  const int value = std::max(0, std::min(2, bodyPart));
+  m_settings.targetBone = static_cast<TargetBone>(value);
+}
+
+void AimAssist::setWallCheck(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.visibleCheck = enabled;
+}
+
+void AimAssist::setTargetPlayers(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.targetPlayers = enabled;
+}
+
+void AimAssist::setTargetMobs(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.targetMobs = enabled;
+}
+
 void AimAssist::setLegitMode(bool legit) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.legit = legit;
   if (legit) {
-    m_settings.smoothingSpeed = 14.0f;
-    m_settings.maxDegPerSecond = 240.0f;
-    m_settings.maxAccelDegPerSecond2 = 1200.0f;
-    m_settings.deadzoneDeg = 0.5f;
-    m_settings.fullSpeedRangeDeg = 8.0f;
+    // Codex-подобный плавный довод: ниже скорость и ускорение, шире зона
+    // мягкого торможения. Значение strength=70 соответствует speed 0.70.
+    m_settings.smoothingSpeed = 11.5f;
+    m_settings.maxDegPerSecond = 190.0f;
+    m_settings.maxAccelDegPerSecond2 = 850.0f;
+    m_settings.deadzoneDeg = 0.45f;
+    m_settings.fullSpeedRangeDeg = 7.0f;
   } else {
-    m_settings.smoothingSpeed = 22.0f;
-    m_settings.maxDegPerSecond = 520.0f;
-    m_settings.maxAccelDegPerSecond2 = 3000.0f;
-    m_settings.deadzoneDeg = 0.2f;
-    m_settings.fullSpeedRangeDeg = 12.0f;
+    m_settings.smoothingSpeed = 18.0f;
+    m_settings.maxDegPerSecond = 360.0f;
+    m_settings.maxAccelDegPerSecond2 = 2400.0f;
+    m_settings.deadzoneDeg = 0.25f;
+    m_settings.fullSpeedRangeDeg = 10.0f;
   }
 }
 
@@ -471,7 +503,8 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
 
   for (void *actor : m_actors) {
     if (!actor || actor == player) continue;
-    if (!m_bridge.isPlayer(actor)) continue;
+    const bool playerActor = m_bridge.isPlayer(actor);
+    if (playerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
     if (settings.ignoreInvisible && isInvisible(actor)) continue;
     if (settings.teamCheck && isSameTeam(player, actor)) continue;
 

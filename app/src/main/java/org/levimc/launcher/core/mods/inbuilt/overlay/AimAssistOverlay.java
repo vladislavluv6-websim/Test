@@ -24,7 +24,12 @@ public class AimAssistOverlay extends BaseOverlayButton {
 
     private void applyNativeSettings(InbuiltModManager manager) {
         AimAssistMod.setRange(manager.getAimAssistRange());
+        AimAssistMod.setFov(manager.getAimAssistFov());
         AimAssistMod.setStrength(manager.getAimAssistStrength());
+        AimAssistMod.setBodyPart(manager.getAimAssistBodyPart());
+        AimAssistMod.setWallCheck(manager.isAimAssistWallCheck());
+        AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
+        AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
         AimAssistMod.setLegitMode(manager.isAimAssistLegitMode());
     }
 

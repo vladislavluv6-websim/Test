@@ -661,6 +661,11 @@
     <string name="mod_config_aim_assist_range">Aim range (blocks)</string>
     <string name="mod_config_aim_assist_strength">Aim speed (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized aim (slower, smoother, less detectable)</string>
+    <string name="mod_config_aim_assist_fov">Aim FOV (degrees)</string>
+    <string name="mod_config_aim_assist_body_part">Body part</string>
+    <string name="mod_config_aim_assist_wall_check">Wall check</string>
+    <string name="mod_config_aim_assist_target_players">Target players</string>
+    <string name="mod_config_aim_assist_target_mobs">Target mobs</string>
     <string name="mod_config_trigger_bot_delay">Trigger Bot reaction delay (ms)</string>
     <string name="aim_assist_mod_unavailable">Aim assist is unavailable for this game version</string>
     <string name="inbuilt_mod_chick_pet">Chick Pet</string>

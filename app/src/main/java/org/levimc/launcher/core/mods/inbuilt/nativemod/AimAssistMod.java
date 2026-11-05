@@ -49,6 +49,26 @@ public final class AimAssistMod {
         if (initialized) nativeSetLegitMode(enabled);
     }
 
+    public static void setFov(float fovDeg) {
+        if (initialized) nativeSetFov(fovDeg);
+    }
+
+    public static void setBodyPart(int bodyPart) {
+        if (initialized) nativeSetBodyPart(bodyPart);
+    }
+
+    public static void setWallCheck(boolean enabled) {
+        if (initialized) nativeSetWallCheck(enabled);
+    }
+
+    public static void setTargetPlayers(boolean enabled) {
+        if (initialized) nativeSetTargetPlayers(enabled);
+    }
+
+    public static void setTargetMobs(boolean enabled) {
+        if (initialized) nativeSetTargetMobs(enabled);
+    }
+
     public static void setTriggerBot(boolean enabled) {
         if (initialized) nativeSetTriggerBot(enabled);
     }
@@ -86,6 +106,11 @@ public final class AimAssistMod {
     private static native boolean nativeIsEnabled();
     private static native void nativeSetRange(float range);
     private static native void nativeSetStrength(float strength);
+    private static native void nativeSetFov(float fovDeg);
+    private static native void nativeSetBodyPart(int bodyPart);
+    private static native void nativeSetWallCheck(boolean enabled);
+    private static native void nativeSetTargetPlayers(boolean enabled);
+    private static native void nativeSetTargetMobs(boolean enabled);
     private static native void nativeSetLegitMode(boolean enabled);
     private static native void nativeSetTriggerBot(boolean enabled);
     private static native void nativeSetTriggerDelay(int delayMs);
