@@ -69,6 +69,10 @@ public final class AimAssistMod {
         if (initialized) nativeSetTouchActive(active);
     }
 
+    public static void notifyCameraLook() {
+        if (initialized) nativeNotifyCameraLook();
+    }
+
     public static void setActivationHeld(boolean held) {
         if (initialized) nativeSetActivationHeld(held);
     }
@@ -87,5 +91,6 @@ public final class AimAssistMod {
     private static native void nativeSetTriggerDelay(int delayMs);
     private static native boolean nativeIsOnTarget();
     private static native void nativeSetTouchActive(boolean active);
+    private static native void nativeNotifyCameraLook();
     private static native void nativeSetActivationHeld(boolean held);
 }

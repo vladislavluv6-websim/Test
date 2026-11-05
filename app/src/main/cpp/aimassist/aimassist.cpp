@@ -78,6 +78,12 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTouch
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeNotifyCameraLook(
+    JNIEnv *, jclass) {
+  aimbot::AimAssist::instance().notifyCameraLook();
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetActivationHeld(
     JNIEnv *, jclass, jboolean held) {
   aimbot::AimAssist::instance().setActivationHeld(held == JNI_TRUE);

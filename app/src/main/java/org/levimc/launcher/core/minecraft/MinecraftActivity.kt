@@ -22,6 +22,7 @@ import androidx.appcompat.widget.AppCompatEditText
 import com.mojang.minecraftpe.MainActivity
 import org.levimc.launcher.core.crash.CrashReporter
 import org.levimc.launcher.core.mods.ModManager
+import org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod
 import org.levimc.launcher.core.mods.inbuilt.nativemod.PojavControlsMod
 import org.levimc.launcher.core.mods.inbuilt.overlay.InbuiltOverlayManager
 import org.levimc.launcher.preloader.PreloaderInput
@@ -528,6 +529,7 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
 
     override fun pojavSendLookDelta(deltaX: Float, deltaY: Float) {
         PojavControlsMod.nativeSendLookDelta(deltaX, deltaY)
+        AimAssistMod.notifyCameraLook()
     }
 
     override fun pojavSendPointer(x: Float, y: Float) {

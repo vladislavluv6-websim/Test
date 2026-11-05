@@ -45,6 +45,7 @@ struct Settings {
   float range = 8.0f;
   float smoothingSpeed = 14.0f;
   float maxDegPerSecond = 240.0f;
+  float maxAccelDegPerSecond2 = 2000.0f;
   float deadzoneDeg = 0.5f;
   float fullSpeedRangeDeg = 8.0f;
 
@@ -64,6 +65,9 @@ struct Settings {
   bool teamCheck = false;
   bool debugOverlay = false;
   bool freezeNetwork = false;
+  // Синхронизация body yaw на сетевом тике. По умолчанию выключена:
+  // applyTurnDelta уже двигает view, а лишняя запись компонента даёт дрожание.
+  bool syncBodyYaw = false;
 
   // Совместимость с текущим UI клиента.
   bool legit = true;
@@ -119,6 +123,7 @@ public:
   void setTriggerBot(bool enabled);
   void setTriggerDelay(int delayMs);
   void setTouchActive(bool active);
+  void notifyCameraLook();
   void setActivationHeld(bool held);
   bool isOnTarget() const;
 
@@ -160,6 +165,7 @@ private:
   std::atomic<bool> m_enabled{false};
   std::atomic<bool> m_activationHeld{false};
   std::atomic<bool> m_touchActive{false};
+  std::atomic<bool> m_resyncRequested{false};
   std::atomic<float> m_localYaw{0.0f};
   std::atomic<float> m_localPitch{0.0f};
   std::atomic<float> m_networkYaw{0.0f};
@@ -167,9 +173,6 @@ private:
   std::atomic<bool> m_onTarget{false};
 
   bool m_hasLocal = false;
-  bool m_hasReadView = false;
-  float m_lastReadYaw = 0.0f;
-  float m_lastReadPitch = 0.0f;
 
   Target m_target;
   std::vector<void *> m_actors;
@@ -178,11 +181,15 @@ private:
 
   int m_frameCounter = 0;
   int m_stickyLeft = 0;
-  int64_t m_humanPauseUntilMs = 0;
+  std::atomic<int64_t> m_humanPauseUntilMs{0};
   int64_t m_lastJitterMs = 0;
   float m_jitterYaw = 0.0f;
   float m_jitterPitch = 0.0f;
 
+  float m_velYaw = 0.0f;
+  float m_velPitch = 0.0f;
+  float m_lastStepYaw = 0.0f;
+  float m_lastStepPitch = 0.0f;
   float m_lastDelta = 0.0f;
   float m_lastFactor = 0.0f;
   float m_lastDt = 0.0f;

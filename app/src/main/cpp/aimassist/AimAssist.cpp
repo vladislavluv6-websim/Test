@@ -53,20 +53,31 @@ AimAssist &AimAssist::instance() {
 // ModuleBase
 // ============================================================
 void AimAssist::onEnable() {
-  m_enabled.store(true, std::memory_order_release);
   m_hasLocal = false;
+  m_velYaw = 0.0f;
+  m_velPitch = 0.0f;
   m_target = {};
   m_targetHistory.clear();
   m_historyActor = nullptr;
   m_stickyLeft = 0;
   m_frameCounter = 0;
+  m_lastStepYaw = 0.0f;
+  m_lastStepPitch = 0.0f;
+  m_lastDelta = 0.0f;
+  m_lastFactor = 0.0f;
+  m_deadzoneHit = false;
   m_onTarget.store(false, std::memory_order_release);
+  // Release-публикация после сброса состояния: render-поток увидит
+  // согласованные поля, а не полу-инициализированные.
+  m_enabled.store(true, std::memory_order_release);
   __android_log_print(ANDROID_LOG_INFO, kTag, "module enabled");
 }
 
 void AimAssist::onDisable() {
   m_enabled.store(false, std::memory_order_release);
   clearTarget();
+  m_velYaw = 0.0f;
+  m_velPitch = 0.0f;
   m_onTarget.store(false, std::memory_order_release);
   __android_log_print(ANDROID_LOG_INFO, kTag, "module disabled");
 }
@@ -79,6 +90,8 @@ void AimAssist::onConfigLoad() {
   // Здесь можно вызвать конфиг-систему клиента.
   // В текущем APK настройки приходят через setRange/setStrength/setLegitMode.
   m_hasLocal = false;
+  m_velYaw = 0.0f;
+  m_velPitch = 0.0f;
   clearTarget();
 }
 
@@ -123,11 +136,13 @@ void AimAssist::setLegitMode(bool legit) {
   if (legit) {
     m_settings.smoothingSpeed = 14.0f;
     m_settings.maxDegPerSecond = 240.0f;
+    m_settings.maxAccelDegPerSecond2 = 1200.0f;
     m_settings.deadzoneDeg = 0.5f;
     m_settings.fullSpeedRangeDeg = 8.0f;
   } else {
     m_settings.smoothingSpeed = 22.0f;
     m_settings.maxDegPerSecond = 520.0f;
+    m_settings.maxAccelDegPerSecond2 = 3000.0f;
     m_settings.deadzoneDeg = 0.2f;
     m_settings.fullSpeedRangeDeg = 12.0f;
   }
@@ -148,10 +163,23 @@ void AimAssist::setTriggerDelay(int delayMs) {
 
 void AimAssist::setTouchActive(bool active) {
   m_touchActive.store(active, std::memory_order_release);
-  if (active) {
-    const Settings settings = getSettings();
-    m_humanPauseUntilMs = nowMs() + std::max(0, settings.humanizePauseMs);
+  const Settings settings = getSettings();
+  m_humanPauseUntilMs.store(
+      nowMs() + std::max(0, settings.humanizePauseMs),
+      std::memory_order_release);
+  if (!active) {
+    // После отпускания обязательно перечитываем фактический view.
+    m_resyncRequested.store(true, std::memory_order_release);
   }
+}
+
+void AimAssist::notifyCameraLook() {
+  const Settings settings = getSettings();
+  m_humanPauseUntilMs.store(
+      nowMs() + std::max(0, settings.humanizePauseMs),
+      std::memory_order_release);
+  // local пересинхронизируется в render-потоке, без гонки за m_hasLocal.
+  m_resyncRequested.store(true, std::memory_order_release);
 }
 
 void AimAssist::setActivationHeld(bool held) {
@@ -201,7 +229,7 @@ bool AimAssist::isPauseActive(const Settings &) const {
   if (m_touchActive.load(std::memory_order_acquire)) {
     return true;
   }
-  return nowMs() < m_humanPauseUntilMs;
+  return nowMs() < m_humanPauseUntilMs.load(std::memory_order_acquire);
 }
 
 // ============================================================
@@ -233,30 +261,30 @@ void AimAssist::updateVisual(float dt) {
 
   const Settings settings = getSettings();
 
+  // Камера двигалась извне (палец/мышь): заново берём фактический view
+  // и сбрасываем скорость, чтобы не было рывка при возобновлении.
+  if (m_resyncRequested.exchange(false, std::memory_order_acq_rel)) {
+    // Сразу берём фактический view, иначе один кадр считаем от старого local.
+    m_localPitch.store(current.pitch, std::memory_order_relaxed);
+    m_localYaw.store(current.yaw, std::memory_order_relaxed);
+    m_hasLocal = true;
+    m_velYaw = 0.0f;
+    m_velPitch = 0.0f;
+  }
+
+  // Пока палец двигает камеру, local всегда равен фактическому view.
+  if (m_touchActive.load(std::memory_order_acquire)) {
+    m_localPitch.store(current.pitch, std::memory_order_relaxed);
+    m_localYaw.store(current.yaw, std::memory_order_relaxed);
+    m_hasLocal = true;
+    m_velYaw = 0.0f;
+    m_velPitch = 0.0f;
+    return;
+  }
   if (!m_hasLocal) {
     m_localPitch.store(current.pitch, std::memory_order_relaxed);
     m_localYaw.store(current.yaw, std::memory_order_relaxed);
     m_hasLocal = true;
-  }
-
-  // Если компонент view изменился (ваниль/палец/applyTurnDelta), подхватываем.
-  // Если applyTurnDelta двигает только камеру, компонент не меняется —
-  // тогда продолжаем вести виртуальные local-углы.
-  if (!m_hasReadView) {
-    m_lastReadYaw = current.yaw;
-    m_lastReadPitch = current.pitch;
-    m_hasReadView = true;
-  } else {
-    const float changedYaw =
-        std::fabs(shortestDelta(m_lastReadYaw, current.yaw));
-    const float changedPitch = std::fabs(current.pitch - m_lastReadPitch);
-    if (changedYaw > 0.001f || changedPitch > 0.001f) {
-      m_localYaw.store(current.yaw, std::memory_order_relaxed);
-      m_localPitch.store(current.pitch, std::memory_order_relaxed);
-      m_hasLocal = true;
-    }
-    m_lastReadYaw = current.yaw;
-    m_lastReadPitch = current.pitch;
   }
 
   if (!isActive(settings)) {
@@ -265,6 +293,8 @@ void AimAssist::updateVisual(float dt) {
   }
 
   if (isPauseActive(settings)) {
+    m_velYaw = 0.0f;
+    m_velPitch = 0.0f;
     return;
   }
 
@@ -275,17 +305,33 @@ void AimAssist::updateVisual(float dt) {
   }
 
   if (!m_target.valid) {
+    // Цели нет: не двигаем камеру вообще. Скорость гасим плавно,
+    // чтобы при появлении цели не было накопленного импульса.
+    m_velYaw *= 0.85f;
+    m_velPitch *= 0.85f;
     m_onTarget.store(false, std::memory_order_release);
     return;
   }
 
   // Обновляем точку текущей цели каждый кадр — это дешёвое чтение позиции.
-  Vec3 position{};
-  if (!m_bridge.getPosition(m_target.actor, position)) {
+  Vec3 targetPosition{};
+  if (!m_bridge.getPosition(m_target.actor, targetPosition)) {
     clearTarget();
     return;
   }
-  m_target.point = getTargetPoint(m_target.actor, settings.targetBone);
+  m_target.point = targetPosition;
+  switch (settings.targetBone) {
+  case TargetBone::Head:
+    m_target.point.y += offsets::kHeadOffset;
+    break;
+  case TargetBone::Chest:
+    m_target.point.y += offsets::kChestOffset;
+    break;
+  case TargetBone::Nearest:
+  default:
+    m_target.point.y += offsets::kNearestOffset;
+    break;
+  }
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -321,11 +367,12 @@ void AimAssist::updateVisual(float dt) {
   const float stepYaw = shortestDelta(beforeYaw, afterYaw);
   const float stepPitch = afterPitch - beforePitch;
   if (std::fabs(stepYaw) > 0.0001f || std::fabs(stepPitch) > 0.0001f) {
-    // applyTurnDelta двигает локальную камеру. Знак pitchUp: минус — вверх.
+    // Только applyTurnDelta. Никаких записей rotation-компонента в кадре:
+    // именно они давали feedback-петлю и дрожание камеры.
     m_bridge.applyTurnDelta(player, -stepPitch, stepYaw);
-    // Body yaw синхронизируем, pitch компонента сохраняем.
-    m_bridge.setBodyYaw(player, afterYaw);
   }
+  m_lastStepYaw = stepYaw;
+  m_lastStepPitch = stepPitch;
 
   // Готовность триггера считаем по реальному углу до цели, не по smoothed.
   const float targetDeltaYaw =
@@ -347,9 +394,10 @@ void AimAssist::updateVisual(float dt) {
       __android_log_print(
           ANDROID_LOG_INFO, kTag,
           "local=(p %.2f y %.2f) target=(p %.2f y %.2f) delta=%.2f "
-          "factor=%.3f dt=%.4f deadzone=%d target=%p",
+          "factor=%.3f step=(p %.3f y %.3f) dt=%.4f deadzone=%d target=%p",
           afterPitch, afterYaw, m_target.pitch, m_target.yaw, m_lastDelta,
-          m_lastFactor, m_lastDt, m_deadzoneHit ? 1 : 0, m_target.actor);
+          m_lastFactor, m_lastStepPitch, m_lastStepYaw, m_lastDt,
+          m_deadzoneHit ? 1 : 0, m_target.actor);
     }
   }
 }
@@ -368,12 +416,18 @@ void AimAssist::updateNetwork() {
   }
 
   const Settings settings = getSettings();
-  if (settings.freezeNetwork) {
+  if (settings.freezeNetwork || !m_enabled.load(std::memory_order_acquire)) {
     return;
   }
 
   void *player = m_bridge.getLocalPlayer();
   if (!player) return;
+
+  // Body yaw — только 20 Гц и только если явно включено.
+  // В 1.26.x applyTurnDelta обычно уже обновляет rotation-компонент.
+  if (settings.syncBodyYaw) {
+    m_bridge.setBodyYaw(player, localYaw);
+  }
 
   // В 1.26.x локальные углы сами попадают в PlayerAuthInput.
   // Если нужен явный MovePlayerPacket — подключи sender через
@@ -494,7 +548,15 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
   }
 
   if (chosen.valid) {
+    const bool switched = chosen.actor != m_target.actor;
     m_target = chosen;
+    if (switched) {
+      // Не переносим скорость с прошлой цели: иначе рывок на переключении.
+      m_velYaw = 0.0f;
+      m_velPitch = 0.0f;
+      m_targetHistory.clear();
+      m_historyActor = chosen.actor;
+    }
     m_stickyLeft = std::max(0, settings.stickyTicks);
     m_target.valid = true;
   } else if (currentStillValid) {
@@ -553,51 +615,88 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
                                             float dt,
                                             const Settings &settings) {
   dt = clampf(dt, 0.0f, kMaxDt);
-
-  const float currentYaw = m_localYaw.load(std::memory_order_relaxed);
-  const float currentPitch = m_localPitch.load(std::memory_order_relaxed);
-
-  const float deltaYaw = shortestDelta(currentYaw, targetYaw);
-  float deltaPitch = targetPitch - currentPitch;
-
-  if (std::fabs(deltaYaw) < settings.deadzoneDeg &&
-      std::fabs(deltaPitch) < settings.deadzoneDeg) {
-    m_deadzoneHit = true;
-    m_lastDelta = std::sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
-    m_lastFactor = 0.0f;
+  if (dt <= 0.0f) {
     return;
   }
 
-  const float magnitude =
-      std::sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
-  const float factor = 1.0f - std::exp(-settings.smoothingSpeed * dt);
-  const float range = std::max(0.001f, settings.fullSpeedRangeDeg);
-  const float proximity = clampf(magnitude / range, 0.0f, 1.0f);
-  const float localFactor = factor * proximity;
-  const float maxStep = settings.maxDegPerSecond * dt;
+  // Один шаг на кадр: applyTurnDelta нельзя вызывать несколько раз за кадр,
+  // иначе камера получает несколько мелких рывков и дрожит.
+  const float h = dt;
 
-  float stepYaw = clampf(deltaYaw * localFactor, -maxStep, maxStep);
-  float stepPitch = clampf(deltaPitch * localFactor, -maxStep, maxStep);
+  // strength 0..100 масштабирует скорость, не меняя форму кривой.
+  const float strengthScale = clampf(settings.strength / 100.0f, 0.0f, 1.0f);
+  const float omega =
+      std::max(0.001f, settings.smoothingSpeed * (0.4f + 0.6f * strengthScale));
+  const float maxVel =
+      std::max(0.0f, settings.maxDegPerSecond * (0.5f + 0.5f * strengthScale));
+  const float maxAccel = std::max(
+      0.0f, settings.maxAccelDegPerSecond2 * (0.5f + 0.5f * strengthScale));
+  const float deadzone = std::max(0.0f, settings.deadzoneDeg);
+  const float fullRange = std::max(0.001f, settings.fullSpeedRangeDeg);
 
-  // Микро-квантование убирает одинаковые дельты, но не даёт дрожи.
-  constexpr float kQuantum = 0.01f;
-  stepYaw = std::round(stepYaw / kQuantum) * kQuantum;
-  stepPitch = std::round(stepPitch / kQuantum) * kQuantum;
+  {
+    const float curYaw = m_localYaw.load(std::memory_order_relaxed);
+    const float curPitch = m_localPitch.load(std::memory_order_relaxed);
+    const float deltaYaw = shortestDelta(curYaw, targetYaw);
+    const float deltaPitch = targetPitch - curPitch;
 
-  if (std::fabs(stepYaw) < 0.0001f && std::fabs(stepPitch) < 0.0001f) {
-    m_deadzoneHit = true;
-    return;
+    if (std::fabs(deltaYaw) <= deadzone &&
+        std::fabs(deltaPitch) <= deadzone) {
+      // Не обнуляем скорость мгновенно: плавно тормозим в зоне.
+      m_velYaw *= 0.5f;
+      m_velPitch *= 0.5f;
+      m_deadzoneHit = true;
+      m_lastDelta = std::sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
+      m_lastFactor = 0.0f;
+      return;
+    }
+
+    const float magnitude =
+        std::sqrt(deltaYaw * deltaYaw + deltaPitch * deltaPitch);
+    const float proximity = clampf(magnitude / fullRange, 0.0f, 1.0f);
+    // smoothstep: мягкий вход/выход без излома на границе fullSpeedRange.
+    const float easedProximity = proximity * proximity * (3.0f - 2.0f * proximity);
+    const float localMaxVel = maxVel * easedProximity;
+
+    // Критически задемпфированная пружина: без перелёта и без рывков.
+    float accelYaw = omega * omega * deltaYaw - 2.0f * omega * m_velYaw;
+    float accelPitch = omega * omega * deltaPitch - 2.0f * omega * m_velPitch;
+    if (maxAccel > 0.0f) {
+      accelYaw = clampf(accelYaw, -maxAccel, maxAccel);
+      accelPitch = clampf(accelPitch, -maxAccel, maxAccel);
+    }
+
+    m_velYaw += accelYaw * h;
+    m_velPitch += accelPitch * h;
+    m_velYaw = clampf(m_velYaw, -localMaxVel, localMaxVel);
+    m_velPitch = clampf(m_velPitch, -localMaxVel, localMaxVel);
+
+    float stepYaw = m_velYaw * h;
+    float stepPitch = m_velPitch * h;
+
+    // Не проскакиваем цель даже на одном подшаге.
+    if (std::fabs(stepYaw) > std::fabs(deltaYaw)) {
+      stepYaw = deltaYaw;
+      m_velYaw = 0.0f;
+    }
+    if (std::fabs(stepPitch) > std::fabs(deltaPitch)) {
+      stepPitch = deltaPitch;
+      m_velPitch = 0.0f;
+    }
+
+    const float newYaw = normalizeYaw(curYaw + stepYaw);
+    const float newPitch = clampf(curPitch + stepPitch, -89.9f, 89.9f);
+    m_localYaw.store(newYaw, std::memory_order_relaxed);
+    m_localPitch.store(newPitch, std::memory_order_relaxed);
+
+    m_lastDelta = magnitude;
+    m_lastFactor = (maxVel > 0.0001f)
+                       ? std::sqrt(m_velYaw * m_velYaw +
+                                   m_velPitch * m_velPitch) /
+                             maxVel
+                       : 0.0f;
+    m_deadzoneHit = false;
   }
-
-  const float newYaw = normalizeYaw(currentYaw + stepYaw);
-  const float newPitch = clampf(currentPitch + stepPitch, -89.9f, 89.9f);
-
-  m_localYaw.store(newYaw, std::memory_order_relaxed);
-  m_localPitch.store(newPitch, std::memory_order_relaxed);
-
-  m_lastDelta = magnitude;
-  m_lastFactor = localFactor;
-  m_deadzoneHit = false;
 }
 
 // ============================================================
@@ -631,21 +730,26 @@ Vec3 AimAssist::smoothedPoint(const Target &target,
     m_targetHistory.clear();
   }
 
-  m_targetHistory.push_back(target.point);
-  const size_t maxFrames =
-      static_cast<size_t>(std::max(1, settings.targetSmoothFrames));
-  while (m_targetHistory.size() > maxFrames) {
-    m_targetHistory.pop_front();
+  // EMA позиции цели по времени, а не окно из N кадров: стабильно при любом FPS.
+  const float lag = clampf(static_cast<float>(settings.targetSmoothFrames) / 120.0f,
+                           0.0f, 0.25f);
+  const float dt = clampf(m_lastDt, 0.0f, kMaxDt);
+  if (m_targetHistory.empty() || dt <= 0.0f) {
+    if (m_targetHistory.empty()) {
+      m_targetHistory.push_back(target.point);
+    } else {
+      m_targetHistory.back() = target.point;
+    }
+  } else if (lag > 0.0001f) {
+    const float alpha = 1.0f - std::exp(-dt / lag);
+    Vec3 &smoothed = m_targetHistory.back();
+    smoothed.x += (target.point.x - smoothed.x) * alpha;
+    smoothed.y += (target.point.y - smoothed.y) * alpha;
+    smoothed.z += (target.point.z - smoothed.z) * alpha;
+  } else {
+    m_targetHistory.back() = target.point;
   }
-
-  Vec3 sum{};
-  for (const Vec3 &point : m_targetHistory) {
-    sum.x += point.x;
-    sum.y += point.y;
-    sum.z += point.z;
-  }
-  const float inv = 1.0f / static_cast<float>(m_targetHistory.size());
-  return Vec3{sum.x * inv, sum.y * inv, sum.z * inv};
+  return m_targetHistory.back();
 }
 
 bool AimAssist::isInvisible(void *actor) const {
@@ -665,6 +769,8 @@ void AimAssist::clearTarget() {
   m_targetHistory.clear();
   m_historyActor = nullptr;
   m_stickyLeft = 0;
+  m_velYaw = 0.0f;
+  m_velPitch = 0.0f;
   m_onTarget.store(false, std::memory_order_release);
 }
 
