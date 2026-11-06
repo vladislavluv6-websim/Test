@@ -381,6 +381,49 @@ bool ClientBridge::getActorAabb(void *actor, Aabb &out) const {
          out.max.z > out.min.z;
 }
 
+bool ClientBridge::getActorBounds(void *actor, Aabb &out) const {
+  Vec3 position{};
+  if (!getPosition(actor, position)) return false;
+
+  Aabb aabb{};
+  if (getActorAabb(actor, aabb)) {
+    const float height = aabb.max.y - aabb.min.y;
+    const float width = std::max(aabb.max.x - aabb.min.x, aabb.max.z - aabb.min.z);
+    const float cx = (aabb.min.x + aabb.max.x) * 0.5f;
+    const float cy = (aabb.min.y + aabb.max.y) * 0.5f;
+    const float cz = (aabb.min.z + aabb.max.z) * 0.5f;
+    const float dx = cx - position.x;
+    const float dy = cy - position.y;
+    const float dz = cz - position.z;
+    // Хитбокс должен быть рядом с позицией актёра и иметь разумный размер.
+    if (height >= 0.1f && height <= 8.0f && width >= 0.05f && width <= 8.0f &&
+        dx * dx + dy * dy + dz * dz <= 16.0f) {
+      out = aabb;
+      return true;
+    }
+  }
+
+  // Fallback: у игроков StateVector-позиция находится на уровне глаз,
+  // у мобов — на уровне ног.
+  const bool player = isPlayer(actor);
+  const float feetY = player ? position.y - offsets::kEyeHeight : position.y;
+  const float halfWidth = 0.3f;
+  const float height = player ? 1.8f : 1.0f;
+  out.min = {position.x - halfWidth, feetY, position.z - halfWidth};
+  out.max = {position.x + halfWidth, feetY + height, position.z + halfWidth};
+  return true;
+}
+
+bool ClientBridge::getEyePosition(void *player, Vec3 &out) const {
+  Aabb bounds{};
+  if (!getActorBounds(player, bounds)) return false;
+  const float height = bounds.max.y - bounds.min.y;
+  out.x = (bounds.min.x + bounds.max.x) * 0.5f;
+  out.z = (bounds.min.z + bounds.max.z) * 0.5f;
+  out.y = bounds.min.y + std::min(offsets::kEyeHeight, height * 0.9f);
+  return true;
+}
+
 uint32_t ClientBridge::getActorCategories(void *actor) const {
   if (!actor) return 0;
   uint32_t categories = 0;

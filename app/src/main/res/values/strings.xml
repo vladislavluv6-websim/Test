@@ -657,7 +657,7 @@
     <string name="inbuilt_mod_aim_assist">Aim Assist</string>
     <string name="inbuilt_mod_aim_assist_desc">Humanized camera aim assist</string>
     <string name="inbuilt_mod_esp">ESP (Hitboxes)</string>
-    <string name="inbuilt_mod_esp_desc">Draws configurable hitbox boxes around players and mobs</string>
+    <string name="inbuilt_mod_esp_desc">Draws filled hitbox boxes around players and mobs, visible through walls</string>
     <string name="mod_config_esp_range">ESP range (blocks)</string>
     <string name="mod_config_esp_players">Show players</string>
     <string name="mod_config_esp_mobs">Show mobs</string>

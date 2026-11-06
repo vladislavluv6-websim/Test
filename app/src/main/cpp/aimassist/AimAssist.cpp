@@ -318,8 +318,7 @@ void AimAssist::updateVisual(float dt) {
   }
 
   Vec3 eyeNow{};
-  if (m_bridge.getPosition(player, eyeNow)) {
-    eyeNow.y += offsets::kEyeHeight;
+  if (m_bridge.getEyePosition(player, eyeNow)) {
     m_eye = eyeNow;
   }
 
@@ -475,11 +474,10 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
   if (!player) return;
 
   Vec3 eye{};
-  if (!m_bridge.getPosition(player, eye)) {
+  if (!m_bridge.getEyePosition(player, eye)) {
     clearTarget();
     return;
   }
-  eye.y += offsets::kEyeHeight;
   m_eye = eye;
 
   m_bridge.fillNearbyActors(player, settings.range, m_actors);
@@ -626,8 +624,7 @@ Angles AimAssist::calculateAngles(void *entity) const {
   if (!player || !entity) return angles;
 
   Vec3 eye{};
-  if (!m_bridge.getPosition(player, eye)) return angles;
-  eye.y += offsets::kEyeHeight;
+  if (!m_bridge.getEyePosition(player, eye)) return angles;
 
   const Settings settings = getSettings();
   const Vec3 point = getTargetPoint(entity, settings.targetBone);
@@ -756,26 +753,35 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 // Вспомогательное
 // ============================================================
 Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
-  Vec3 position{};
-  if (!m_bridge.getPosition(actor, position)) {
+  Aabb bounds{};
+  if (!m_bridge.getActorBounds(actor, bounds)) {
+    Vec3 position{};
+    m_bridge.getPosition(actor, position);
     return position;
   }
 
-  // StateVector position — это ноги. Смещения считаем от них, не доверяя
-  // AABB-компоненту: при неверном чтении он уводил прицел вниз.
+  // Точка считается от низа реального хитбокса. Раньше к StateVector-позиции
+  // прибавлялось +1.62, но у игроков эта позиция уже на уровне глаз, а у
+  // мобов — у ног; из-за этого прицел уходил вниз и не поднимался к голове.
+  float fraction = offsets::kHeadFraction;
   switch (bone) {
   case TargetBone::Chest:
-    position.y += offsets::kChestOffset;
+    fraction = offsets::kChestFraction;
     break;
   case TargetBone::Legs:
-    position.y += offsets::kLegsOffset;
+    fraction = offsets::kLegsFraction;
     break;
   case TargetBone::Head:
   default:
-    position.y += offsets::kHeadOffset;
+    fraction = offsets::kHeadFraction;
     break;
   }
-  return position;
+
+  Vec3 point{};
+  point.x = (bounds.min.x + bounds.max.x) * 0.5f;
+  point.z = (bounds.min.z + bounds.max.z) * 0.5f;
+  point.y = bounds.min.y + (bounds.max.y - bounds.min.y) * fraction;
+  return point;
 }
 
 Vec3 AimAssist::smoothedPoint(const Target &target,

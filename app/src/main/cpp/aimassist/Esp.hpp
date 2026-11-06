@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <vector>
@@ -41,6 +42,7 @@ private:
   std::atomic<uint32_t> m_playerColor{0xFFFF5555u};
   std::atomic<uint32_t> m_mobColor{0xFFFFAA00u};
   std::vector<void *> m_actors;
+  std::chrono::steady_clock::time_point m_lastLog{};
 };
 
 } // namespace aimbot

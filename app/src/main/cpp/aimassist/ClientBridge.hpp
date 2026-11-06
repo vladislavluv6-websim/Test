@@ -57,6 +57,14 @@ public:
 
   bool getPosition(void *actor, Vec3 &out) const;
   bool getActorAabb(void *actor, Aabb &out) const;
+
+  // Хитбокс в мировых координатах. Если AABB не читается или не похож на
+  // правду — строит стандартный бокс от позиции (у игрока позиция = глаза,
+  // у моба = ноги).
+  bool getActorBounds(void *actor, Aabb &out) const;
+
+  // Позиция глаз локального игрока: низ хитбокса + рост глаз.
+  bool getEyePosition(void *player, Vec3 &out) const;
   uint32_t getActorCategories(void *actor) const;
   bool isPlayer(void *actor) const;
   int getActorType(void *actor) const;

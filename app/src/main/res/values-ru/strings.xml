@@ -664,7 +664,7 @@
     <string name="inbuilt_mod_aim_assist">Аим-ассист</string>
     <string name="inbuilt_mod_aim_assist_desc">Плавная наводка камеры на игроков</string>
     <string name="inbuilt_mod_esp">ESP (Хитбоксы)</string>
-    <string name="inbuilt_mod_esp_desc">Рисует настраиваемые боксы хитбокса вокруг игроков и мобов</string>
+    <string name="inbuilt_mod_esp_desc">Рисует заполненные хитбоксы игроков и мобов, видимые сквозь стены</string>
     <string name="mod_config_esp_range">Дальность ESP (блоки)</string>
     <string name="mod_config_esp_players">Показывать игроков</string>
     <string name="mod_config_esp_mobs">Показывать мобов</string>
