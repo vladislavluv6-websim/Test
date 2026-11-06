@@ -1138,4 +1138,14 @@
     <string name="bg_media_blur_unavailable">Android 12+</string>
     <string name="screenshot_saved">Screenshot saved</string>
     <string name="backup_select_downloads">Select the Downloads folder to save backups in Downloads/LeviLauncher/Backups.</string>
+    <string name="zenix_brand">ZENIX CLIENT</string>
+    <string name="zenix_subtitle">BEDROCK MOD MENU</string>
+    <string name="mod_menu_all_modules">All modules</string>
+    <string name="mod_menu_details_empty">Select a module to open its settings.</string>
+    <string name="mod_menu_category_combat">Combat</string>
+    <string name="mod_menu_category_visuals">Visuals</string>
+    <string name="mod_menu_category_movement">Movement</string>
+    <string name="mod_menu_category_build">Build</string>
+    <string name="mod_menu_category_targets">Targets</string>
+    <string name="mod_menu_category_misc">Misc</string>
 </resources>

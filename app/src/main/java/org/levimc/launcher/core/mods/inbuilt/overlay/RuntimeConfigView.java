@@ -59,11 +59,11 @@ final class RuntimeConfigView {
     private static final Map<String, String> LAST_SELECTED_CATEGORIES = new HashMap<>();
     private static final Map<String, Parcelable> CONTENT_SCROLL_STATES = new HashMap<>();
     private static final Map<String, Parcelable> CATEGORY_SCROLL_STATES = new HashMap<>();
-    private static final int ACCENT = 0xFF4AE0A0;
-    private static final int TEXT_PRIMARY = 0xFFF1F4F6;
-    private static final int TEXT_SECONDARY = 0xFFA8B0B8;
-    private static final int CARD = 0xFF202428;
-    private static final int CARD_SELECTED = 0xFF27312E;
+    private static final int ACCENT = 0xFF55AAFF;
+    private static final int TEXT_PRIMARY = 0xFFEDF6FF;
+    private static final int TEXT_SECONDARY = 0xFFA9BDD5;
+    private static final int CARD = 0xFF132A45;
+    private static final int CARD_SELECTED = 0xFF17395C;
 
     private final Context context;
     private final ViewGroup host;
@@ -1051,9 +1051,9 @@ final class RuntimeConfigView {
         chip.setTextColor(TEXT_PRIMARY);
         chip.setChipBackgroundColor(new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
-                new int[]{CARD_SELECTED, 0xFF2A2E32}));
+                new int[]{CARD_SELECTED, 0xFF17395C}));
         chip.setChipStrokeWidth(1f);
-        chip.setChipStrokeColor(ColorStateList.valueOf(0xFF3C4349));
+        chip.setChipStrokeColor(ColorStateList.valueOf(0xFF2E5C8A));
         return chip;
     }
 
@@ -1090,8 +1090,8 @@ final class RuntimeConfigView {
 
     private void tintSwitch(Switch control) {
         int[][] states = {{android.R.attr.state_checked}, {}};
-        control.setThumbTintList(new ColorStateList(states, new int[]{ACCENT, 0xFFA8B0B8}));
-        control.setTrackTintList(new ColorStateList(states, new int[]{0x884AE0A0, 0xFF343A40}));
+        control.setThumbTintList(new ColorStateList(states, new int[]{ACCENT, 0xFFA9BDD5}));
+        control.setTrackTintList(new ColorStateList(states, new int[]{0x8855AAFF, 0xFF2E5C8A}));
     }
 
     private void setEnabledRecursive(View view, boolean enabled) {

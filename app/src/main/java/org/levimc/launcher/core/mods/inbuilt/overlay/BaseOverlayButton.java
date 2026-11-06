@@ -263,7 +263,7 @@ public abstract class BaseOverlayButton {
     private void refreshHudEditorBackground() {
         if (overlayView != null) {
             if (isHudEditorMode) {
-                overlayView.setBackgroundColor(isHudEditorSelected ? 0x664AE0A0 : 0x44FFFFFF);
+                overlayView.setBackgroundColor(isHudEditorSelected ? 0x6655AAFF : 0x44FFFFFF);
             } else {
                 overlayView.setBackgroundColor(Color.TRANSPARENT);
             }

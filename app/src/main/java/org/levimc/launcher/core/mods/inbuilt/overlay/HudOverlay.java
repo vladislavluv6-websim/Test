@@ -738,7 +738,7 @@ public class HudOverlay extends View {
                     }
                     paint.setStyle(Paint.Style.STROKE);
                     paint.setStrokeWidth(2f);
-                    paint.setColor(0xFF4AE0A0);
+                    paint.setColor(0xFF55AAFF);
                     canvas.drawRect(bounds.left - 2, bounds.top - 2, bounds.right + 2, bounds.bottom + 2, paint);
                 }
             }
@@ -752,14 +752,14 @@ public class HudOverlay extends View {
                 while (step < 16f) step *= 2f;
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(1f);
-                paint.setColor(0x334AE0A0);
+                paint.setColor(0x3355AAFF);
                 for (float x = 0f; x <= getWidth(); x += step) canvas.drawLine(x, 0f, x, getHeight(), paint);
                 for (float y = 0f; y <= getHeight(); y += step) canvas.drawLine(0f, y, getWidth(), y, paint);
             }
 
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(2f);
-            paint.setColor(0xFF4AE0A0);
+            paint.setColor(0xFF55AAFF);
             for (ExternalModBridge.HudEditorElement element : currentHudEditorElements()) {
                 if (element == null || isHiddenInHudEditor(element.moduleId)) continue;
                 ModuleBounds bounds = getHudElementBounds(element);

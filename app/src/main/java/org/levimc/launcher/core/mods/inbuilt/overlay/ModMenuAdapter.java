@@ -147,7 +147,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             title.setLayoutParams(params);
             title.setGravity(Gravity.CENTER_VERTICAL);
             title.setPadding((int) (6 * density), 0, (int) (6 * density), 0);
-            title.setTextColor(0xFF4AE0A0);
+            title.setTextColor(0xFF7BE4FF);
             title.setTextSize(11);
             title.setTypeface(null, Typeface.BOLD);
             title.setSingleLine(true);
@@ -174,6 +174,11 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         UnifiedMod mod = item.mod;
 
         modHolder.name.setText(mod.getName());
+        if (modHolder.descText != null) {
+            String desc = mod.getDescription();
+            modHolder.descText.setText(desc == null ? "" : desc);
+            modHolder.descText.setVisibility(desc == null || desc.isEmpty() ? View.GONE : View.VISIBLE);
+        }
         if (modHolder.groupText != null) {
             modHolder.groupText.setVisibility(item.showGroupLabel ? View.VISIBLE : View.GONE);
             if (item.showGroupLabel) {
@@ -204,9 +209,12 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         };
 
-        modHolder.itemView.setOnClickListener(toggleClick);
+        View.OnClickListener cardClick = mod.hasConfig()
+            ? v -> { if (listener != null) listener.onConfig(mod); }
+            : toggleClick;
+        modHolder.itemView.setOnClickListener(cardClick);
         modHolder.statusText.setOnClickListener(toggleClick);
-        modHolder.icon.setOnClickListener(toggleClick);
+        modHolder.icon.setOnClickListener(cardClick);
 
         modHolder.favoriteBtn.setOnClickListener(v -> {
             boolean favorite = !favoriteStates.getOrDefault(mod.getStableKey(), false);
@@ -238,7 +246,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     private void updateFavoriteView(ModViewHolder holder, boolean favorite) {
-        int color = favorite ? 0xFFFFC107 : 0xFFA8B0B8;
+        int color = favorite ? 0xFFFFC94D : 0xFFA9BDD5;
         holder.favoriteBtn.setImageTintList(ColorStateList.valueOf(color));
         holder.favoriteBtn.setAlpha(favorite ? 1f : 0.9f);
         holder.favoriteBtn.setContentDescription(holder.favoriteBtn.getContext().getString(
@@ -246,21 +254,14 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     private void updateStatusView(ModViewHolder holder, boolean enabled) {
-        int accent = 0xFF4AE0A0;
-
         if (enabled) {
             holder.statusText.setText(R.string.mod_status_enabled);
-            holder.statusText.setTextColor(accent);
-            holder.statusText.setBackgroundResource(R.drawable.bg_mod_status_enabled);
-            holder.statusText.getBackground().setTint(android.graphics.Color.argb(40, 
-                android.graphics.Color.red(accent), 
-                android.graphics.Color.green(accent), 
-                android.graphics.Color.blue(accent)));
+            holder.statusText.setTextColor(0xFF7BE4FF);
+            holder.statusText.setBackgroundResource(R.drawable.bg_zenix_status_on);
         } else {
             holder.statusText.setText(R.string.mod_status_disabled);
-            holder.statusText.setTextColor(0xFFB4BBC3);
-            holder.statusText.setBackgroundResource(R.drawable.bg_mod_status_disabled);
-            holder.statusText.getBackground().setTintList(null);
+            holder.statusText.setTextColor(0xFFB4C7DB);
+            holder.statusText.setBackgroundResource(R.drawable.bg_zenix_status_off);
         }
         updateCardState(holder, enabled);
     }
@@ -268,16 +269,16 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private void updateCardState(ModViewHolder holder, boolean enabled) {
         holder.itemView.setAlpha(1f);
         holder.icon.setAlpha(enabled ? 1f : 0.8f);
-        holder.name.setTextColor(enabled ? 0xFFF1F4F6 : 0xFFD6DCE2);
+        holder.name.setTextColor(enabled ? 0xFFEDF6FF : 0xFFCBDBEC);
         
         if (holder.itemView instanceof androidx.cardview.widget.CardView) {
             androidx.cardview.widget.CardView cv = (androidx.cardview.widget.CardView) holder.itemView;
             
             if (enabled) {
-                cv.setCardBackgroundColor(0xFF28302D);
-                cv.setCardElevation(6f);
+                cv.setCardBackgroundColor(0xFF17395C);
+                cv.setCardElevation(5f);
             } else {
-                cv.setCardBackgroundColor(0xFF24282C);
+                cv.setCardBackgroundColor(0xFF132A45);
                 cv.setCardElevation(2f);
             }
         }
@@ -344,6 +345,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         TextView name;
         TextView statusText;
         TextView groupText;
+        TextView descText;
         ImageButton favoriteBtn;
         ImageButton configBtn;
 
@@ -353,6 +355,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             name = itemView.findViewById(R.id.mod_card_name);
             statusText = itemView.findViewById(R.id.mod_card_status);
             groupText = itemView.findViewById(R.id.mod_card_group);
+            descText = itemView.findViewById(R.id.mod_card_desc);
             favoriteBtn = itemView.findViewById(R.id.mod_card_favorite);
             configBtn = itemView.findViewById(R.id.mod_card_config);
         }
