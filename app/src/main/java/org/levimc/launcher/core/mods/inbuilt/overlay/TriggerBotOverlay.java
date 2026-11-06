@@ -27,6 +27,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     private final Handler triggerHandler = new Handler(Looper.getMainLooper());
     private final Random random = new Random();
     private boolean isActive = false;
+    private boolean wantActive = false;
+    private boolean initPending = false;
     private long targetSince = 0L;
     private long nextAttackAt = 0L;
 
@@ -108,36 +110,52 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setTriggerBot(true);
     }
 
+    // Native init идёт в фоне (скан сигнатур занимает секунды).
+    private void requestActivate(boolean fromClick) {
+        wantActive = true;
+        if (initPending) return;
+        initPending = true;
+        AimAssistMod.initializeAsync(ok -> {
+            initPending = false;
+            if (!wantActive || activity.isFinishing() || activity.isDestroyed()) return;
+            if (ok) {
+                applyNativeSettings(InbuiltModManager.getInstance(activity));
+                startLoop();
+                isActive = true;
+            } else {
+                isActive = false;
+                wantActive = false;
+                if (fromClick) {
+                    Toast.makeText(activity, R.string.aim_assist_mod_unavailable, Toast.LENGTH_SHORT).show();
+                }
+            }
+            updateButtonState(isActive);
+        });
+    }
+
     @Override
     public void show(int startX, int startY) {
-        if (!isActive && isSupportedVersion() && AimAssistMod.initialize()) {
-            isActive = true;
-            applyNativeSettings(InbuiltModManager.getInstance(activity));
-            startLoop();
+        if (!isActive && isSupportedVersion()) {
+            requestActivate(false);
         }
         super.show(startX, startY);
     }
 
     @Override
     protected void onButtonClick() {
-        boolean nextState = !isActive;
-        if (nextState) {
+        if (!isActive) {
             if (!isSupportedVersion()) {
                 Toast.makeText(activity, R.string.aim_assist_mod_unavailable, Toast.LENGTH_SHORT).show();
-                nextState = false;
-            } else if (!AimAssistMod.initialize()) {
-                Toast.makeText(activity, R.string.aim_assist_mod_unavailable, Toast.LENGTH_SHORT).show();
-                nextState = false;
-            } else {
-                applyNativeSettings(InbuiltModManager.getInstance(activity));
-                startLoop();
+                return;
             }
-        } else {
-            stopLoop();
-            AimAssistMod.setTriggerBot(false);
+            requestActivate(true);
+            return;
         }
-        isActive = nextState;
-        updateButtonState(isActive);
+        wantActive = false;
+        stopLoop();
+        AimAssistMod.setTriggerBot(false);
+        isActive = false;
+        updateButtonState(false);
     }
 
     private void startLoop() {
@@ -173,6 +191,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
 
     @Override
     public void hide() {
+        wantActive = false;
         stopLoop();
         if (isActive) {
             AimAssistMod.setTriggerBot(false);

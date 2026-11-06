@@ -17,6 +17,8 @@ public class EspOverlay extends BaseOverlayButton {
     private static final String SUPPORTED_MINECRAFT_VERSION = "1.26.60";
     private static boolean versionLogged = false;
     private boolean isActive = false;
+    private boolean wantActive = false;
+    private boolean initPending = false;
 
     public EspOverlay(Activity activity) {
         super(activity);
@@ -42,11 +44,27 @@ public class EspOverlay extends BaseOverlayButton {
         EspMod.setMobColor(manager.getEspMobColor());
     }
 
-    private boolean enable() {
-        if (!isSupportedVersion()) return false;
-        if (!EspMod.setEnabled(true)) return false;
-        applyNativeSettings(InbuiltModManager.getInstance(activity));
-        return true;
+    // Native init сканирует libminecraftpe.so несколько секунд, поэтому
+    // идёт в фоне; включаем модуль, когда он готов и всё ещё нужен.
+    private void requestActivate(boolean fromClick) {
+        wantActive = true;
+        if (initPending) return;
+        initPending = true;
+        EspMod.initializeAsync(ok -> {
+            initPending = false;
+            if (!wantActive || activity.isFinishing() || activity.isDestroyed()) return;
+            if (ok && EspMod.setEnabled(true)) {
+                applyNativeSettings(InbuiltModManager.getInstance(activity));
+                isActive = true;
+            } else {
+                isActive = false;
+                wantActive = false;
+                if (fromClick) {
+                    Toast.makeText(activity, R.string.esp_mod_unavailable, Toast.LENGTH_SHORT).show();
+                }
+            }
+            updateButtonState(isActive);
+        });
     }
 
     @Override
@@ -61,30 +79,26 @@ public class EspOverlay extends BaseOverlayButton {
 
     @Override
     public void show(int startX, int startY) {
-        if (!isActive) {
-            isActive = enable();
+        if (!isActive && isSupportedVersion()) {
+            requestActivate(false);
         }
         super.show(startX, startY);
     }
 
     @Override
     protected void onButtonClick() {
-        boolean nextState = !isActive;
-        if (nextState) {
+        if (!isActive) {
             if (!isSupportedVersion()) {
                 Toast.makeText(activity, R.string.esp_mod_unavailable, Toast.LENGTH_SHORT).show();
-                nextState = false;
-            } else if (!EspMod.setEnabled(true)) {
-                Toast.makeText(activity, R.string.esp_mod_unavailable, Toast.LENGTH_SHORT).show();
-                nextState = false;
-            } else {
-                applyNativeSettings(InbuiltModManager.getInstance(activity));
+                return;
             }
-        } else {
-            EspMod.setEnabled(false);
+            requestActivate(true);
+            return;
         }
-        isActive = nextState;
-        updateButtonState(isActive);
+        wantActive = false;
+        EspMod.setEnabled(false);
+        isActive = false;
+        updateButtonState(false);
     }
 
     private void updateButtonState(boolean active) {
@@ -107,6 +121,7 @@ public class EspOverlay extends BaseOverlayButton {
 
     @Override
     public void hide() {
+        wantActive = false;
         if (isActive) {
             EspMod.setEnabled(false);
             isActive = false;

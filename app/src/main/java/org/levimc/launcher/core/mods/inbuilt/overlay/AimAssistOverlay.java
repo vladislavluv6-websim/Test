@@ -17,6 +17,8 @@ public class AimAssistOverlay extends BaseOverlayButton {
     private static final String SUPPORTED_MINECRAFT_VERSION = "1.26.60";
     private static boolean versionLogged = false;
     private boolean isActive = false;
+    private boolean wantActive = false;
+    private boolean initPending = false;
 
     public AimAssistOverlay(Activity activity) {
         super(activity);
@@ -63,41 +65,53 @@ public class AimAssistOverlay extends BaseOverlayButton {
         return isActive ? R.drawable.ic_aimassist_pressed : R.drawable.ic_aimassist_normal;
     }
 
+    // Native init сканирует libminecraftpe.so несколько секунд, поэтому
+    // идёт в фоне; включаем модуль, когда он готов и всё ещё нужен.
+    private void requestActivate(boolean fromClick) {
+        wantActive = true;
+        if (initPending) return;
+        initPending = true;
+        AimAssistMod.initializeAsync(ok -> {
+            initPending = false;
+            if (!wantActive || activity.isFinishing() || activity.isDestroyed()) return;
+            InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+            if (ok && AimAssistMod.setEnabled(true,
+                    manager.getAimAssistRange(), manager.getAimAssistStrength())) {
+                applyNativeSettings(manager);
+                isActive = true;
+            } else {
+                isActive = false;
+                wantActive = false;
+                if (fromClick) {
+                    Toast.makeText(activity, R.string.aim_assist_mod_unavailable, Toast.LENGTH_SHORT).show();
+                }
+            }
+            updateButtonState(isActive);
+        });
+    }
+
     @Override
     public void show(int startX, int startY) {
         if (!isActive && isSupportedVersion()) {
-            InbuiltModManager manager = InbuiltModManager.getInstance(activity);
-            isActive = AimAssistMod.setEnabled(true,
-                    manager.getAimAssistRange(), manager.getAimAssistStrength());
-            if (isActive) {
-                applyNativeSettings(manager);
-            }
+            requestActivate(false);
         }
         super.show(startX, startY);
     }
 
     @Override
     protected void onButtonClick() {
-        boolean nextState = !isActive;
-        if (nextState) {
+        if (!isActive) {
             if (!isSupportedVersion()) {
                 Toast.makeText(activity, R.string.aim_assist_mod_unavailable, Toast.LENGTH_SHORT).show();
-                nextState = false;
-            } else {
-                InbuiltModManager manager = InbuiltModManager.getInstance(activity);
-                if (!AimAssistMod.setEnabled(true,
-                        manager.getAimAssistRange(), manager.getAimAssistStrength())) {
-                    Toast.makeText(activity, R.string.aim_assist_mod_unavailable, Toast.LENGTH_SHORT).show();
-                    nextState = false;
-                } else {
-                    applyNativeSettings(manager);
-                }
+                return;
             }
-        } else {
-            AimAssistMod.setEnabled(false, 8.0f, 100.0f);
+            requestActivate(true);
+            return;
         }
-        isActive = nextState;
-        updateButtonState(isActive);
+        wantActive = false;
+        AimAssistMod.setEnabled(false, 8.0f, 100.0f);
+        isActive = false;
+        updateButtonState(false);
     }
 
     private void updateButtonState(boolean active) {
@@ -120,6 +134,7 @@ public class AimAssistOverlay extends BaseOverlayButton {
 
     @Override
     public void hide() {
+        wantActive = false;
         if (isActive) {
             AimAssistMod.setEnabled(false, 8.0f, 100.0f);
             isActive = false;

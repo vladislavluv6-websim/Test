@@ -2,8 +2,9 @@ package org.levimc.launcher.core.mods.inbuilt.nativemod;
 
 public final class EspMod {
     private static boolean libraryLoaded;
-    private static boolean initialized;
+    private static volatile boolean initialized;
     private static long lastInitAttempt;
+    private static final NativeModInit.Task INIT_TASK = new NativeModInit.Task();
 
     private EspMod() {}
 
@@ -28,8 +29,21 @@ public final class EspMod {
         return initialized;
     }
 
+    /**
+     * Initializes on a background thread (signature scan takes seconds) and
+     * reports the result on the main thread.
+     */
+    public static void initializeAsync(NativeModInit.Callback callback) {
+        if (initialized) {
+            if (callback != null) callback.onResult(true);
+            return;
+        }
+        INIT_TASK.request(EspMod::initialize, callback);
+    }
+
+    /** Requires a completed {@link #initializeAsync}; never blocks the caller. */
     public static boolean setEnabled(boolean enabled) {
-        if (enabled && !initialize()) return false;
+        if (enabled && !initialized) return false;
         if (!initialized) return !enabled;
         nativeSetEnabled(enabled);
         return true;
