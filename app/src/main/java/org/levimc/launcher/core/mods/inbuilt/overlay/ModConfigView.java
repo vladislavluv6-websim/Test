@@ -34,7 +34,7 @@ public class ModConfigView {
         if (RuntimeConfigView.render(context, container, mod, compact, onConfigChanged)) return;
 
         float density = context.getResources().getDisplayMetrics().density;
-        int accent = 0xFF55AAFF;
+        int accent = 0xFF80B3FF;
         ScrollView scroll = new ScrollView(context);
         scroll.setFillViewport(true);
         LinearLayout content = new LinearLayout(context);
@@ -145,10 +145,10 @@ public class ModConfigView {
                         int optionId = View.generateViewId();
                         rb.setId(optionId);
                         rb.setText(options[i]);
-                        rb.setTextColor(0xFFEDF6FF);
+                        rb.setTextColor(0xFFCECFD2);
                         rb.setTextSize(14);
                         int[][] states = {{android.R.attr.state_checked}, {}};
-                        rb.setButtonTintList(new ColorStateList(states, new int[]{accent, 0xFFA9BDD5}));
+                        rb.setButtonTintList(new ColorStateList(states, new int[]{accent, 0xFF85888E}));
                         optionIds.put(optionId, i);
 
                         LinearLayout.LayoutParams rbParams = new LinearLayout.LayoutParams(
@@ -198,7 +198,7 @@ public class ModConfigView {
                     android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
                     gd.setColor(initialColor);
                     gd.setCornerRadius(4 * density);
-                    gd.setStroke((int)(1 * density), 0xFF2E5C8A);
+                    gd.setStroke((int)(1 * density), 0xFF2A2E36);
                     colorPreview.setBackground(gd);
                     headerRow.addView(colorPreview, previewParams);
                     container.addView(headerRow);
@@ -261,7 +261,7 @@ public class ModConfigView {
                     TextView label = createLabel(context, cfg.displayName, density);
                     android.widget.EditText editText = new android.widget.EditText(context);
                     editText.setText(cfg.currentValue.isEmpty() ? cfg.defaultValue : cfg.currentValue);
-                    editText.setTextColor(0xFFEDF6FF);
+                    editText.setTextColor(0xFFCECFD2);
                     editText.setTextSize(14);
                     editText.setBackgroundTintList(ColorStateList.valueOf(accent));
                     editText.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
@@ -282,7 +282,7 @@ public class ModConfigView {
                     LinearLayout row = createRow(context, container, density);
                     Button btn = new Button(context);
                     btn.setText(cfg.displayName);
-                    btn.setBackgroundTintList(ColorStateList.valueOf(0xFF17395C));
+                    btn.setBackgroundTintList(ColorStateList.valueOf(0xFF1F2028));
                     btn.setTextColor(accent);
                     btn.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
                     btn.setOnClickListener(v -> {
@@ -340,9 +340,9 @@ public class ModConfigView {
         toggle.setChecked(isChecked);
 
         int[][] states = {{android.R.attr.state_checked}, {}};
-        toggle.setThumbTintList(new ColorStateList(states, new int[]{accent, 0xFFA9BDD5}));
+        toggle.setThumbTintList(new ColorStateList(states, new int[]{accent, 0xFF85888E}));
         int trackColor = Color.argb(100, Color.red(accent), Color.green(accent), Color.blue(accent));
-        toggle.setTrackTintList(new ColorStateList(states, new int[]{trackColor, 0xFF2E5C8A}));
+        toggle.setTrackTintList(new ColorStateList(states, new int[]{trackColor, 0xFF2A2E36}));
 
         toggle.setOnCheckedChangeListener((btn, checked) -> listener.onToggleChanged(checked));
 
@@ -356,7 +356,7 @@ public class ModConfigView {
         TextView label = createLabel(context, labelText, density);
         Button btn = new Button(context);
         btn.setText(getKeyName(context, currentKey));
-        btn.setBackgroundTintList(ColorStateList.valueOf(0xFF17395C));
+        btn.setBackgroundTintList(ColorStateList.valueOf(0xFF1F2028));
         btn.setTextColor(accent);
 
         btn.setOnClickListener(v -> {
@@ -404,7 +404,7 @@ public class ModConfigView {
 
         TextView tv = new TextView(context);
         tv.setText(labelText);
-        tv.setTextColor(0xFFEDF6FF);
+        tv.setTextColor(0xFFCECFD2);
         tv.setTextSize(12);
         tv.setTypeface(null, android.graphics.Typeface.BOLD);
         tv.setLayoutParams(new LinearLayout.LayoutParams((int)(20 * density), LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -437,7 +437,7 @@ public class ModConfigView {
     private static TextView createLabel(Context context, String text, float density) {
         TextView label = new TextView(context);
         label.setText(text);
-        label.setTextColor(0xFFEDF6FF);
+        label.setTextColor(0xFFCECFD2);
         label.setTextSize(14);
         label.setTypeface(null, android.graphics.Typeface.BOLD);
         label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));

@@ -1133,7 +1133,7 @@
     <string name="mod_menu_all_modules">Все модули</string>
     <string name="mod_menu_details_empty">Выбери модуль слева, чтобы открыть его настройки.</string>
     <string name="mod_menu_category_combat">Бой</string>
-    <string name="mod_menu_category_visuals">Визуал</string>
+    <string name="mod_menu_category_visuals">Рендер</string>
     <string name="mod_menu_category_movement">Движение</string>
     <string name="mod_menu_category_build">Строительство</string>
     <string name="mod_menu_category_targets">Цели</string>

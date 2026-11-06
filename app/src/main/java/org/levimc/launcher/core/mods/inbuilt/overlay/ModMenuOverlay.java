@@ -82,10 +82,10 @@ public class ModMenuOverlay {
     private TextView compactFilterSelector, compactModuleCount;
     private LinearLayout navCategories;
     private TextView modSectionTitle;
-    private View detailsEmpty;
+    private View detailsPanel;
     private final java.util.Map<String, TextView> categoryNavViews = new java.util.LinkedHashMap<>();
     private String activeCategory = null;
-    private static final String[] CATEGORY_KEYS = {"combat", "visuals", "movement", "build", "targets", "misc"};
+    private static final String[] CATEGORY_KEYS = {"combat", "render", "movement", "build", "targets", "misc"};
     private static final int[] CATEGORY_LABELS = {
         R.string.mod_menu_category_combat,
         R.string.mod_menu_category_visuals,
@@ -196,7 +196,7 @@ public class ModMenuOverlay {
     }
 
     private int getAccentColor() {
-        return 0xFF55AAFF;
+        return 0xFF80B3FF;
     }
     
     public interface ModMenuCallback {
@@ -329,7 +329,7 @@ public class ModMenuOverlay {
         compactFilterBar = overlayView.findViewById(R.id.compact_filter_bar);
         navCategories = overlayView.findViewById(R.id.nav_categories);
         modSectionTitle = overlayView.findViewById(R.id.mod_section_title);
-        detailsEmpty = overlayView.findViewById(R.id.details_empty);
+        detailsPanel = overlayView.findViewById(R.id.mod_menu_details);
         compactFilterSelector = overlayView.findViewById(R.id.compact_filter_selector);
         compactModuleCount = overlayView.findViewById(R.id.compact_module_count);
         ImageButton closeBtn = overlayView.findViewById(R.id.btn_close_menu);
@@ -550,7 +550,7 @@ public class ModMenuOverlay {
         
         adapter = new ModMenuAdapter();
         adapter.setCompactMode(compactMode);
-        modsLayoutManager = new GridLayoutManager(activity, compactMode ? 1 : 4);
+        modsLayoutManager = new GridLayoutManager(activity, compactMode ? 1 : 2);
         modsLayoutManager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
             @Override
             public int getSpanSize(int position) {
@@ -711,6 +711,7 @@ public class ModMenuOverlay {
             crossfade(modulesContainer);
         }
         settingsContainer.setVisibility(View.GONE);
+        if (detailsPanel != null) detailsPanel.setVisibility(View.GONE);
         
         if (overlayView != null) {
             View modConfigContainer = overlayView.findViewById(R.id.mod_config_container);
@@ -719,7 +720,6 @@ public class ModMenuOverlay {
             if (modConfigContainer != null) modConfigContainer.setVisibility(View.GONE);
             if (searchContainer != null) searchContainer.setVisibility(View.VISIBLE);
             if (configHeader != null) configHeader.setVisibility(View.GONE);
-            if (detailsEmpty != null) detailsEmpty.setVisibility(View.VISIBLE);
             updateSectionTitle();
             updateFilterBarVisibility();
         }
@@ -732,22 +732,25 @@ public class ModMenuOverlay {
         updateNavigationItem(navHudEditor, compactNavHudEditor, false);
         updateCategorySelection();
         
-        modulesContainer.setVisibility(compactMode ? View.GONE : View.VISIBLE);
+        modulesContainer.setVisibility(View.VISIBLE);
         if (settingsContainer.getVisibility() != View.VISIBLE) {
             settingsContainer.setVisibility(View.VISIBLE);
             crossfade(settingsContainer);
+        }
+        if (detailsPanel != null) {
+            detailsPanel.setVisibility(View.VISIBLE);
+            crossfade(detailsPanel);
         }
         
         if (overlayView != null) {
             View modConfigContainer = overlayView.findViewById(R.id.mod_config_container);
             View searchContainer = overlayView.findViewById(R.id.search_container);
             View configHeader = overlayView.findViewById(R.id.config_header);
+            TextView configTitle = overlayView.findViewById(R.id.config_title);
             if (modConfigContainer != null) modConfigContainer.setVisibility(View.GONE);
-            if (searchContainer != null) {
-                searchContainer.setVisibility(compactMode ? View.GONE : View.VISIBLE);
-            }
-            if (configHeader != null) configHeader.setVisibility(View.GONE);
-            if (detailsEmpty != null) detailsEmpty.setVisibility(View.GONE);
+            if (searchContainer != null) searchContainer.setVisibility(View.GONE);
+            if (configHeader != null) configHeader.setVisibility(View.VISIBLE);
+            if (configTitle != null) configTitle.setText(R.string.settings);
             if (filterBar != null) filterBar.setVisibility(View.GONE);
             if (compactFilterBar != null) compactFilterBar.setVisibility(View.GONE);
         }
@@ -774,8 +777,12 @@ public class ModMenuOverlay {
         updateNavigationItem(navHudEditor, compactNavHudEditor, false);
         updateCategorySelection();
         
-        modulesContainer.setVisibility(compactMode ? View.GONE : View.VISIBLE);
+        modulesContainer.setVisibility(View.VISIBLE);
         settingsContainer.setVisibility(View.GONE);
+        if (detailsPanel != null) {
+            detailsPanel.setVisibility(View.VISIBLE);
+            crossfade(detailsPanel);
+        }
         
         if (overlayView != null) {
             View modConfigContainer = overlayView.findViewById(R.id.mod_config_container);
@@ -789,10 +796,9 @@ public class ModMenuOverlay {
                 crossfade(modConfigContainer);
             }
             if (searchContainer != null) {
-                searchContainer.setVisibility(compactMode ? View.GONE : View.VISIBLE);
+                searchContainer.setVisibility(View.GONE);
             }
             if (configHeader != null) configHeader.setVisibility(View.VISIBLE);
-            if (detailsEmpty != null) detailsEmpty.setVisibility(View.GONE);
             if (filterBar != null) filterBar.setVisibility(View.GONE);
             if (compactFilterBar != null) compactFilterBar.setVisibility(View.GONE);
             if (configTitle != null) configTitle.setText(mod.getName());
@@ -1035,7 +1041,7 @@ public class ModMenuOverlay {
         saveVisibleScrollPosition();
         compactMode = compact;
         if (modsLayoutManager != null) {
-            modsLayoutManager.setSpanCount(compact ? 1 : 4);
+            modsLayoutManager.setSpanCount(compact ? 1 : 2);
         }
         if (adapter != null) {
             adapter.setCompactMode(compact);
@@ -1087,6 +1093,12 @@ public class ModMenuOverlay {
             modMenuSidebar.setPadding(0, dp(14), 0, dp(14));
         }
         if (modMenuLogo != null) modMenuLogo.setVisibility(compact ? View.GONE : View.VISIBLE);
+        View searchContainer = overlayView.findViewById(R.id.search_container);
+        if (searchContainer != null) {
+            ViewGroup.LayoutParams searchParams = searchContainer.getLayoutParams();
+            searchParams.width = dp(compact ? 148 : 220);
+            searchContainer.setLayoutParams(searchParams);
+        }
 
         setNavigationMode(navModules, compactNavModules, R.string.mod_menu_all_modules, compact);
         setNavigationMode(navHudEditor, compactNavHudEditor, R.string.mod_menu_hud_editor, compact);
@@ -1095,9 +1107,13 @@ public class ModMenuOverlay {
         updateCategorySelection();
         updateNavigationItem(navSettings, compactNavSettings, activeSection == MenuSection.SETTINGS);
         updateNavigationItem(navHudEditor, compactNavHudEditor, false);
-        boolean detailsOpen = activeSection == MenuSection.CONFIG || activeSection == MenuSection.SETTINGS;
         if (modulesContainer != null) {
-            modulesContainer.setVisibility(detailsOpen && compact ? View.GONE : View.VISIBLE);
+            modulesContainer.setVisibility(View.VISIBLE);
+        }
+        if (detailsPanel != null) {
+            ViewGroup.LayoutParams params = detailsPanel.getLayoutParams();
+            params.width = compact ? ViewGroup.LayoutParams.MATCH_PARENT : dp(330);
+            detailsPanel.setLayoutParams(params);
         }
         if (navCategories != null) {
             navCategories.setVisibility(compact ? View.GONE : View.VISIBLE);
@@ -1229,7 +1245,7 @@ public class ModMenuOverlay {
             case "toggle_hud":
             case "fps_display":
             case "cps_display":
-                return "visuals";
+                return "render";
             case "auto_sprint":
             case "speed":
             case "zoom":
@@ -1312,12 +1328,12 @@ public class ModMenuOverlay {
             boolean selected = entry.getKey().equals(activeCategory)
                 && activeSection == MenuSection.MODULES;
             TextView view = entry.getValue();
-            view.setTextColor(selected ? 0xFF7BE4FF : 0xFFA9BDD5);
-            view.setAlpha(selected ? 1f : 0.85f);
+            view.setTextColor(selected ? 0xFF80B3FF : 0xFF85888E);
+            view.setAlpha(selected ? 1f : 1f);
             view.setBackgroundResource(selected
                 ? R.drawable.bg_zenix_nav_active : R.drawable.bg_zenix_nav);
             android.content.res.ColorStateList tint = android.content.res.ColorStateList.valueOf(
-                selected ? 0xFF7BE4FF : 0xFFA9BDD5);
+                selected ? 0xFF80B3FF : 0xFF85888E);
             view.setCompoundDrawableTintList(tint);
         }
         if (navCategories != null) {
@@ -1336,7 +1352,7 @@ public class ModMenuOverlay {
                 ? activity.getString(CATEGORY_LABELS[index])
                 : activity.getString(R.string.mod_menu_all_modules);
         }
-        modSectionTitle.setText(label.toUpperCase(Locale.ROOT));
+        modSectionTitle.setText(label);
     }
 
     private void resetMenuState() {
@@ -1397,14 +1413,14 @@ public class ModMenuOverlay {
 
     private void updateFilterButton(TextView view, boolean selected) {
         if (view == null) return;
-        view.setTextColor(selected ? 0xFF7BE4FF : 0xFFA9BDD5);
+        view.setTextColor(selected ? 0xFF80B3FF : 0xFF85888E);
         view.setAlpha(1f);
         view.setBackgroundResource(selected
             ? R.drawable.bg_zenix_chip_active : R.drawable.bg_zenix_chip);
     }
 
     private void updateNavigationItem(TextView fullView, ImageButton compactView, boolean selected) {
-        int color = selected ? getAccentColor() : 0xFFA9BDD5;
+        int color = selected ? getAccentColor() : 0xFF85888E;
         if (fullView != null) {
             fullView.setTextColor(color);
             fullView.setAlpha(selected ? 1f : 0.85f);

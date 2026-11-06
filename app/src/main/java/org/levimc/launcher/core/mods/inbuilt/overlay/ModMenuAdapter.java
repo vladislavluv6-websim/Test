@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -147,7 +148,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             title.setLayoutParams(params);
             title.setGravity(Gravity.CENTER_VERTICAL);
             title.setPadding((int) (6 * density), 0, (int) (6 * density), 0);
-            title.setTextColor(0xFF7BE4FF);
+            title.setTextColor(0xFF80B3FF);
             title.setTextSize(11);
             title.setTypeface(null, Typeface.BOLD);
             title.setSingleLine(true);
@@ -186,35 +187,48 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         }
 
-        if (mod.getSource() == UnifiedMod.Source.INBUILT) {
-            modHolder.icon.setImageResource(ModIconHelper.getModIcon(mod.getId()));
-            modHolder.icon.setImageTintList(null);
-            modHolder.icon.setColorFilter(null);
-        } else {
-            modHolder.icon.setImageResource(R.drawable.ic_modules);
+        if (modHolder.icon != null) {
+            if (mod.getSource() == UnifiedMod.Source.INBUILT) {
+                modHolder.icon.setImageResource(ModIconHelper.getModIcon(mod.getId()));
+            } else {
+                modHolder.icon.setImageResource(R.drawable.ic_modules);
+            }
             modHolder.icon.setImageTintList(null);
             modHolder.icon.setColorFilter(null);
         }
 
         boolean isEnabled = toggleStates.getOrDefault(mod.getStableKey(), false);
+        if (modHolder.statusText instanceof Switch) {
+            ((Switch) modHolder.statusText).setOnCheckedChangeListener(null);
+        }
         updateStatusView(modHolder, isEnabled);
         updateFavoriteView(modHolder, favoriteStates.getOrDefault(mod.getStableKey(), false));
 
-        View.OnClickListener toggleClick = v -> {
-            boolean newState = !toggleStates.getOrDefault(mod.getStableKey(), false);
-            toggleStates.put(mod.getStableKey(), newState);
-            updateStatusView(modHolder, newState);
-            if (listener != null) {
-                listener.onToggle(mod, newState);
-            }
-        };
+        View.OnClickListener toggleClick = v ->
+            toggleMod(mod, !toggleStates.getOrDefault(mod.getStableKey(), false), modHolder);
 
-        View.OnClickListener cardClick = mod.hasConfig()
-            ? v -> { if (listener != null) listener.onConfig(mod); }
-            : toggleClick;
-        modHolder.itemView.setOnClickListener(cardClick);
-        modHolder.statusText.setOnClickListener(toggleClick);
-        modHolder.icon.setOnClickListener(cardClick);
+        modHolder.itemView.setOnClickListener(toggleClick);
+        if (modHolder.icon != null) {
+            modHolder.icon.setOnClickListener(toggleClick);
+        }
+        if (modHolder.statusText instanceof Switch) {
+            ((Switch) modHolder.statusText).setOnCheckedChangeListener((btn, checked) -> {
+                if (checked != toggleStates.getOrDefault(mod.getStableKey(), false)) {
+                    toggleMod(mod, checked, modHolder);
+                }
+            });
+        } else {
+            modHolder.statusText.setOnClickListener(toggleClick);
+        }
+
+        if (mod.hasConfig()) {
+            modHolder.itemView.setOnLongClickListener(v -> {
+                if (listener != null) listener.onConfig(mod);
+                return true;
+            });
+        } else {
+            modHolder.itemView.setOnLongClickListener(null);
+        }
 
         modHolder.favoriteBtn.setOnClickListener(v -> {
             boolean favorite = !favoriteStates.getOrDefault(mod.getStableKey(), false);
@@ -245,8 +259,16 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         return compactMode ? VIEW_TYPE_MOD_COMPACT : VIEW_TYPE_MOD;
     }
 
+    private void toggleMod(UnifiedMod mod, boolean newState, ModViewHolder holder) {
+        toggleStates.put(mod.getStableKey(), newState);
+        updateStatusView(holder, newState);
+        if (listener != null) {
+            listener.onToggle(mod, newState);
+        }
+    }
+
     private void updateFavoriteView(ModViewHolder holder, boolean favorite) {
-        int color = favorite ? 0xFFFFC94D : 0xFFA9BDD5;
+        int color = favorite ? 0xFFFFC94D : 0xFF727279;
         holder.favoriteBtn.setImageTintList(ColorStateList.valueOf(color));
         holder.favoriteBtn.setAlpha(favorite ? 1f : 0.9f);
         holder.favoriteBtn.setContentDescription(holder.favoriteBtn.getContext().getString(
@@ -254,13 +276,15 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     private void updateStatusView(ModViewHolder holder, boolean enabled) {
-        if (enabled) {
+        if (holder.statusText instanceof Switch) {
+            ((Switch) holder.statusText).setChecked(enabled);
+        } else if (enabled) {
             holder.statusText.setText(R.string.mod_status_enabled);
-            holder.statusText.setTextColor(0xFF7BE4FF);
+            holder.statusText.setTextColor(0xFF80B3FF);
             holder.statusText.setBackgroundResource(R.drawable.bg_zenix_status_on);
         } else {
             holder.statusText.setText(R.string.mod_status_disabled);
-            holder.statusText.setTextColor(0xFFB4C7DB);
+            holder.statusText.setTextColor(0xFF85888E);
             holder.statusText.setBackgroundResource(R.drawable.bg_zenix_status_off);
         }
         updateCardState(holder, enabled);
@@ -268,19 +292,13 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     private void updateCardState(ModViewHolder holder, boolean enabled) {
         holder.itemView.setAlpha(1f);
-        holder.icon.setAlpha(enabled ? 1f : 0.8f);
-        holder.name.setTextColor(enabled ? 0xFFEDF6FF : 0xFFCBDBEC);
-        
+        if (holder.icon != null) holder.icon.setAlpha(enabled ? 1f : 0.75f);
+        holder.name.setTextColor(enabled ? 0xFFCECFD2 : 0xFF85888E);
+
         if (holder.itemView instanceof androidx.cardview.widget.CardView) {
             androidx.cardview.widget.CardView cv = (androidx.cardview.widget.CardView) holder.itemView;
-            
-            if (enabled) {
-                cv.setCardBackgroundColor(0xFF17395C);
-                cv.setCardElevation(5f);
-            } else {
-                cv.setCardBackgroundColor(0xFF132A45);
-                cv.setCardElevation(2f);
-            }
+            cv.setCardBackgroundColor(enabled ? 0xFF141A24 : 0xFF0F131C);
+            cv.setCardElevation(0f);
         }
     }
 

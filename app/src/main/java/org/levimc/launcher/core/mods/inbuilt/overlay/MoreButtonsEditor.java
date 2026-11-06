@@ -43,7 +43,7 @@ import java.util.Locale;
 
 public final class MoreButtonsEditor {
     private static final int REQUEST_SVG = 0x4D42;
-    private static final int ACCENT = 0xFF55AAFF;
+    private static final int ACCENT = 0xFF80B3FF;
     private static EditorHost editor;
     private static WeakReference<Activity> editorActivity = new WeakReference<>(null);
     private static WeakReference<EditPage> pendingSession;

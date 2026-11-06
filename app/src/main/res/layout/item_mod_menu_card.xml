@@ -1,37 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_margin="6dp"
+    android:layout_height="58dp"
+    android:layout_marginStart="5dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="5dp"
+    android:layout_marginBottom="4dp"
     android:defaultFocusHighlightEnabled="false"
-    app:cardBackgroundColor="#132A45"
-    app:cardCornerRadius="14dp"
-    app:cardElevation="2dp">
+    app:cardBackgroundColor="#0F131C"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="0dp"
+    app:strokeColor="#1AFFFFFF"
+    app:strokeWidth="1dp"
+    app:rippleColor="#1480B3FF">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="92dp"
+        android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="12dp"
-        android:paddingTop="12dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="12dp">
-
-        <ImageView
-            android:id="@+id/mod_card_icon"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
-            android:background="@drawable/bg_zenix_chip"
-            android:padding="9dp"
-            android:contentDescription="@null" />
+        android:paddingEnd="8dp">
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="11dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -41,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#EDF6FF"
+                android:textColor="#CECFD2"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
@@ -52,7 +46,7 @@
                 android:layout_marginTop="1dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#7D93AE"
+                android:textColor="#727279"
                 android:textSize="9sp"
                 android:visibility="gone" />
 
@@ -60,60 +54,46 @@
                 android:id="@+id/mod_card_desc"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="1dp"
                 android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="#91A8C4"
+                android:maxLines="1"
+                android:textColor="#727279"
                 android:textSize="11sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/mod_card_status"
-                    android:layout_width="wrap_content"
-                    android:layout_height="22dp"
-                    android:background="@drawable/bg_zenix_status_off"
-                    android:gravity="center"
-                    android:minWidth="52dp"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:textSize="9sp"
-                    android:textStyle="bold" />
-
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
-
-                <ImageButton
-                    android:id="@+id/mod_card_favorite"
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:defaultFocusHighlightEnabled="false"
-                    android:padding="6dp"
-                    android:src="@drawable/ic_star"
-                    android:tint="#A9BDD5" />
-
-                <ImageButton
-                    android:id="@+id/mod_card_config"
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:defaultFocusHighlightEnabled="false"
-                    android:padding="6dp"
-                    android:src="@drawable/ic_settings"
-                    android:tint="#A9BDD5" />
-
-            </LinearLayout>
 
         </LinearLayout>
 
+        <ImageButton
+            android:id="@+id/mod_card_favorite"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:defaultFocusHighlightEnabled="false"
+            android:padding="6dp"
+            android:src="@drawable/ic_star"
+            android:tint="#727279" />
+
+        <ImageButton
+            android:id="@+id/mod_card_config"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:defaultFocusHighlightEnabled="false"
+            android:padding="6dp"
+            android:src="@drawable/ic_settings"
+            android:tint="#727279" />
+
+        <Switch
+            android:id="@+id/mod_card_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:defaultFocusHighlightEnabled="false"
+            android:showText="false"
+            android:switchMinWidth="38dp"
+            android:thumbTint="@color/zenix_switch_thumb"
+            android:trackTint="@color/zenix_switch_track" />
+
     </LinearLayout>
 
-</androidx.cardview.widget.CardView>
+</com.google.android.material.card.MaterialCardView>

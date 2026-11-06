@@ -16,931 +16,885 @@
         android:layout_marginEnd="24dp"
         android:layout_marginBottom="16dp"
         app:cardBackgroundColor="#00000000"
-        app:cardCornerRadius="22dp"
-        app:cardElevation="18dp">
+        app:cardCornerRadius="16dp"
+        app:cardElevation="20dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@drawable/bg_zenix_panel"
-            android:orientation="vertical">
+            android:orientation="horizontal">
 
             <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="72dp"
-                android:background="@drawable/bg_zenix_topbar"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="18dp"
-                android:paddingEnd="14dp">
+                android:id="@+id/mod_menu_sidebar"
+                android:layout_width="172dp"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_zenix_sidebar"
+                android:orientation="vertical"
+                android:paddingStart="8dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="8dp">
 
                 <TextView
                     android:id="@+id/mod_menu_logo"
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
-                    android:background="@drawable/bg_zenix_logo"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
                     android:fontFamily="sans-serif-black"
                     android:gravity="center"
                     android:text="Z"
-                    android:textColor="#8BDCFF"
-                    android:textSize="23sp"
-                    android:textStyle="bold" />
+                    android:textColor="#80B3FF"
+                    android:textSize="26sp" />
 
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="13dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:letterSpacing="0.12"
-                        android:text="@string/zenix_brand"
-                        android:textColor="#EDF6FF"
-                        android:textSize="19sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:letterSpacing="0.08"
-                        android:text="@string/zenix_subtitle"
-                        android:textColor="#91A8C4"
-                        android:textSize="10sp" />
-
-                </LinearLayout>
-
-                <Space
-                    android:layout_width="0dp"
+                <View
+                    android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:layout_weight="1" />
+                    android:layout_marginStart="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="#1AFFFFFF" />
 
-                <ImageButton
-                    android:id="@+id/btn_menu_reset"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:layout_marginEnd="8dp"
-                    android:background="@drawable/bg_zenix_close"
-                    android:contentDescription="@string/reset"
-                    android:padding="10dp"
-                    android:src="@drawable/ic_delete"
-                    android:tint="#9FC4E8" />
-
-                <ImageButton
-                    android:id="@+id/btn_close_menu"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:background="@drawable/bg_zenix_close"
-                    android:contentDescription="@string/close"
-                    android:padding="10dp"
-                    android:src="@drawable/ic_close"
-                    android:tint="#EDF6FF" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:orientation="horizontal">
-
-                <LinearLayout
-                    android:id="@+id/mod_menu_sidebar"
-                    android:layout_width="172dp"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_zenix_sidebar"
-                    android:orientation="vertical"
-                    android:paddingStart="10dp"
-                    android:paddingTop="12dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="12dp">
-
-                    <ScrollView
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:overScrollMode="never"
-                        android:scrollbars="none">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:id="@+id/nav_modules"
-                                android:layout_width="match_parent"
-                                android:layout_height="44dp"
-                                android:background="@drawable/bg_zenix_nav_active"
-                                android:defaultFocusHighlightEnabled="false"
-                                android:drawableStart="@drawable/ic_modules"
-                                android:drawablePadding="9dp"
-                                android:drawableTint="#7BE4FF"
-                                android:ellipsize="end"
-                                android:gravity="center_vertical"
-                                android:paddingStart="12dp"
-                                android:paddingEnd="10dp"
-                                android:singleLine="true"
-                                android:text="@string/mod_menu_all_modules"
-                                android:textColor="#7BE4FF"
-                                android:textSize="13sp"
-                                android:textStyle="bold" />
-
-                            <ImageButton
-                                android:id="@+id/nav_modules_compact"
-                                android:layout_width="48dp"
-                                android:layout_height="48dp"
-                                android:layout_gravity="center_horizontal"
-                                android:layout_marginTop="2dp"
-                                android:background="@drawable/bg_mod_menu_nav_compact_selected"
-                                android:contentDescription="@string/mod_menu_all_modules"
-                                android:defaultFocusHighlightEnabled="false"
-                                android:padding="12dp"
-                                android:scaleType="center"
-                                android:src="@drawable/ic_modules"
-                                android:tint="#7BE4FF"
-                                android:visibility="gone" />
-
-                            <LinearLayout
-                                android:id="@+id/nav_categories"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:orientation="vertical" />
-
-                        </LinearLayout>
-
-                    </ScrollView>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginTop="6dp"
-                        android:layout_marginBottom="8dp"
-                        android:background="#336EA9EB" />
-
-                    <TextView
-                        android:id="@+id/nav_hud_editor"
-                        android:layout_width="match_parent"
-                        android:layout_height="44dp"
-                        android:alpha="0.8"
-                        android:background="@drawable/bg_zenix_nav"
-                        android:defaultFocusHighlightEnabled="false"
-                        android:drawableStart="@drawable/ic_edit"
-                        android:drawablePadding="9dp"
-                        android:drawableTint="#A9BDD5"
-                        android:ellipsize="end"
-                        android:gravity="center_vertical"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="10dp"
-                        android:singleLine="true"
-                        android:text="@string/mod_menu_hud_editor"
-                        android:textColor="#A9BDD5"
-                        android:textSize="13sp" />
-
-                    <ImageButton
-                        android:id="@+id/nav_hud_editor_compact"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_gravity="center_horizontal"
-                        android:layout_marginTop="6dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/mod_menu_hud_editor"
-                        android:defaultFocusHighlightEnabled="false"
-                        android:padding="12dp"
-                        android:scaleType="center"
-                        android:src="@drawable/ic_edit"
-                        android:tint="#A9BDD5"
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/nav_settings"
-                        android:layout_width="match_parent"
-                        android:layout_height="44dp"
-                        android:alpha="0.8"
-                        android:background="@drawable/bg_zenix_nav"
-                        android:defaultFocusHighlightEnabled="false"
-                        android:drawableStart="@drawable/ic_settings"
-                        android:drawablePadding="9dp"
-                        android:drawableTint="#A9BDD5"
-                        android:ellipsize="end"
-                        android:gravity="center_vertical"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="10dp"
-                        android:singleLine="true"
-                        android:text="@string/settings"
-                        android:textColor="#A9BDD5"
-                        android:textSize="13sp" />
-
-                    <ImageButton
-                        android:id="@+id/nav_settings_compact"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_gravity="center_horizontal"
-                        android:layout_marginTop="6dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/settings"
-                        android:defaultFocusHighlightEnabled="false"
-                        android:padding="12dp"
-                        android:scaleType="center"
-                        android:src="@drawable/ic_settings"
-                        android:tint="#A9BDD5"
-                        android:visibility="gone" />
-
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
                     android:layout_weight="1"
-                    android:orientation="vertical">
+                    android:overScrollMode="never"
+                    android:scrollbars="none">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingStart="12dp"
-                        android:paddingTop="12dp"
-                        android:paddingEnd="12dp">
+                        android:paddingTop="10dp">
+
+                        <TextView
+                            android:id="@+id/nav_modules"
+                            android:layout_width="match_parent"
+                            android:layout_height="30dp"
+                            android:background="@drawable/bg_zenix_nav_active"
+                            android:defaultFocusHighlightEnabled="false"
+                            android:drawableStart="@drawable/ic_modules"
+                            android:drawablePadding="9dp"
+                            android:drawableTint="#80B3FF"
+                            android:ellipsize="end"
+                            android:gravity="center_vertical"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="8dp"
+                            android:singleLine="true"
+                            android:text="@string/mod_menu_all_modules"
+                            android:textColor="#CECFD2"
+                            android:textSize="13sp" />
+
+                        <ImageButton
+                            android:id="@+id/nav_modules_compact"
+                            android:layout_width="46dp"
+                            android:layout_height="46dp"
+                            android:layout_gravity="center_horizontal"
+                            android:layout_marginTop="2dp"
+                            android:background="@drawable/bg_mod_menu_nav_compact_selected"
+                            android:contentDescription="@string/mod_menu_all_modules"
+                            android:defaultFocusHighlightEnabled="false"
+                            android:padding="12dp"
+                            android:scaleType="center"
+                            android:src="@drawable/ic_modules"
+                            android:tint="#80B3FF"
+                            android:visibility="gone" />
 
                         <LinearLayout
-                            android:id="@+id/search_container"
+                            android:id="@+id/nav_categories"
                             android:layout_width="match_parent"
-                            android:layout_height="42dp"
-                            android:background="@drawable/bg_zenix_search"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal"
-                            android:paddingStart="12dp"
-                            android:paddingEnd="8dp">
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:orientation="vertical" />
 
-                            <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@drawable/ic_search"
-                                android:tint="#91A8C4" />
+                    </LinearLayout>
 
-                            <EditText
-                                android:id="@+id/search_input"
-                                android:layout_width="0dp"
-                                android:layout_height="match_parent"
-                                android:layout_marginStart="8dp"
-                                android:layout_weight="1"
-                                android:background="@android:color/transparent"
-                                android:hint="@string/mod_menu_search_hint"
-                                android:imeOptions="actionSearch"
-                                android:inputType="text"
-                                android:singleLine="true"
-                                android:textColor="#EDF6FF"
-                                android:textColorHint="#7D93AE"
-                                android:textSize="12sp" />
+                </ScrollView>
 
-                            <ImageButton
-                                android:id="@+id/btn_clear_search"
-                                android:layout_width="22dp"
-                                android:layout_height="22dp"
-                                android:background="?attr/selectableItemBackgroundBorderless"
-                                android:padding="3dp"
-                                android:src="@drawable/ic_close"
-                                android:tint="#91A8C4"
-                                android:visibility="gone" />
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="#1AFFFFFF" />
 
-                        </LinearLayout>
+                <TextView
+                    android:id="@+id/nav_hud_editor"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:background="@drawable/bg_zenix_nav"
+                    android:defaultFocusHighlightEnabled="false"
+                    android:drawableStart="@drawable/ic_edit"
+                    android:drawablePadding="9dp"
+                    android:drawableTint="#727279"
+                    android:ellipsize="end"
+                    android:gravity="center_vertical"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="8dp"
+                    android:singleLine="true"
+                    android:text="@string/mod_menu_hud_editor"
+                    android:textColor="#727279"
+                    android:textSize="13sp" />
+
+                <ImageButton
+                    android:id="@+id/nav_hud_editor_compact"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="6dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/mod_menu_hud_editor"
+                    android:defaultFocusHighlightEnabled="false"
+                    android:padding="12dp"
+                    android:scaleType="center"
+                    android:src="@drawable/ic_edit"
+                    android:tint="#727279"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/nav_settings"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:background="@drawable/bg_zenix_nav"
+                    android:defaultFocusHighlightEnabled="false"
+                    android:drawableStart="@drawable/ic_settings"
+                    android:drawablePadding="9dp"
+                    android:drawableTint="#727279"
+                    android:ellipsize="end"
+                    android:gravity="center_vertical"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="8dp"
+                    android:singleLine="true"
+                    android:text="@string/settings"
+                    android:textColor="#727279"
+                    android:textSize="13sp" />
+
+                <ImageButton
+                    android:id="@+id/nav_settings_compact"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="6dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/settings"
+                    android:defaultFocusHighlightEnabled="false"
+                    android:padding="12dp"
+                    android:scaleType="center"
+                    android:src="@drawable/ic_settings"
+                    android:tint="#727279"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:background="@drawable/bg_zenix_topbar"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="12dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:letterSpacing="0.08"
+                            android:text="@string/zenix_brand"
+                            android:textColor="#727279"
+                            android:textSize="10sp" />
 
                         <TextView
                             android:id="@+id/mod_section_title"
-                            android:layout_width="match_parent"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:layout_marginBottom="8dp"
-                            android:letterSpacing="0.1"
+                            android:layout_marginTop="1dp"
                             android:text="@string/mod_menu_all_modules"
-                            android:textAllCaps="true"
-                            android:textColor="#91A8C4"
-                            android:textSize="11sp"
+                            android:textColor="#CECFD2"
+                            android:textSize="15sp"
                             android:textStyle="bold" />
-
-
 
                     </LinearLayout>
 
-                    <HorizontalScrollView
-                        android:id="@+id/filter_bar"
-                        android:layout_width="match_parent"
-                        android:layout_height="44dp"
-                        android:overScrollMode="never"
-                        android:scrollbars="none">
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="match_parent"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal"
-                            android:paddingStart="12dp"
-                            android:paddingEnd="12dp">
-
-                            <TextView
-                                android:id="@+id/filter_all"
-                                android:layout_width="wrap_content"
-                                android:layout_height="30dp"
-                                android:layout_marginEnd="7dp"
-                                android:background="@drawable/bg_zenix_chip_active"
-                                android:defaultFocusHighlightEnabled="false"
-                                android:gravity="center"
-                                android:minWidth="54dp"
-                                android:paddingStart="14dp"
-                                android:paddingEnd="14dp"
-                                android:text="@string/filter_all"
-                                android:textColor="#EAF7FF"
-                                android:textSize="12sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:id="@+id/filter_favorites"
-                                android:layout_width="wrap_content"
-                                android:layout_height="30dp"
-                                android:layout_marginEnd="7dp"
-                                android:background="@drawable/bg_zenix_chip"
-                                android:defaultFocusHighlightEnabled="false"
-                                android:gravity="center"
-                                android:minWidth="68dp"
-                                android:paddingStart="14dp"
-                                android:paddingEnd="14dp"
-                                android:text="@string/mod_menu_favorites"
-                                android:textColor="#91A8C4"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:id="@+id/filter_enabled"
-                                android:layout_width="wrap_content"
-                                android:layout_height="30dp"
-                                android:layout_marginEnd="7dp"
-                                android:background="@drawable/bg_zenix_chip"
-                                android:defaultFocusHighlightEnabled="false"
-                                android:gravity="center"
-                                android:minWidth="68dp"
-                                android:paddingStart="14dp"
-                                android:paddingEnd="14dp"
-                                android:text="@string/mod_menu_filter_enabled"
-                                android:textColor="#91A8C4"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:id="@+id/filter_inbuilt"
-                                android:layout_width="wrap_content"
-                                android:layout_height="30dp"
-                                android:layout_marginEnd="7dp"
-                                android:background="@drawable/bg_zenix_chip"
-                                android:defaultFocusHighlightEnabled="false"
-                                android:gravity="center"
-                                android:minWidth="68dp"
-                                android:paddingStart="14dp"
-                                android:paddingEnd="14dp"
-                                android:text="@string/mod_menu_filter_inbuilt"
-                                android:textColor="#91A8C4"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:id="@+id/filter_external"
-                                android:layout_width="wrap_content"
-                                android:layout_height="30dp"
-                                android:layout_marginEnd="7dp"
-                                android:background="@drawable/bg_zenix_chip"
-                                android:defaultFocusHighlightEnabled="false"
-                                android:gravity="center"
-                                android:minWidth="68dp"
-                                android:paddingStart="14dp"
-                                android:paddingEnd="14dp"
-                                android:text="@string/mod_menu_filter_external"
-                                android:textColor="#91A8C4"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:id="@+id/module_count_text"
-                                android:layout_width="wrap_content"
-                                android:layout_height="30dp"
-                                android:gravity="center"
-                                android:textColor="#91A8C4"
-                                android:textSize="11sp" />
-
-                        </LinearLayout>
-                    </HorizontalScrollView>
-
                     <LinearLayout
-                        android:id="@+id/compact_filter_bar"
-                        android:layout_width="match_parent"
-                        android:layout_height="44dp"
+                        android:id="@+id/search_container"
+                        android:layout_width="220dp"
+                        android:layout_height="34dp"
+                        android:background="@drawable/bg_zenix_search"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
                         android:paddingStart="10dp"
-                        android:paddingEnd="12dp"
-                        android:visibility="gone">
+                        android:paddingEnd="6dp">
 
-                        <TextView
-                            android:id="@+id/compact_filter_selector"
-                            android:layout_width="wrap_content"
-                            android:layout_height="30dp"
-                            android:background="@drawable/bg_zenix_chip"
-                            android:defaultFocusHighlightEnabled="false"
-                            android:drawableEnd="@drawable/ic_arrow_down"
-                            android:drawablePadding="6dp"
-                            android:drawableTint="#91A8C4"
-                            android:gravity="center_vertical"
-                            android:minWidth="94dp"
-                            android:paddingStart="12dp"
-                            android:paddingEnd="10dp"
-                            android:text="@string/filter_all"
-                            android:textColor="#7BE4FF"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
+                        <ImageView
+                            android:layout_width="15dp"
+                            android:layout_height="15dp"
+                            android:src="@drawable/ic_search"
+                            android:tint="#727279" />
 
-                        <Space
+                        <EditText
+                            android:id="@+id/search_input"
                             android:layout_width="0dp"
-                            android:layout_height="1dp"
-                            android:layout_weight="1" />
+                            android:layout_height="match_parent"
+                            android:layout_marginStart="7dp"
+                            android:layout_weight="1"
+                            android:background="@android:color/transparent"
+                            android:hint="@string/mod_menu_search_hint"
+                            android:imeOptions="actionSearch"
+                            android:inputType="text"
+                            android:singleLine="true"
+                            android:textColor="#CECFD2"
+                            android:textColorHint="#727279"
+                            android:textSize="12sp" />
 
-                        <TextView
-                            android:id="@+id/compact_module_count"
-                            android:layout_width="wrap_content"
-                            android:layout_height="30dp"
-                            android:gravity="center"
-                            android:textColor="#91A8C4"
-                            android:textSize="11sp" />
+                        <ImageButton
+                            android:id="@+id/btn_clear_search"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:padding="3dp"
+                            android:src="@drawable/ic_close"
+                            android:tint="#85888E"
+                            android:visibility="gone" />
 
                     </LinearLayout>
 
-                    <FrameLayout
-                        android:id="@+id/modules_container"
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1">
-
-                        <androidx.recyclerview.widget.RecyclerView
-                            android:id="@+id/mods_grid_recycler"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:clipToPadding="false"
-                            android:defaultFocusHighlightEnabled="false"
-                            android:focusable="false"
-                            android:padding="10dp" />
-
-                        <LinearLayout
-                            android:id="@+id/empty_state"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center"
-                            android:gravity="center"
-                            android:orientation="vertical"
-                            android:visibility="gone">
-
-                            <ImageView
-                                android:layout_width="48dp"
-                                android:layout_height="48dp"
-                                android:src="@drawable/ic_modules"
-                                android:tint="#3D6EA9EB" />
-
-                            <TextView
-                                android:id="@+id/empty_state_text"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:text="@string/mod_menu_no_mods"
-                                android:textColor="#7D93AE"
-                                android:textSize="12sp" />
-
-                        </LinearLayout>
-
-                    </FrameLayout>
+                    <ImageButton
+                        android:id="@+id/btn_close_menu"
+                        android:layout_width="34dp"
+                        android:layout_height="34dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_zenix_close"
+                        android:contentDescription="@string/close"
+                        android:padding="9dp"
+                        android:src="@drawable/ic_close"
+                        android:tint="#CECFD2" />
 
                 </LinearLayout>
+
+                <HorizontalScrollView
+                    android:id="@+id/filter_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:overScrollMode="never"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="12dp">
+
+                        <TextView
+                            android:id="@+id/filter_all"
+                            android:layout_width="wrap_content"
+                            android:layout_height="26dp"
+                            android:layout_marginEnd="6dp"
+                            android:background="@drawable/bg_zenix_chip_active"
+                            android:defaultFocusHighlightEnabled="false"
+                            android:gravity="center"
+                            android:minWidth="50dp"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="@string/filter_all"
+                            android:textColor="#80B3FF"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/filter_favorites"
+                            android:layout_width="wrap_content"
+                            android:layout_height="26dp"
+                            android:layout_marginEnd="6dp"
+                            android:background="@drawable/bg_zenix_chip"
+                            android:defaultFocusHighlightEnabled="false"
+                            android:gravity="center"
+                            android:minWidth="64dp"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="@string/mod_menu_favorites"
+                            android:textColor="#727279"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/filter_enabled"
+                            android:layout_width="wrap_content"
+                            android:layout_height="26dp"
+                            android:layout_marginEnd="6dp"
+                            android:background="@drawable/bg_zenix_chip"
+                            android:defaultFocusHighlightEnabled="false"
+                            android:gravity="center"
+                            android:minWidth="64dp"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="@string/mod_menu_filter_enabled"
+                            android:textColor="#727279"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/filter_inbuilt"
+                            android:layout_width="wrap_content"
+                            android:layout_height="26dp"
+                            android:layout_marginEnd="6dp"
+                            android:background="@drawable/bg_zenix_chip"
+                            android:defaultFocusHighlightEnabled="false"
+                            android:gravity="center"
+                            android:minWidth="64dp"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="@string/mod_menu_filter_inbuilt"
+                            android:textColor="#727279"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/filter_external"
+                            android:layout_width="wrap_content"
+                            android:layout_height="26dp"
+                            android:layout_marginEnd="6dp"
+                            android:background="@drawable/bg_zenix_chip"
+                            android:defaultFocusHighlightEnabled="false"
+                            android:gravity="center"
+                            android:minWidth="64dp"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="@string/mod_menu_filter_external"
+                            android:textColor="#727279"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/module_count_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="26dp"
+                            android:gravity="center"
+                            android:textColor="#727279"
+                            android:textSize="11sp" />
+
+                    </LinearLayout>
+                </HorizontalScrollView>
 
                 <LinearLayout
-                    android:id="@+id/mod_menu_details"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1.08"
-                    android:background="#33071322"
-                    android:orientation="vertical">
-
-                            <LinearLayout
-                                android:id="@+id/config_header"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal"
-                                android:visibility="gone">
-
-                                <ImageButton
-                                    android:id="@+id/btn_back_to_modules"
-                                    android:layout_width="34dp"
-                                    android:layout_height="34dp"
-                                    android:background="@drawable/bg_zenix_close"
-                                    android:padding="7dp"
-                                    android:src="@drawable/ic_arrow_back"
-                                    android:tint="#EDF6FF" />
-
-                                <TextView
-                                    android:id="@+id/config_title"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="10dp"
-                                    android:textColor="#EDF6FF"
-                                    android:textSize="15sp"
-                                    android:textStyle="bold" />
-                            </LinearLayout>
+                    android:id="@+id/compact_filter_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:visibility="gone">
 
                     <TextView
-                        android:id="@+id/details_empty"
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:padding="28dp"
-                        android:text="@string/mod_menu_details_empty"
-                        android:textColor="#91A8C4"
-                        android:textSize="13sp" />
+                        android:id="@+id/compact_filter_selector"
+                        android:layout_width="wrap_content"
+                        android:layout_height="26dp"
+                        android:background="@drawable/bg_zenix_chip"
+                        android:defaultFocusHighlightEnabled="false"
+                        android:drawableEnd="@drawable/ic_arrow_down"
+                        android:drawablePadding="6dp"
+                        android:drawableTint="#727279"
+                        android:gravity="center_vertical"
+                        android:minWidth="94dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="10dp"
+                        android:text="@string/filter_all"
+                        android:textColor="#80B3FF"
+                        android:textSize="11sp" />
 
-                    <FrameLayout
-                        android:id="@+id/mod_config_container"
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+
+                    <TextView
+                        android:id="@+id/compact_module_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="26dp"
+                        android:gravity="center"
+                        android:textColor="#727279"
+                        android:textSize="11sp" />
+
+                </LinearLayout>
+
+                <FrameLayout
+                    android:id="@+id/modules_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/mods_grid_recycler"
                         android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false"
+                        android:defaultFocusHighlightEnabled="false"
+                        android:focusable="false"
+                        android:padding="10dp" />
+
+                    <LinearLayout
+                        android:id="@+id/empty_state"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:gravity="center"
+                        android:orientation="vertical"
                         android:visibility="gone">
 
-                        <FrameLayout
-                            android:id="@+id/mod_config_content"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
+                        <ImageView
+                            android:layout_width="44dp"
+                            android:layout_height="44dp"
+                            android:src="@drawable/ic_modules"
+                            android:tint="#2A2E36" />
 
-                    <ScrollView
-                        android:id="@+id/settings_container"
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1"
-                        android:fillViewport="true"
+                        <TextView
+                            android:id="@+id/empty_state_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="@string/mod_menu_no_mods"
+                            android:textColor="#727279"
+                            android:textSize="12sp" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/mod_menu_details"
+                        android:layout_width="330dp"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="end"
+                        android:background="@drawable/bg_zenix_details"
+                        android:clickable="true"
+                        android:elevation="16dp"
+                        android:focusable="true"
+                        android:orientation="vertical"
+                        android:padding="12dp"
                         android:visibility="gone">
 
                         <LinearLayout
+                            android:id="@+id/config_header"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:padding="16dp">
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <ImageButton
+                                android:id="@+id/btn_back_to_modules"
+                                android:layout_width="30dp"
+                                android:layout_height="30dp"
+                                android:background="@drawable/bg_zenix_close"
+                                android:padding="6dp"
+                                android:src="@drawable/ic_arrow_back"
+                                android:tint="#CECFD2" />
 
                             <TextView
-                                android:layout_width="wrap_content"
+                                android:id="@+id/config_title"
+                                android:layout_width="0dp"
                                 android:layout_height="wrap_content"
-                                android:layout_marginBottom="12dp"
-                                android:letterSpacing="0.1"
-                                android:text="@string/mod_menu_general_settings"
-                                android:textAllCaps="true"
-                                android:textColor="#7BE4FF"
-                                android:textSize="12sp"
+                                android:layout_marginStart="9dp"
+                                android:layout_weight="1"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:textColor="#CECFD2"
+                                android:textSize="14sp"
                                 android:textStyle="bold" />
-
-                            <LinearLayout
-                                android:id="@+id/setting_notifications"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:background="@drawable/bg_zenix_setting"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal"
-                                android:padding="12dp">
-
-                                <ImageView
-                                    android:layout_width="24dp"
-                                    android:layout_height="24dp"
-                                    android:src="@drawable/ic_notifications"
-                                    android:tint="#7BE4FF" />
-
-                                <LinearLayout
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="12dp"
-                                    android:layout_weight="1"
-                                    android:orientation="vertical">
-
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="@string/mod_menu_notifications"
-                                        android:textColor="#EDF6FF"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold" />
-
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginTop="2dp"
-                                        android:text="@string/mod_menu_notifications_desc"
-                                        android:textColor="#91A8C4"
-                                        android:textSize="11sp" />
-
-                                </LinearLayout>
-
-                                <Switch
-                                    android:id="@+id/switch_notifications"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:thumbTint="#D9F8FF"
-                                    android:trackTint="#552C6BA8" />
-
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:id="@+id/setting_pause_menu_only"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
-                                android:background="@drawable/bg_zenix_setting"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal"
-                                android:padding="12dp">
-
-                                <ImageView
-                                    android:layout_width="24dp"
-                                    android:layout_height="24dp"
-                                    android:src="@drawable/ic_hud"
-                                    android:tint="#7BE4FF" />
-
-                                <LinearLayout
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="12dp"
-                                    android:layout_weight="1"
-                                    android:orientation="vertical">
-
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="@string/mod_menu_pause_menu_only"
-                                        android:textColor="#EDF6FF"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold" />
-
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginTop="2dp"
-                                        android:text="@string/mod_menu_pause_menu_only_desc"
-                                        android:textColor="#91A8C4"
-                                        android:textSize="11sp" />
-
-                                </LinearLayout>
-
-                                <Switch
-                                    android:id="@+id/switch_pause_menu_only"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:thumbTint="#D9F8FF"
-                                    android:trackTint="#552C6BA8" />
-
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:id="@+id/setting_mod_menu_keybind"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
-                                android:background="@drawable/bg_zenix_setting"
-                                android:clickable="true"
-                                android:focusable="true"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal"
-                                android:padding="12dp">
-
-                                <ImageView
-                                    android:layout_width="24dp"
-                                    android:layout_height="24dp"
-                                    android:src="@drawable/ic_menu"
-                                    android:tint="#7BE4FF" />
-
-                                <LinearLayout
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="12dp"
-                                    android:layout_weight="1"
-                                    android:orientation="vertical">
-
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="@string/mod_menu_keybind"
-                                        android:textColor="#EDF6FF"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold" />
-
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginTop="2dp"
-                                        android:text="@string/mod_menu_keybind_desc"
-                                        android:textColor="#91A8C4"
-                                        android:textSize="11sp" />
-
-                                </LinearLayout>
-
-                                <TextView
-                                    android:id="@+id/mod_menu_keybind_value"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="12dp"
-                                    android:background="@drawable/bg_zenix_chip"
-                                    android:gravity="center"
-                                    android:minWidth="48dp"
-                                    android:paddingStart="10dp"
-                                    android:paddingTop="5dp"
-                                    android:paddingEnd="10dp"
-                                    android:paddingBottom="5dp"
-                                    android:text="M"
-                                    android:textColor="#7BE4FF"
-                                    android:textSize="13sp"
-                                    android:textStyle="bold" />
-
-                            </LinearLayout>
-
-                            <View
-                                android:layout_width="match_parent"
-                                android:layout_height="1dp"
-                                android:layout_marginTop="20dp"
-                                android:layout_marginBottom="16dp"
-                                android:background="#336EA9EB" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginBottom="12dp"
-                                android:letterSpacing="0.1"
-                                android:text="@string/mod_menu_appearance"
-                                android:textAllCaps="true"
-                                android:textColor="#7BE4FF"
-                                android:textSize="12sp"
-                                android:textStyle="bold" />
-
-                            <LinearLayout
-                                android:id="@+id/setting_compact_mod_menu"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginBottom="12dp"
-                                android:background="@drawable/bg_zenix_setting"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal"
-                                android:padding="12dp">
-
-                                <ImageView
-                                    android:layout_width="24dp"
-                                    android:layout_height="24dp"
-                                    android:src="@drawable/ic_menu"
-                                    android:tint="#7BE4FF" />
-
-                                <LinearLayout
-                                    android:layout_width="0dp"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginStart="12dp"
-                                    android:layout_weight="1"
-                                    android:orientation="vertical">
-
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="@string/mod_menu_compact"
-                                        android:textColor="#EDF6FF"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold" />
-
-                                    <TextView
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginTop="2dp"
-                                        android:text="@string/mod_menu_compact_desc"
-                                        android:textColor="#91A8C4"
-                                        android:textSize="11sp" />
-
-                                </LinearLayout>
-
-                                <Switch
-                                    android:id="@+id/switch_compact_mod_menu"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:thumbTint="#D9F8FF"
-                                    android:trackTint="#552C6BA8" />
-
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:id="@+id/setting_mod_menu_opacity"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:background="@drawable/bg_zenix_setting"
-                                android:orientation="vertical"
-                                android:padding="12dp">
-
-                                <LinearLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:gravity="center_vertical"
-                                    android:orientation="horizontal">
-
-                                    <ImageView
-                                        android:layout_width="24dp"
-                                        android:layout_height="24dp"
-                                        android:src="@drawable/ic_modules"
-                                        android:tint="#7BE4FF" />
-
-                                    <TextView
-                                        android:layout_width="0dp"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginStart="12dp"
-                                        android:layout_weight="1"
-                                        android:text="@string/mod_menu_opacity"
-                                        android:textColor="#EDF6FF"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold" />
-
-                                    <TextView
-                                        android:id="@+id/text_mod_menu_opacity"
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="@string/mod_menu_default_percent"
-                                        android:textColor="#7BE4FF"
-                                        android:textSize="12sp"
-                                        android:textStyle="bold" />
-
-                                </LinearLayout>
-
-                                <SeekBar
-                                    android:id="@+id/seekbar_mod_menu_opacity"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginTop="8dp"
-                                    android:max="100"
-                                    android:min="70"
-                                    android:progress="100"
-                                    android:progressTint="#55AAFF"
-                                    android:thumbTint="#7BE4FF" />
-
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:id="@+id/setting_mod_menu_button_opacity"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="12dp"
-                                android:background="@drawable/bg_zenix_setting"
-                                android:orientation="vertical"
-                                android:padding="12dp">
-
-                                <LinearLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:gravity="center_vertical"
-                                    android:orientation="horizontal">
-
-                                    <ImageView
-                                        android:layout_width="24dp"
-                                        android:layout_height="24dp"
-                                        android:src="@drawable/ic_leaf_logo"
-                                        android:tint="#7BE4FF" />
-
-                                    <TextView
-                                        android:layout_width="0dp"
-                                        android:layout_height="wrap_content"
-                                        android:layout_marginStart="12dp"
-                                        android:layout_weight="1"
-                                        android:text="@string/mod_menu_button_opacity"
-                                        android:textColor="#EDF6FF"
-                                        android:textSize="13sp"
-                                        android:textStyle="bold" />
-
-                                    <TextView
-                                        android:id="@+id/text_mod_menu_button_opacity"
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="@string/mod_menu_default_percent"
-                                        android:textColor="#7BE4FF"
-                                        android:textSize="12sp"
-                                        android:textStyle="bold" />
-
-                                </LinearLayout>
-
-                                <SeekBar
-                                    android:id="@+id/seekbar_mod_menu_button_opacity"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginTop="8dp"
-                                    android:max="100"
-                                    android:min="0"
-                                    android:progress="100"
-                                    android:progressTint="#55AAFF"
-                                    android:thumbTint="#7BE4FF" />
-
-                            </LinearLayout>
 
                         </LinearLayout>
-                    </ScrollView>
 
-                </LinearLayout>
+                        <FrameLayout
+                            android:id="@+id/mod_config_container"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:layout_marginTop="6dp"
+                            android:visibility="gone">
+
+                            <FrameLayout
+                                android:id="@+id/mod_config_content"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent" />
+
+                        </FrameLayout>
+
+    <ScrollView
+                            android:id="@+id/settings_container"
+                            android:layout_width="match_parent"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:fillViewport="true"
+                            android:visibility="gone">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:padding="16dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="12dp"
+                                    android:letterSpacing="0.1"
+                                    android:text="@string/mod_menu_general_settings"
+                                    android:textAllCaps="true"
+                                    android:textColor="#80B3FF"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
+
+                                <LinearLayout
+                                    android:id="@+id/setting_notifications"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/bg_zenix_setting"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal"
+                                    android:padding="12dp">
+
+                                    <ImageView
+                                        android:layout_width="24dp"
+                                        android:layout_height="24dp"
+                                        android:src="@drawable/ic_notifications"
+                                        android:tint="#80B3FF" />
+
+                                    <LinearLayout
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="12dp"
+                                        android:layout_weight="1"
+                                        android:orientation="vertical">
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:text="@string/mod_menu_notifications"
+                                            android:textColor="#CECFD2"
+                                            android:textSize="13sp"
+                                            android:textStyle="bold" />
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginTop="2dp"
+                                            android:text="@string/mod_menu_notifications_desc"
+                                            android:textColor="#727279"
+                                            android:textSize="11sp" />
+
+                                    </LinearLayout>
+
+                                    <Switch
+                                        android:id="@+id/switch_notifications"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:thumbTint="#CECFD2"
+                                        android:trackTint="#1AFFFFFF" />
+
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/setting_pause_menu_only"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="12dp"
+                                    android:background="@drawable/bg_zenix_setting"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal"
+                                    android:padding="12dp">
+
+                                    <ImageView
+                                        android:layout_width="24dp"
+                                        android:layout_height="24dp"
+                                        android:src="@drawable/ic_hud"
+                                        android:tint="#80B3FF" />
+
+                                    <LinearLayout
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="12dp"
+                                        android:layout_weight="1"
+                                        android:orientation="vertical">
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:text="@string/mod_menu_pause_menu_only"
+                                            android:textColor="#CECFD2"
+                                            android:textSize="13sp"
+                                            android:textStyle="bold" />
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginTop="2dp"
+                                            android:text="@string/mod_menu_pause_menu_only_desc"
+                                            android:textColor="#727279"
+                                            android:textSize="11sp" />
+
+                                    </LinearLayout>
+
+                                    <Switch
+                                        android:id="@+id/switch_pause_menu_only"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:thumbTint="#CECFD2"
+                                        android:trackTint="#1AFFFFFF" />
+
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/setting_mod_menu_keybind"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="12dp"
+                                    android:background="@drawable/bg_zenix_setting"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal"
+                                    android:padding="12dp">
+
+                                    <ImageView
+                                        android:layout_width="24dp"
+                                        android:layout_height="24dp"
+                                        android:src="@drawable/ic_menu"
+                                        android:tint="#80B3FF" />
+
+                                    <LinearLayout
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="12dp"
+                                        android:layout_weight="1"
+                                        android:orientation="vertical">
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:text="@string/mod_menu_keybind"
+                                            android:textColor="#CECFD2"
+                                            android:textSize="13sp"
+                                            android:textStyle="bold" />
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginTop="2dp"
+                                            android:text="@string/mod_menu_keybind_desc"
+                                            android:textColor="#727279"
+                                            android:textSize="11sp" />
+
+                                    </LinearLayout>
+
+                                    <TextView
+                                        android:id="@+id/mod_menu_keybind_value"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="12dp"
+                                        android:background="@drawable/bg_zenix_chip"
+                                        android:gravity="center"
+                                        android:minWidth="48dp"
+                                        android:paddingStart="10dp"
+                                        android:paddingTop="5dp"
+                                        android:paddingEnd="10dp"
+                                        android:paddingBottom="5dp"
+                                        android:text="M"
+                                        android:textColor="#80B3FF"
+                                        android:textSize="13sp"
+                                        android:textStyle="bold" />
+
+                                </LinearLayout>
+
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="1dp"
+                                    android:layout_marginTop="20dp"
+                                    android:layout_marginBottom="16dp"
+                                    android:background="#3380B3FF" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="12dp"
+                                    android:letterSpacing="0.1"
+                                    android:text="@string/mod_menu_appearance"
+                                    android:textAllCaps="true"
+                                    android:textColor="#80B3FF"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold" />
+
+                                <LinearLayout
+                                    android:id="@+id/setting_compact_mod_menu"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginBottom="12dp"
+                                    android:background="@drawable/bg_zenix_setting"
+                                    android:gravity="center_vertical"
+                                    android:orientation="horizontal"
+                                    android:padding="12dp">
+
+                                    <ImageView
+                                        android:layout_width="24dp"
+                                        android:layout_height="24dp"
+                                        android:src="@drawable/ic_menu"
+                                        android:tint="#80B3FF" />
+
+                                    <LinearLayout
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="12dp"
+                                        android:layout_weight="1"
+                                        android:orientation="vertical">
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:text="@string/mod_menu_compact"
+                                            android:textColor="#CECFD2"
+                                            android:textSize="13sp"
+                                            android:textStyle="bold" />
+
+                                        <TextView
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginTop="2dp"
+                                            android:text="@string/mod_menu_compact_desc"
+                                            android:textColor="#727279"
+                                            android:textSize="11sp" />
+
+                                    </LinearLayout>
+
+                                    <Switch
+                                        android:id="@+id/switch_compact_mod_menu"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:thumbTint="#CECFD2"
+                                        android:trackTint="#1AFFFFFF" />
+
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/setting_mod_menu_opacity"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:background="@drawable/bg_zenix_setting"
+                                    android:orientation="vertical"
+                                    android:padding="12dp">
+
+                                    <LinearLayout
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:gravity="center_vertical"
+                                        android:orientation="horizontal">
+
+                                        <ImageView
+                                            android:layout_width="24dp"
+                                            android:layout_height="24dp"
+                                            android:src="@drawable/ic_modules"
+                                            android:tint="#80B3FF" />
+
+                                        <TextView
+                                            android:layout_width="0dp"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginStart="12dp"
+                                            android:layout_weight="1"
+                                            android:text="@string/mod_menu_opacity"
+                                            android:textColor="#CECFD2"
+                                            android:textSize="13sp"
+                                            android:textStyle="bold" />
+
+                                        <TextView
+                                            android:id="@+id/text_mod_menu_opacity"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:text="@string/mod_menu_default_percent"
+                                            android:textColor="#80B3FF"
+                                            android:textSize="12sp"
+                                            android:textStyle="bold" />
+
+                                    </LinearLayout>
+
+                                    <SeekBar
+                                        android:id="@+id/seekbar_mod_menu_opacity"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginTop="8dp"
+                                        android:max="100"
+                                        android:min="70"
+                                        android:progress="100"
+                                        android:progressTint="#80B3FF"
+                                        android:thumbTint="#80B3FF" />
+
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/setting_mod_menu_button_opacity"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="12dp"
+                                    android:background="@drawable/bg_zenix_setting"
+                                    android:orientation="vertical"
+                                    android:padding="12dp">
+
+                                    <LinearLayout
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:gravity="center_vertical"
+                                        android:orientation="horizontal">
+
+                                        <ImageView
+                                            android:layout_width="24dp"
+                                            android:layout_height="24dp"
+                                            android:src="@drawable/ic_leaf_logo"
+                                            android:tint="#80B3FF" />
+
+                                        <TextView
+                                            android:layout_width="0dp"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginStart="12dp"
+                                            android:layout_weight="1"
+                                            android:text="@string/mod_menu_button_opacity"
+                                            android:textColor="#CECFD2"
+                                            android:textSize="13sp"
+                                            android:textStyle="bold" />
+
+                                        <TextView
+                                            android:id="@+id/text_mod_menu_button_opacity"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:text="@string/mod_menu_default_percent"
+                                            android:textColor="#80B3FF"
+                                            android:textSize="12sp"
+                                            android:textStyle="bold" />
+
+                                    </LinearLayout>
+
+                                    <SeekBar
+                                        android:id="@+id/seekbar_mod_menu_button_opacity"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginTop="8dp"
+                                        android:max="100"
+                                        android:min="0"
+                                        android:progress="100"
+                                        android:progressTint="#80B3FF"
+                                        android:thumbTint="#80B3FF" />
+
+                                </LinearLayout>
+
+                            </LinearLayout>
+                        </ScrollView>
+
+                    </LinearLayout>
+
+                </FrameLayout>
 
             </LinearLayout>
 
@@ -948,7 +902,7 @@
 
     </androidx.cardview.widget.CardView>
 
-    <androidx.cardview.widget.CardView
+<androidx.cardview.widget.CardView
         android:id="@+id/hud_editor_tools"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -998,7 +952,7 @@
                         android:layout_marginEnd="8dp"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_drag_handle"
-                        android:tint="#7BE4FF" />
+                        android:tint="#80B3FF" />
 
                     <LinearLayout
                         android:layout_width="wrap_content"
@@ -1010,7 +964,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/mod_menu_hud_editor"
-                            android:textColor="#EDF6FF"
+                            android:textColor="#CECFD2"
                             android:textSize="13sp"
                             android:textStyle="bold" />
 
@@ -1019,7 +973,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:text="@string/hud_editor_drag_hint"
-                            android:textColor="#7BE4FF"
+                            android:textColor="#80B3FF"
                             android:textSize="11sp" />
 
                     </LinearLayout>
@@ -1034,7 +988,7 @@
                     android:contentDescription="@string/save"
                     android:padding="8dp"
                     android:src="@drawable/ic_check"
-                    android:tint="#7BE4FF" />
+                    android:tint="#80B3FF" />
 
                 <ImageButton
                     android:id="@+id/btn_hud_reset"
@@ -1055,7 +1009,7 @@
                     android:contentDescription="@string/cancel"
                     android:padding="8dp"
                     android:src="@drawable/ic_close"
-                    android:tint="#EDF6FF" />
+                    android:tint="#CECFD2" />
 
             </LinearLayout>
 
@@ -1071,7 +1025,7 @@
                     android:layout_width="82dp"
                     android:layout_height="wrap_content"
                     android:text="@string/overlay_button_size"
-                    android:textColor="#7BE4FF"
+                    android:textColor="#80B3FF"
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
@@ -1083,8 +1037,8 @@
                     android:max="100"
                     android:min="20"
                     android:progress="56"
-                    android:progressTint="#55AAFF"
-                    android:thumbTint="#7BE4FF" />
+                    android:progressTint="#80B3FF"
+                    android:thumbTint="#80B3FF" />
 
             </LinearLayout>
 
