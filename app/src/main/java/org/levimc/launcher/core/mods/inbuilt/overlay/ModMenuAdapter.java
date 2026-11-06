@@ -8,7 +8,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.TextView;
 
@@ -187,16 +186,6 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         }
 
-        if (modHolder.icon != null) {
-            if (mod.getSource() == UnifiedMod.Source.INBUILT) {
-                modHolder.icon.setImageResource(ModIconHelper.getModIcon(mod.getId()));
-            } else {
-                modHolder.icon.setImageResource(R.drawable.ic_modules);
-            }
-            modHolder.icon.setImageTintList(null);
-            modHolder.icon.setColorFilter(null);
-        }
-
         boolean isEnabled = toggleStates.getOrDefault(mod.getStableKey(), false);
         if (modHolder.statusText instanceof Switch) {
             ((Switch) modHolder.statusText).setOnCheckedChangeListener(null);
@@ -208,9 +197,6 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             toggleMod(mod, !toggleStates.getOrDefault(mod.getStableKey(), false), modHolder);
 
         modHolder.itemView.setOnClickListener(toggleClick);
-        if (modHolder.icon != null) {
-            modHolder.icon.setOnClickListener(toggleClick);
-        }
         if (modHolder.statusText instanceof Switch) {
             ((Switch) modHolder.statusText).setOnCheckedChangeListener((btn, checked) -> {
                 if (checked != toggleStates.getOrDefault(mod.getStableKey(), false)) {
@@ -292,7 +278,6 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     private void updateCardState(ModViewHolder holder, boolean enabled) {
         holder.itemView.setAlpha(1f);
-        if (holder.icon != null) holder.icon.setAlpha(enabled ? 1f : 0.75f);
         holder.name.setTextColor(enabled ? 0xFFCECFD2 : 0xFF85888E);
 
         if (holder.itemView instanceof androidx.cardview.widget.CardView) {
@@ -359,7 +344,6 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     static class ModViewHolder extends RecyclerView.ViewHolder {
-        ImageView icon;
         TextView name;
         TextView statusText;
         TextView groupText;
@@ -369,7 +353,6 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         ModViewHolder(View itemView) {
             super(itemView);
-            icon = itemView.findViewById(R.id.mod_card_icon);
             name = itemView.findViewById(R.id.mod_card_name);
             statusText = itemView.findViewById(R.id.mod_card_status);
             groupText = itemView.findViewById(R.id.mod_card_group);

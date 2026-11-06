@@ -425,10 +425,6 @@ public class ModMenuOverlay {
         }
         
         closeBtn.setOnClickListener(v -> hide());
-        View resetBtn = overlayView.findViewById(R.id.btn_menu_reset);
-        if (resetBtn != null) {
-            resetBtn.setOnClickListener(v -> resetMenuState());
-        }
         
         // Search functionality
         searchInput.addTextChangedListener(new TextWatcher() {
