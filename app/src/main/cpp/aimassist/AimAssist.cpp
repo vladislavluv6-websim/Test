@@ -337,6 +337,17 @@ bool AimAssist::isOnTarget() const {
   return m_onTarget.load(std::memory_order_acquire);
 }
 
+void AimAssist::requestAttack() {
+  int pending = m_attackRequests.load(std::memory_order_relaxed);
+  if (pending < 4) {
+    m_attackRequests.store(pending + 1, std::memory_order_release);
+  }
+}
+
+bool AimAssist::lastAttackOk() const {
+  return m_lastAttackOk.load(std::memory_order_acquire);
+}
+
 DebugState AimAssist::getDebugState() const {
   DebugState state{};
   const Settings settings = getSettings();
@@ -438,6 +449,31 @@ void AimAssist::updateVisual(float dt) {
     m_onTarget.store(false, std::memory_order_release);
     m_triggerActor.store(nullptr, std::memory_order_release);
     m_triggerDistance.store(0.0f, std::memory_order_relaxed);
+  }
+
+  // ---------------------------------------------------------------
+  // Нативный удар. Java-сторона только просит ударить (requestAttack),
+  // сам удар выполняется здесь — в игровом потоке и на свежих данных
+  // кадра. Никаких синтетических касаний экрана.
+  // ---------------------------------------------------------------
+  if (settings.triggerBot &&
+      m_attackRequests.exchange(0, std::memory_order_acq_rel) > 0) {
+    void *target = m_triggerActor.load(std::memory_order_acquire);
+    bool ok = false;
+    if (target) {
+      bool alive = false;
+      for (void *actor : m_actors) {
+        if (actor == target) {
+          alive = true;
+          break;
+        }
+      }
+      Vec3 ignored{};
+      if (alive && m_bridge.getPosition(target, ignored)) {
+        ok = m_bridge.attackActor(target);
+      }
+    }
+    m_lastAttackOk.store(ok, std::memory_order_release);
   }
 
   if (!m_enabled.load(std::memory_order_acquire)) {

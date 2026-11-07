@@ -179,6 +179,24 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeIsOnTarg
   return aimbot::AimAssist::instance().isOnTarget() ? JNI_TRUE : JNI_FALSE;
 }
 
+// Нативный удар по цели триггера (GameMode::attack через vtable игры).
+// Возвращает true, если удар поставлен в очередь на игровой поток.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeAttack(
+    JNIEnv *, jclass) {
+  aimbot::AimAssist &assist = aimbot::AimAssist::instance();
+  if (!assist.isOnTarget()) return JNI_FALSE;
+  assist.requestAttack();
+  return JNI_TRUE;
+}
+
+// Результат последнего исполненного удара (диагностика).
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeLastAttackOk(
+    JNIEnv *, jclass) {
+  return aimbot::AimAssist::instance().lastAttackOk() ? JNI_TRUE : JNI_FALSE;
+}
+
 // Дополнительные точки входа для input-слоя клиента.
 extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTouchActive(

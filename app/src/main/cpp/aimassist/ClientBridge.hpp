@@ -74,6 +74,15 @@ public:
   int getActorType(void *actor) const;
   uint64_t getActorFlags(void *actor) const;
 
+  // GameMode локального игрока (клиентский режим игры).
+  // Берётся из ClientInstance (+0xA08) и валидируется по mPlayer.
+  void *getGameMode() const;
+
+  // Нативный удар по актёру: GameMode::attack(Actor&) через vtable объекта.
+  // Ничего не эмулирует на экране, отправляет штатную
+  // ItemUseOnActorInventoryTransaction. Только из игрового потока.
+  bool attackActor(void *actor) const;
+
   // Заполняет vector без per-frame аллокаций: capacity сохраняется между кадрами.
   void fillNearbyActors(void *player, float range, std::vector<void *> &out) const;
 

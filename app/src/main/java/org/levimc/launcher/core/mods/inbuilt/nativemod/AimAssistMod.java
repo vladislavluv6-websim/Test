@@ -152,6 +152,21 @@ public final class AimAssistMod {
         return initialized && nativeIsOnTarget();
     }
 
+    /**
+     * Нативный удар по цели триггера: игра получает штатную
+     * ItemUseOnActorInventoryTransaction (GameMode::attack) — без
+     * синтетических касаний экрана. Возвращает true, если удар поставлен
+     * в очередь на игровой поток.
+     */
+    public static boolean attack() {
+        return initialized && nativeAttack();
+    }
+
+    /** Результат последнего исполненного нативного удара. */
+    public static boolean lastAttackOk() {
+        return initialized && nativeLastAttackOk();
+    }
+
     public static boolean isEnabled() {
         return initialized && nativeIsEnabled();
     }
@@ -199,6 +214,8 @@ public final class AimAssistMod {
     private static native void nativeSetReactionDelay(int baseMs, int jitterMs);
     private static native void nativeSetAimTremor(float degrees);
     private static native boolean nativeIsOnTarget();
+    private static native boolean nativeAttack();
+    private static native boolean nativeLastAttackOk();
     private static native void nativeSetTouchActive(boolean active);
     private static native void nativeNotifyCameraLook();
     private static native void nativeSetActivationHeld(boolean held);

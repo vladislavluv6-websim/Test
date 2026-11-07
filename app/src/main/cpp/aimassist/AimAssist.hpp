@@ -171,6 +171,13 @@ public:
   void setActivationHeld(bool held);
   bool isOnTarget() const;
 
+  // Запрос нативного удара по текущей цели триггера. Потокобезопасно:
+  // Java-сторона только ставит флаг, сам удар выполняется в игровом потоке
+  // на ближайшем кадре (см. updateVisual). Синтетических касаний экрана нет.
+  void requestAttack();
+  // Результат последнего исполненного удара.
+  bool lastAttackOk() const;
+
   Settings getSettings() const;
   void setSettings(const Settings &settings);
   DebugState getDebugState() const;
@@ -219,6 +226,10 @@ private:
   // Цель под прицелом (ray-vs-hitbox), независимая от aim assist.
   std::atomic<void *> m_triggerActor{nullptr};
   std::atomic<float> m_triggerDistance{0.0f};
+
+  // Нативный удар: Java ставит запрос, игровой поток исполняет.
+  std::atomic<int> m_attackRequests{0};
+  std::atomic<bool> m_lastAttackOk{false};
 
   // Троттлинг диагностического лога (1 запись в секунду).
   int64_t m_lastTriggerLogMs = 0;

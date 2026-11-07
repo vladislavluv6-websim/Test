@@ -61,6 +61,61 @@ std::mutex g_initMutex;
 
 std::chrono::steady_clock::time_point g_lastFrame{};
 std::atomic<ClientBridge::MovePacketSender> g_movePacketSender{nullptr};
+
+// --- GameMode -------------------------------------------------------------
+// Указатель на GameMode кешируется: он живёт столько же, сколько сессия.
+// Валидность проверяется по mPlayer каждый раз перед использованием.
+std::atomic<void *> g_gameMode{nullptr};
+std::atomic<long long> g_gameModeNextScanMs{0};
+// (gameMode, actor, bool actionIsAttack, Vec3 const *hitPoint)
+using GameModeAttackFn = bool (*)(void *gameMode, void *actor, bool arg2,
+                                  void *arg3);
+
+bool looksLikeGameMode(uintptr_t candidate, void *player, uintptr_t *vtableOut) {
+  if (!mem::isPlausiblePointer(candidate)) return false;
+
+  uintptr_t vtable = 0;
+  if (!mem::read(candidate, vtable)) return false;
+  if (!mem::isPlausiblePointer(vtable) ||
+      !mem::isGameAddress(reinterpret_cast<void *>(vtable))) {
+    return false;
+  }
+
+  uintptr_t actor = 0;
+  if (!mem::read(candidate + offsets::kGameModePlayer, actor)) return false;
+  if (reinterpret_cast<void *>(actor) != player) return false;
+
+  uintptr_t attack = 0;
+  if (!mem::read(vtable + offsets::kGameModeAttackSlot * sizeof(void *),
+                 attack)) {
+    return false;
+  }
+  if (!mem::isPlausiblePointer(attack) ||
+      !mem::isGameAddress(reinterpret_cast<void *>(attack))) {
+    return false;
+  }
+
+  if (vtableOut) *vtableOut = vtable;
+  return true;
+}
+
+long long nowMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+void *tryKnownGameModeOffset(void *client, void *player) {
+  uintptr_t candidate = 0;
+  if (!mem::read(reinterpret_cast<uintptr_t>(client) +
+                     offsets::kGameModeClientOffset,
+                 candidate)) {
+    return nullptr;
+  }
+  if (!mem::isPlausiblePointer(candidate)) return nullptr;
+  if (!looksLikeGameMode(candidate, player, nullptr)) return nullptr;
+  return reinterpret_cast<void *>(candidate);
+}
 int64_t g_lastNearbyLogMs = 0;
 int64_t g_lastLocalPlayerScanMs = 0;
 bool g_loggedBadLocalPlayer = false;
@@ -594,6 +649,112 @@ void ClientBridge::sendMovePacket(void *player, float yaw, float pitch) const {
   if (sender) {
     sender(player, yaw, pitch);
   }
+}
+
+void *ClientBridge::getGameMode() const {
+  void *client = getClientInstance();
+  void *player = getLocalPlayer();
+  if (!client || !player) return nullptr;
+
+  if (void *cached = g_gameMode.load(std::memory_order_acquire)) {
+    if (looksLikeGameMode(reinterpret_cast<uintptr_t>(cached), player,
+                          nullptr)) {
+      return cached;
+    }
+    g_gameMode.store(nullptr, std::memory_order_release);
+  }
+
+  // Полный скан ClientInstance дорогой, поэтому не чаще раза в 2 секунды:
+  // указатель появляется только после входа в мир.
+  const long long now = nowMs();
+  if (now < g_gameModeNextScanMs.load(std::memory_order_relaxed)) {
+    return tryKnownGameModeOffset(client, player);
+  }
+
+  // 1. Известный оффсет (ClientInstance::_setGameMode).
+  if (void *known = tryKnownGameModeOffset(client, player)) {
+    g_gameMode.store(known, std::memory_order_release);
+    return known;
+  }
+
+  // 2. Полный скан на случай смены раскладки ClientInstance.
+  g_gameModeNextScanMs.store(now + 2000, std::memory_order_relaxed);
+  const uintptr_t base = reinterpret_cast<uintptr_t>(client);
+  for (uintptr_t off = 0; off < offsets::kGameModeClientScanBytes;
+       off += sizeof(void *)) {
+    uintptr_t candidate = 0;
+    if (!mem::read(base + off, candidate)) continue;
+    if (!mem::isPlausiblePointer(candidate)) continue;
+
+    uintptr_t vtable = 0;
+    if (!looksLikeGameMode(candidate, player, &vtable)) continue;
+
+    uintptr_t attack = 0;
+    mem::read(vtable + offsets::kGameModeAttackSlot * sizeof(void *), attack);
+    g_gameMode.store(reinterpret_cast<void *>(candidate),
+                     std::memory_order_release);
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "gamemode=%p clientOff=0x%zx vtable=%p attack=%p",
+                        reinterpret_cast<void *>(candidate),
+                        static_cast<size_t>(off),
+                        reinterpret_cast<void *>(vtable),
+                        reinterpret_cast<void *>(attack));
+    return reinterpret_cast<void *>(candidate);
+  }
+  return nullptr;
+}
+
+bool ClientBridge::attackActor(void *actor) const {
+  if (!actor) return false;
+
+  void *gameMode = getGameMode();
+  if (!gameMode) return false;
+
+  // Точка удара в мировых координатах: обёртка передаёт её в колбэк
+  // транзакции, который сам считает направление (attackPos - глаза) и
+  // нормализует. nullptr туда передавать нельзя — будет разыменование.
+  Aabb box{};
+  Vec3 hitPoint{};
+  if (getActorBounds(actor, box)) {
+    hitPoint.x = (box.min.x + box.max.x) * 0.5f;
+    hitPoint.y = (box.min.y + box.max.y) * 0.5f;
+    hitPoint.z = (box.min.z + box.max.z) * 0.5f;
+  } else if (!getPosition(actor, hitPoint)) {
+    return false;
+  }
+
+  const uintptr_t gm = reinterpret_cast<uintptr_t>(gameMode);
+  uintptr_t vtable = 0;
+  uintptr_t attackAddr = 0;
+  if (!mem::read(gm, vtable)) return false;
+  if (!mem::read(vtable + offsets::kGameModeAttackSlot * sizeof(void *),
+                 attackAddr)) {
+    return false;
+  }
+  if (!mem::isPlausiblePointer(attackAddr) ||
+      !mem::isGameAddress(reinterpret_cast<void *>(attackAddr))) {
+    // Кеш устарел (сменился мир) — сбросим и попробуем в следующий раз.
+    g_gameMode.store(nullptr, std::memory_order_release);
+    return false;
+  }
+
+  const auto attack = reinterpret_cast<GameModeAttackFn>(attackAddr);
+  // Обёртка в vtable (SurvivalMode::attack -> GameMode::attack) сама
+  // подставляет actionType = attack, поэтому w2 передаём нулём; x3 —
+  // указатель на точку удара, он копируется в колбэк и живёт до конца
+  // синхронного вызова.
+  const bool hit = attack(gameMode, actor, false, &hitPoint);
+
+  static std::atomic<int> g_attackLogs{0};
+  if (g_attackLogs.fetch_add(1, std::memory_order_relaxed) < 3) {
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "attack gm=%p fn=%p actor=%p hit=%d pos=%.2f/%.2f/%.2f",
+                        gameMode, reinterpret_cast<void *>(attackAddr), actor,
+                        hit ? 1 : 0, static_cast<double>(hitPoint.x),
+                        static_cast<double>(hitPoint.y),
+                        static_cast<double>(hitPoint.z));
+  }
+  return hit;
 }
 
 } // namespace aimbot

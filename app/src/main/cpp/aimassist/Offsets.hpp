@@ -123,6 +123,28 @@ inline constexpr int kActorTypeMob = 0x100;
 inline constexpr int kActorTypeAll = -1;
 
 // ============================================================
+// GameMode (1.26.60, ARM64)
+// ============================================================
+// GameMode::mPlayer — локальный игрок.
+inline constexpr uintptr_t kGameModePlayer = 0x8;
+// Слот GameMode::attack(Actor&) в первичной таблице виртуальных функций.
+// 1.26.60: slot 16 — тонкая обёртка (mov x3,x2 ; mov w2,#1 ; b attackImpl),
+// поэтому вызов идёт через таблицу объекта, а не по жёсткому адресу.
+inline constexpr size_t kGameModeAttackSlot = 16;
+// ClientInstance::_setGameMode кладёт указатель сюда (проверено по
+// 0x101ec9c4: "str x23, [x19, #0xa08]" в libminecraftpe 1.26.60).
+inline constexpr uintptr_t kGameModeClientOffset = 0xa08;
+// Сколько байт ClientInstance просматривать, если оффсет не совпал.
+inline constexpr uintptr_t kGameModeClientScanBytes = 0x2000;
+// --- Значения получены реверсом libminecraftpe.so 1.26.60.04_RC3 ---
+//   GameMode typeinfo: 0x13d22b68 ("?8GameMode"), vtable: 0x13d227d0
+//   SurvivalMode typeinfo: 0x13d22ba0, vtable: 0x13d22900
+//   attack thunk: GameMode 0x1009cb98, SurvivalMode 0x100a11c8
+//   attack body:  0x1009cba4 (ItemUseOnActorInventoryTransaction, 0xd0)
+//   interact(Actor&,Vec3): slot 15 -> 0x1009c5e4
+//   useItemOn(...):        slot 14 -> 0x1009f214
+
+// ============================================================
 // КОНСТАНТЫ ЦЕЛИ
 // ============================================================
 // Рост глаз игрока над низом хитбокса.

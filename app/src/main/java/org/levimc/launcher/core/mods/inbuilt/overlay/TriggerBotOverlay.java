@@ -102,9 +102,13 @@ public class TriggerBotOverlay extends BaseOverlayButton {
                 return;
             }
 
-            boolean attacked = ((MinecraftActivity) activity).performInbuiltAttack();
+            // Удар уходит нативно: GameMode::attack(Actor&) через vtable игры.
+            // Синтетических касаний экрана больше нет, поэтому раскладка
+            // управления (в т.ч. контрол «прыжок» в центре) ни на что не влияет.
+            boolean attacked = AimAssistMod.attack();
             if (diagDue) {
-                Log.i(TAG, "attack dispatched=" + attacked);
+                Log.i(TAG, "attack dispatched=" + attacked
+                        + " nativeOk=" + AimAssistMod.lastAttackOk());
             }
             if (attacked) {
                 if (skipChancePercent > 0 && random.nextInt(100) < skipChancePercent) {
