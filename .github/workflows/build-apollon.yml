@@ -18,13 +18,17 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install SDK packages
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "platforms;android-30" "build-tools;30.0.3" "ndk;21.4.7075529"
+          set -e
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SM="$(command -v sdkmanager || true)"
+          if [ -z "$SM" ]; then
+            SM="$(find "$SDK/cmdline-tools" -path '*/bin/sdkmanager' | head -n1)"
+          fi
+          echo "Using sdkmanager: $SM"
+          yes | "$SM" --licenses > /dev/null || true
+          "$SM" "platform-tools" "platforms;android-30" "build-tools;30.0.3" "ndk;21.4.7075529"
 
       - name: Build APK
         run: bash build_apk.sh
