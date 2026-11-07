@@ -43,6 +43,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     private float triggerTolerance = 0.03f;
 
     private final Runnable triggerRunnable = new Runnable() {
+        private long lastDiagAt = 0L;
+
         @Override
         public void run() {
             if (!isActive) {
@@ -52,11 +54,21 @@ public class TriggerBotOverlay extends BaseOverlayButton {
                 return;
             }
             InbuiltOverlayManager overlayManager = InbuiltOverlayManager.getInstance();
+            boolean hudOpen = PreloaderInput.isHudScreenOpen();
+            boolean pauseOpen = PreloaderInput.isPauseMenuOpen();
+            boolean showingMenu = PreloaderInput.isShowingMenu();
+            boolean modMenuShowing = overlayManager != null && overlayManager.isModMenuShowing();
+            long diagNow = SystemClock.uptimeMillis();
+            boolean diagDue = diagNow - lastDiagAt >= 1000L;
+            if (diagDue) {
+                lastDiagAt = diagNow;
+                Log.i(TAG, "loop: hudOpen=" + hudOpen + " pause=" + pauseOpen
+                        + " showingMenu=" + showingMenu + " modMenu=" + modMenuShowing
+                        + " onTarget=" + AimAssistMod.isOnTarget());
+            }
             // isHudScreenOpen() == идёт обычный геймплей (HUD-экран открыт).
             // Бьём только в геймплее и никогда — в меню/паузе/инвентаре.
-            if (!PreloaderInput.isHudScreenOpen() || PreloaderInput.isPauseMenuOpen()
-                    || PreloaderInput.isShowingMenu()
-                    || (overlayManager != null && overlayManager.isModMenuShowing())) {
+            if (!hudOpen || pauseOpen || showingMenu || modMenuShowing) {
                 // Меню клиента тоже перекрывает игру — не бьём сквозь него.
                 targetSince = 0L;
                 triggerHandler.postDelayed(this, 100L);
@@ -91,6 +103,9 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             }
 
             boolean attacked = ((MinecraftActivity) activity).performInbuiltAttack();
+            if (diagDue) {
+                Log.i(TAG, "attack dispatched=" + attacked);
+            }
             if (attacked) {
                 if (skipChancePercent > 0 && random.nextInt(100) < skipChancePercent) {
                     // Пропущенный удар: живой игрок тоже иногда не кликает.

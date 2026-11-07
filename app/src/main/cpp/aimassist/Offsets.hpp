@@ -97,6 +97,19 @@ inline constexpr uintptr_t kActorCategories = 0x220;
 // applyTurnDelta двигает именно этот компонент; читаем его каждый кадр.
 inline constexpr uintptr_t kActorRotationComponent = 0x238;
 
+// Actor -> Level*. Снято с 1.26.60.04 (RC3) из вызовов
+// Level::fetchNearbyActors: перед вызовом код делает ldr x0, [actor, #0x28].
+inline constexpr uintptr_t kActorLevel = 0x28;
+
+// Level -> указатель на AABB/границы измерения (6 float). Снято с
+// Level::fetchNearbyActors: `ldr x8, [x0, #0x230]` затем читаются
+// x8[0..5] как min/max по осям и складываются с extent.
+inline constexpr uintptr_t kLevelBounds = 0x230;
+
+// Предел сканирования полей ClientInstance при поиске LocalPlayer.
+// Реальное поле лежит ниже 0x1000; запас на будущие версии.
+inline constexpr uintptr_t kClientInstanceLevelScanLimit = 0x1400;
+
 // Если известны flags / team — заполни. 0 = фича отключена.
 inline constexpr uintptr_t kActorFlags = 0;
 inline constexpr uintptr_t kActorTeam = 0;

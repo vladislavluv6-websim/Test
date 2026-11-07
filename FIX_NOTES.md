@@ -137,3 +137,53 @@ git submodule update --init --recursive
 бить мобов, humanized-реакция, интервал и его разброс, шанс промаха,
 клавиша активации. Все значения сохраняются в prefs и применяются нативно
 через `AimAssistMod` (общие настройки триггера, Aim Assist не трогаем).
+
+## 6. TriggerBot: найдена корневая причина «вообще не бьёт»
+
+Разбор `libminecraftpe.so` 1.26.60.04_RC3 (ARM64) показал два неверных
+допущения в нативной части:
+
+1. **`Level::fetchNearbyActors` принимает `Level*`, а не `Actor*`.**
+   В `ClientBridge::appendNearbyActors` первым аргументом передавался
+   локальный игрок. По дизассемблеру функции:
+   - `x0` — `Level*` (код перед вызовом делает `ldr x0, [actor, #0x28]`);
+   - `x1` — `Vec3 const*` (полуразмеры, читаются как `ldp s1,s2,[x1]`);
+   - `x2` — маска типа (`0x100` мобы, `0x40`, `0x13f`, `-1`);
+   - `x8` — `std::vector<DistanceSortedActor>` (sret).
+   Из Actor объект уровня берётся по оффсету `+0x28`, поэтому добавлены
+   `offsets::kActorLevel = 0x28`, `offsets::kLevelBounds = 0x230`
+   (`Level+0x230` — указатель на 6 float границ) и
+   `ClientBridge::getLevel()`.
+   `DistanceSortedActor` подтверждён как 16 байт (`asr x8, x25, #4` в
+   самом `fetchNearbyActors`), `ActorVec` — `{begin, end, cap}`.
+
+2. **`ClientInstance::getLocalPlayer` резолвился не в ту функцию.**
+   Найденная по сигнатуре функция копирует `std::vector` из
+   `ClientInstance+0x240` и возвращает `bool`; её результат
+   интерпретировался как `Actor*`, то есть локальным игроком становился
+   указатель на стек. После этого `getViewAngles()`/`getEyePosition()`
+   всегда падали, `updateTrigger()` не вызывался, `isOnTarget()` был
+   вечно `false` — отсюда «не бьёт».
+   Исправления:
+   - результат сигнатуры проверяется по vtable (`dladdr` →
+     `libminecraftpe.so`), а не принимается на веру;
+   - добавлен резервный поиск `LocalPlayer` сканированием полей
+     `ClientInstance`: кандидат должен быть Actor (`isPlayer`), иметь
+     валидный `+0x28` (Level), у которого `+0x230` указывает на
+     правдоподобные границы, и читаемый `ActorRotationComponent`;
+   - `clientUpdateDetour` больше не перезаписывает кеш игрока
+     результатом ошибочной сигнатуры; при смене `ClientInstance` кеш
+     сбрасывается.
+
+3. Триггер стал щедрее к касанию: допуск `triggerBoxTolerance`
+   применяется по всем осям (X, Y, Z), а не половиной по вертикали —
+   луч, задевший хитбокс краем, уже считается попаданием.
+
+Диагностика (logcat):
+- `adb logcat -s AimAssist AimAssistBridge TriggerBot`
+- `AimAssistBridge`: `fetchNearbyActors(...)-> begin/end/cap`,
+  `local player resolved by scan: client+0xNN -> ...`
+- `AimAssist`: `trigger: player=… actors=… considered=… rejectedType=…
+  rejectedBounds=… eye=… dir=… view=… hit=… onTarget=…` (раз в секунду)
+- `TriggerBot`: `loop: hudOpen=… pause=… showingMenu=… modMenu=…
+  onTarget=…`, `attack dispatched=…`

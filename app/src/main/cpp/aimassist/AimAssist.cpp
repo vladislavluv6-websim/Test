@@ -379,10 +379,19 @@ void AimAssist::updateVisual(float dt) {
   dt = clampf(dt, 0.0f, kMaxDt);
   m_lastDt = dt;
 
+  const int64_t diagNow = nowMs();
+  const bool diagDue = diagNow - m_lastTriggerLogMs >= 1000;
+
   void *player = m_bridge.getLocalPlayer();
   if (!player) {
     m_onTarget.store(false, std::memory_order_release);
     m_triggerActor.store(nullptr, std::memory_order_release);
+    if (diagDue) {
+      m_lastTriggerLogMs = diagNow;
+      __android_log_print(ANDROID_LOG_WARN, kTag,
+                          "trigger: no local player (bridge=%d)",
+                          m_bridge.getClientInstance() ? 1 : 0);
+    }
     return;
   }
 
@@ -390,6 +399,12 @@ void AimAssist::updateVisual(float dt) {
   if (!m_bridge.getViewAngles(player, current)) {
     m_onTarget.store(false, std::memory_order_release);
     m_triggerActor.store(nullptr, std::memory_order_release);
+    if (diagDue) {
+      m_lastTriggerLogMs = diagNow;
+      __android_log_print(ANDROID_LOG_WARN, kTag,
+                          "trigger: view angles unavailable (player=%p)",
+                          player);
+    }
     return;
   }
 
@@ -787,30 +802,41 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
 
   void *bestActor = nullptr;
   float bestDistance = reach + tolerance;
+  int rejectedByType = 0;
+  int rejectedByBounds = 0;
+  int actorsConsidered = 0;
 
   for (void *actor : m_actors) {
     if (!actor || actor == player) continue;
+    ++actorsConsidered;
 
     const bool playerActor = m_bridge.isPlayer(actor);
-    if (playerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
+    if (playerActor ? !settings.targetPlayers : !settings.targetMobs) {
+      ++rejectedByType;
+      continue;
+    }
     if (settings.ignoreInvisible && isInvisible(actor)) continue;
     if (settings.teamCheck && isSameTeam(player, actor)) continue;
 
     Aabb bounds{};
-    if (!m_bridge.getActorBounds(actor, bounds)) continue;
+    if (!m_bridge.getActorBounds(actor, bounds)) {
+      ++rejectedByBounds;
+      continue;
+    }
 
-    // Допуск по горизонтали: позиция актёра интерполируется, и хитбокс
-    // может отставать от фактического положения на кадр-два.
+    // Допуск по всем осям: компенсирует интерполяцию позиции между
+    // тиками и расхождение клиент/сервер. Луч, коснувшийся хитбокса
+    // хотя бы краем, уже считается попаданием.
     bounds.min.x -= tolerance;
+    bounds.min.y -= tolerance;
     bounds.min.z -= tolerance;
     bounds.max.x += tolerance;
+    bounds.max.y += tolerance;
     bounds.max.z += tolerance;
-    bounds.min.y -= tolerance * 0.5f;
-    bounds.max.y += tolerance * 0.5f;
 
     float hit = 0.0f;
     if (!rayIntersectsAabb(eye, dir, bounds, bestDistance, hit)) continue;
-    if (hit >= bestDistance) continue;
+    if (hit > bestDistance) continue;
 
     bestDistance = hit;
     bestActor = actor;
@@ -820,6 +846,23 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   m_triggerDistance.store(bestActor ? bestDistance : 0.0f,
                           std::memory_order_relaxed);
   m_onTarget.store(bestActor != nullptr, std::memory_order_release);
+
+  // Диагностика: без неё причину «триггер молчит» не видно снаружи.
+  // Полный лог в logcat: adb logcat -s AimAssist
+  const int64_t logNow = nowMs();
+  if (logNow - m_lastTriggerLogMs >= 1000) {
+    m_lastTriggerLogMs = logNow;
+    __android_log_print(
+        ANDROID_LOG_INFO, kTag,
+        "trigger: player=%p actors=%zu considered=%d rejectedType=%d "
+        "rejectedBounds=%d eye=(%.2f,%.2f,%.2f) dir=(%.3f,%.3f,%.3f) "
+        "view=(p=%.1f y=%.1f) reach=%.2f tol=%.2f hit=%p dist=%.2f "
+        "onTarget=%d",
+        player, m_actors.size(), actorsConsidered, rejectedByType,
+        rejectedByBounds, eye.x, eye.y, eye.z, dir.x, dir.y, dir.z,
+        view.pitch, view.yaw, reach, tolerance, bestActor, bestDistance,
+        bestActor ? 1 : 0);
+  }
 }
 
 Angles AimAssist::calculateAngles(void *entity) const {
