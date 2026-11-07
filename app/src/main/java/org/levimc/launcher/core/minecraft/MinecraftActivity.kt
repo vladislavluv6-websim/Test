@@ -38,6 +38,7 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
 
     companion object {
         private const val PRELOADER_DOCUMENT_REQUEST = 0x4C50
+
         // Максимальный pointerId в Android (InputDispatcher::MAX_POINTER_ID).
         private const val MAX_POINTER_ID = 31
     }
@@ -56,8 +57,8 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
      * Реальные пальцы на экране: pointerId → последние координаты.
      * Обновляется только из dispatchTouchEvent() — синтетические события
      * идут через super.dispatchTouchEvent() и сюда не попадают.
-     * Нужно, чтобы синтетический тап (TriggerBot/AutoClicker) шёл
-     * отдельным pointer'ом и не ломал жест настоящего пальца.
+     * Нужно, чтобы синтетический тап (TriggerBot) шёл отдельным pointer'ом
+     * и не ломал жест настоящего пальца.
      */
     private val activeTouchPointers = LinkedHashMap<Int, PointF>()
     private var realGestureDownTime = 0L
@@ -448,6 +449,10 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         return super.dispatchGenericMotionEvent(event)
     }
 
+    fun dispatchTouchEventToGame(event: MotionEvent): Boolean {
+        return super.dispatchTouchEvent(event)
+    }
+
     /** Трекинг настоящих пальцев: нужен, чтобы синтетический тап не
      *  переиспользовал pointerId живого пальца (это и давало «залипание»). */
     private fun trackRealTouch(event: MotionEvent) {
@@ -500,12 +505,26 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         return result
     }
 
-    fun dispatchTouchEventToGame(event: MotionEvent): Boolean {
-        return super.dispatchTouchEvent(event)
-    }
-
     fun dispatchKeyEventToGame(event: KeyEvent): Boolean {
         return super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * Удар для TriggerBot. Сначала нажимаем экранную кнопку атаки из
+     * Pojav Controls — ровно её, без касаний игровой области, поэтому
+     * камера и остальные контролы не задеваются. Если кнопки нет, но
+     * включён нативный ввод Pojav — инжектим кнопку мыши. И только если
+     * недоступно ни то, ни другое — старый синтетический тап.
+     */
+    fun performTriggerBotAttack(): Boolean {
+        if (isFinishing || isDestroyed) return false
+        if (PojavControls.isEnabled() && PojavControls.pressAttackButton()) {
+            return true
+        }
+        if (PojavControlsMod.isEnabled()) {
+            return performNativeMouseAttack()
+        }
+        return performInbuiltAttack()
     }
 
     /**

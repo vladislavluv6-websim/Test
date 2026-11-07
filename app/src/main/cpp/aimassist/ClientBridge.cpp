@@ -61,9 +61,6 @@ std::mutex g_initMutex;
 
 std::chrono::steady_clock::time_point g_lastFrame{};
 std::atomic<ClientBridge::MovePacketSender> g_movePacketSender{nullptr};
-int64_t g_lastNearbyLogMs = 0;
-int64_t g_lastLocalPlayerScanMs = 0;
-bool g_loggedBadLocalPlayer = false;
 
 bool isPlausiblePointer(uintptr_t address) {
   return mem::isPlausiblePointer(address);
@@ -123,12 +120,12 @@ void *clientUpdateDetour(void *client, bool value) {
       g_clientUpdateOriginal ? g_clientUpdateOriginal(client, value) : nullptr;
 
   if (client) {
-    void *previousClient =
-        g_clientInstance.exchange(client, std::memory_order_acq_rel);
-    // Сменился ClientInstance (новый мир / перезапуск сессии) — кеш
-    // локального игрока больше не валиден.
-    if (previousClient != client) {
-      g_localPlayer.store(nullptr, std::memory_order_release);
+    g_clientInstance.store(client, std::memory_order_relaxed);
+    if (g_getLocalPlayer) {
+      void *localPlayer = g_getLocalPlayer(client);
+      if (localPlayer) {
+        g_localPlayer.store(localPlayer, std::memory_order_relaxed);
+      }
     }
     // ClientInstance::update вызывается в кадровом цикле.
     AimAssist::instance().onRender(frameDelta());
@@ -251,97 +248,13 @@ void *ClientBridge::getClientInstance() const {
 void *ClientBridge::getLocalPlayer() const {
   void *cached = g_localPlayer.load(std::memory_order_acquire);
   if (cached) return cached;
-
   void *client = g_clientInstance.load(std::memory_order_acquire);
-  if (!client) return nullptr;
-
-  // 1) Основной путь: сигнатура ClientInstance::getLocalPlayer.
-  if (g_getLocalPlayer) {
-    void *player = g_getLocalPlayer(client);
-    if (player) {
-      uintptr_t vtable = 0;
-      if (safeRead(reinterpret_cast<uintptr_t>(player), vtable) &&
-          mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
-        g_localPlayer.store(player, std::memory_order_release);
-        return player;
-      }
-      if (!g_loggedBadLocalPlayer) {
-        g_loggedBadLocalPlayer = true;
-        __android_log_print(ANDROID_LOG_WARN, kTag,
-                            "getLocalPlayer signature returned non-actor %p, "
-                            "falling back to ClientInstance scan",
-                            player);
-      }
-    }
+  if (!client || !g_getLocalPlayer) return nullptr;
+  void *player = g_getLocalPlayer(client);
+  if (player) {
+    g_localPlayer.store(player, std::memory_order_release);
   }
-
-  // Сканирование ClientInstance дорогое: не чаще раза в 500 мс.
-  const int64_t scanNow =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count();
-  if (scanNow - g_lastLocalPlayerScanMs < 500) return nullptr;
-  g_lastLocalPlayerScanMs = scanNow;
-
-  // 2) Резерв: LocalPlayer лежит полем прямо в ClientInstance. Ищем
-  // указатель на Actor, у которого Actor::mLevel (+0x28) валиден и у
-  // объекта уровня на +0x230 лежит правдоподобная позиция (Vec3).
-  // ClientInstance хранит только локального игрока, поэтому результат
-  // однозначен.
-  for (uintptr_t off = 0x8; off <= offsets::kClientInstanceLevelScanLimit;
-       off += sizeof(uintptr_t)) {
-    uintptr_t candidate = 0;
-    if (!safeRead(reinterpret_cast<uintptr_t>(client) + off, candidate) ||
-        !isPlausiblePointer(candidate)) {
-      continue;
-    }
-    void *actor = reinterpret_cast<void *>(candidate);
-    uintptr_t level = 0;
-    if (!safeRead(candidate + offsets::kActorLevel, level) ||
-        !isPlausiblePointer(level)) {
-      continue;
-    }
-    // Level+0x230 — указатель на AABB/границы измерения (6 float:
-    // minX,minY,minZ,maxX,maxY,maxZ), а не сам Vec3.
-    uintptr_t levelBounds = 0;
-    if (!safeRead(level + offsets::kLevelBounds, levelBounds) ||
-        !isPlausiblePointer(levelBounds)) {
-      continue;
-    }
-    float bounds[6]{};
-    if (!safeRead(levelBounds, bounds)) continue;
-    bool finite = true;
-    for (float value : bounds) {
-      if (!std::isfinite(value) || std::fabs(value) > 3.0e7f) {
-        finite = false;
-        break;
-      }
-    }
-    if (!finite) continue;
-    if (g_actorIsPlayer && !g_actorIsPlayer(actor)) continue;
-    Rotation playerRotation{};
-    if (!readRotationComponent(actor, playerRotation)) continue;
-
-    g_localPlayer.store(actor, std::memory_order_release);
-    __android_log_print(ANDROID_LOG_INFO, kTag,
-                        "local player resolved by scan: client+0x%zx -> %p "
-                        "(level=%p)",
-                        static_cast<size_t>(off), actor,
-                        reinterpret_cast<void *>(level));
-    return actor;
-  }
-  return nullptr;
-}
-
-void *ClientBridge::getLevel(void *actor) const {
-  if (!actor) return nullptr;
-  uintptr_t level = 0;
-  if (!safeRead(reinterpret_cast<uintptr_t>(actor) + offsets::kActorLevel,
-                level) ||
-      !isPlausiblePointer(level)) {
-    return nullptr;
-  }
-  return reinterpret_cast<void *>(level);
+  return player;
 }
 
 bool ClientBridge::getViewAngles(void *player, ViewAngles &out) const {
@@ -418,34 +331,9 @@ void ClientBridge::appendNearbyActors(void *player, const Vec3 &extent,
                                       std::vector<void *> &out) const {
   if (!player || !g_fetchNearbyActors) return;
 
-  // Level::fetchNearbyActors принимает Level* первым аргументом (x0) —
-  // не Actor*. Снято с 1.26.60.04 RC3: перед вызовом код делает
-  // `ldr x0, [actor, #0x28]`, а `w2` — маска типа (0x100 / 0x40 / -1).
-  void *level = getLevel(player);
-  if (!level) {
-    __android_log_print(ANDROID_LOG_WARN, kTag,
-                        "fetchNearbyActors: no Level for player %p", player);
-    return;
-  }
-
-  const ActorVec actors =
-      g_fetchNearbyActors(level, &extent, actorType);
+  const ActorVec actors = g_fetchNearbyActors(player, &extent, actorType);
   const auto begin = reinterpret_cast<uintptr_t>(actors.begin);
   const auto end = reinterpret_cast<uintptr_t>(actors.end);
-  const int64_t diagNow =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count();
-  if (diagNow - g_lastNearbyLogMs >= 1000) {
-    g_lastNearbyLogMs = diagNow;
-    __android_log_print(ANDROID_LOG_INFO, kTag,
-                        "fetchNearbyActors(type=%d extent=%.1f) -> "
-                        "begin=%p end=%p cap=%p",
-                        actorType, extent.x,
-                        static_cast<void *>(actors.begin),
-                        static_cast<void *>(actors.end),
-                        static_cast<void *>(actors.cap));
-  }
   if (!isPlausiblePointer(begin) || !isPlausiblePointer(end) || end <= begin) {
     return;
   }

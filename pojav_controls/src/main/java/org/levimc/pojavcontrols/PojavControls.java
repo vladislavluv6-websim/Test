@@ -37,6 +37,18 @@ public final class PojavControls {
         return overlay != null && overlay.isAttachedToWindow();
     }
 
+    /**
+     * Нажимает экранную кнопку атаки (primary mouse) текущего профиля.
+     * Нажатие идёт теми же MotionEvent, что приходят от пальца, поэтому
+     * обработка не отличается от ручного тапа по кнопке, а игровая область
+     * экрана не затрагивается вовсе.
+     *
+     * @return true, если кнопка атаки найдена и нажата.
+     */
+    public static synchronized boolean pressAttackButton() {
+        return overlay != null && overlay.pressAttackButton();
+    }
+
     public static void launchEditor(Activity activity) {
         activity.runOnUiThread(() -> showEditor(activity));
     }

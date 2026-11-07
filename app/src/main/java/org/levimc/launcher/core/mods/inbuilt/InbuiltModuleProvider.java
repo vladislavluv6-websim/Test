@@ -61,7 +61,6 @@ public final class InbuiltModuleProvider {
     private static final String CFG_TRIGGER_BOT_INTERVAL = "trigger_bot_interval";
     private static final String CFG_TRIGGER_BOT_INTERVAL_JITTER = "trigger_bot_interval_jitter";
     private static final String CFG_TRIGGER_BOT_SKIP_CHANCE = "trigger_bot_skip_chance";
-    private static final String CFG_AUTO_CLICKER_CPS = "auto_clicker_cps";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
     private static final String CFG_ZOOM_TRANSITION = "zoom_transition";
@@ -111,9 +110,6 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.TRIGGER_BOT,
                 R.string.inbuilt_mod_trigger_bot, R.string.inbuilt_mod_trigger_bot_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.AUTO_CLICKER,
-                R.string.inbuilt_mod_auto_clicker, R.string.inbuilt_mod_auto_clicker_desc,
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.CHICK_PET,
                 R.string.inbuilt_mod_chick_pet, R.string.inbuilt_mod_chick_pet_desc,
@@ -536,12 +532,6 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.COLOR,
                     formatColor(manager.getEspMobColor()), "", "",
                     formatColor(manager.getEspMobColor())));
-        } else if (ModIds.AUTO_CLICKER.equals(modId)) {
-            configs.add(config(CFG_AUTO_CLICKER_CPS,
-                    context.getString(R.string.mod_config_auto_clicker_cps),
-                    UnifiedMod.ConfigType.SLIDER_INT,
-                    "10", "1", "20",
-                    String.valueOf(manager.getAutoClickerCps())));
         } else if (ModIds.TRIGGER_BOT.equals(modId)) {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
@@ -817,9 +807,6 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_TRIGGER_BOT_SKIP_CHANCE:
                 manager.setTriggerBotSkipChance(parseInt(value, manager.getTriggerBotSkipChance()));
-                break;
-            case CFG_AUTO_CLICKER_CPS:
-                manager.setAutoClickerCps(parseInt(value, manager.getAutoClickerCps()));
                 break;
             case CFG_CURSOR_SENSITIVITY:
                 manager.setCursorSensitivity(parseInt(value, manager.getCursorSensitivity()));

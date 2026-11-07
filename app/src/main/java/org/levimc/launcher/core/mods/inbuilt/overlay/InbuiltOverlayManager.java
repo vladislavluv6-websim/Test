@@ -31,7 +31,6 @@ public class InbuiltOverlayManager {
     private static final String[] KEYBIND_MOD_IDS = {
             ModIds.QUICK_DROP, ModIds.CAMERA_PERSPECTIVE, ModIds.TOGGLE_HUD,
             ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.TRIGGER_BOT,
-            ModIds.AUTO_CLICKER,
             ModIds.ESP, ModIds.ZOOM, ModIds.FPS_DISPLAY,
             ModIds.CPS_DISPLAY,
             ModIds.SNAPLOOK, ModIds.VIRTUAL_CURSOR, ModIds.GYRO,
@@ -169,7 +168,6 @@ public class InbuiltOverlayManager {
         modActiveStates.put(ModIds.SPEED, false);
         modActiveStates.put(ModIds.AIM_ASSIST, false);
         modActiveStates.put(ModIds.TRIGGER_BOT, false);
-        modActiveStates.put(ModIds.AUTO_CLICKER, false);
         modActiveStates.put(ModIds.ESP, false);
         modActiveStates.put(ModIds.CHICK_PET, false);
         modActiveStates.put(ModIds.ZOOM, false);
@@ -189,7 +187,6 @@ public class InbuiltOverlayManager {
         modPositionMap.put(ModIds.SPEED, nextY + SPACING * 5);
         modPositionMap.put(ModIds.AIM_ASSIST, nextY + SPACING * 6);
         modPositionMap.put(ModIds.TRIGGER_BOT, nextY + SPACING * 12);
-        modPositionMap.put(ModIds.AUTO_CLICKER, nextY + SPACING * 13);
         modPositionMap.put(ModIds.ESP, nextY + SPACING * 6 + 60);
         modPositionMap.put(ModIds.ZOOM, nextY + SPACING * 6);
         modPositionMap.put(ModIds.FPS_DISPLAY, nextY + SPACING * 7);
@@ -215,7 +212,6 @@ public class InbuiltOverlayManager {
         restorePersistedInbuiltModState(manager, ModIds.SPEED);
         restorePersistedInbuiltModState(manager, ModIds.AIM_ASSIST);
         restorePersistedInbuiltModState(manager, ModIds.TRIGGER_BOT);
-        restorePersistedInbuiltModState(manager, ModIds.AUTO_CLICKER);
         restorePersistedInbuiltModState(manager, ModIds.ESP);
         restorePersistedInbuiltModState(manager, ModIds.CHICK_PET);
         restorePersistedInbuiltModState(manager, ModIds.ZOOM);
@@ -278,7 +274,6 @@ public class InbuiltOverlayManager {
             case ModIds.AIM_ASSIST: controller = new AimAssistOverlay(activity); break;
             case ModIds.ESP: controller = new EspOverlay(activity); break;
             case ModIds.TRIGGER_BOT: controller = new TriggerBotOverlay(activity); break;
-            case ModIds.AUTO_CLICKER: controller = new AutoClickerOverlay(activity); break;
             case ModIds.VIRTUAL_CURSOR: controller = new VirtualCursorOverlay(activity); break;
             case ModIds.ZOOM:
                 if (zoomOverlay == null) zoomOverlay = new ZoomOverlay(activity);
@@ -354,12 +349,6 @@ public class InbuiltOverlayManager {
                 triggerBot.show(savedX, savedY);
                 overlays.add(triggerBot);
                 modOverlayMap.put(modId, triggerBot);
-                break;
-            case ModIds.AUTO_CLICKER:
-                AutoClickerOverlay autoClicker = (AutoClickerOverlay) getKeybindController(ModIds.AUTO_CLICKER);
-                autoClicker.show(savedX, savedY);
-                overlays.add(autoClicker);
-                modOverlayMap.put(modId, autoClicker);
                 break;
             case ModIds.ESP:
                 EspOverlay esp = (EspOverlay) getKeybindController(ModIds.ESP);
@@ -511,11 +500,6 @@ public class InbuiltOverlayManager {
 
         if (modId.equals(ModIds.TRIGGER_BOT)) {
             BaseOverlayButton controller = keybindControllers.get(ModIds.TRIGGER_BOT);
-            if (controller != null) controller.hide();
-        }
-
-        if (modId.equals(ModIds.AUTO_CLICKER)) {
-            BaseOverlayButton controller = keybindControllers.get(ModIds.AUTO_CLICKER);
             if (controller != null) controller.hide();
         }
 

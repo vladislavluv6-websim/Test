@@ -45,10 +45,6 @@ public:
 
   void *getLocalPlayer() const;
 
-  // Level* из Actor (Actor::mLevel, оффсет kActorLevel). Нужен для
-  // Level::fetchNearbyActors — её первый аргумент именно Level, а не Actor.
-  void *getLevel(void *actor) const;
-
   // Текущий view из ActorRotationComponent: {pitch, yaw}.
   bool getViewAngles(void *player, ViewAngles &out) const;
 

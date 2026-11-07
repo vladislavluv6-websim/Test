@@ -1291,7 +1291,6 @@ public class ModMenuOverlay {
         switch (id) {
             case "aim_assist":
             case "trigger_bot":
-            case "auto_clicker":
                 return "combat";
             case "esp":
             case "toggle_hud":

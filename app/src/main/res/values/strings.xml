@@ -666,8 +666,6 @@
     <string name="esp_mod_unavailable">ESP is unavailable for this game version</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players and mobs under the crosshair</string>
-    <string name="inbuilt_mod_auto_clicker">AutoClicker</string>
-    <string name="inbuilt_mod_auto_clicker_desc">Attacks continuously while enabled (no target needed)</string>
     <string name="mod_config_aim_assist_range">Aim range (blocks)</string>
     <string name="mod_config_aim_assist_strength">Aim strength (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized aim (slower, smoother, less detectable)</string>
@@ -697,7 +695,6 @@
     <string name="mod_config_trigger_bot_interval">Attack interval (ms)</string>
     <string name="mod_config_trigger_bot_interval_jitter">Attack interval randomness (ms)</string>
     <string name="mod_config_trigger_bot_skip_chance">Miss chance (%)</string>
-    <string name="mod_config_auto_clicker_cps">Clicks per second (CPS)</string>
     <string name="aim_assist_mod_unavailable">Aim assist is unavailable for this game version</string>
     <string name="inbuilt_mod_chick_pet">Chick Pet</string>
     <string name="inbuilt_mod_chick_pet_desc">A cute pixelated chick that walks around, sleeps, and runs when touched!</string>

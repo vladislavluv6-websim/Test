@@ -220,9 +220,6 @@ private:
   std::atomic<void *> m_triggerActor{nullptr};
   std::atomic<float> m_triggerDistance{0.0f};
 
-  // Троттлинг диагностического лога (1 запись в секунду).
-  int64_t m_lastTriggerLogMs = 0;
-
   bool m_hasLocal = false;
 
   Target m_target;

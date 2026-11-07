@@ -138,52 +138,68 @@ git submodule update --init --recursive
 клавиша активации. Все значения сохраняются в prefs и применяются нативно
 через `AimAssistMod` (общие настройки триггера, Aim Assist не трогаем).
 
-## 6. TriggerBot: найдена корневая причина «вообще не бьёт»
+## 5. «Экран зажимается» и удар TriggerBot не доходит (корневая причина)
 
-Разбор `libminecraftpe.so` 1.26.60.04_RC3 (ARM64) показал два неверных
-допущения в нативной части:
+Обе проблемы — один и тот же баг в `MinecraftActivity` (Kotlin).
 
-1. **`Level::fetchNearbyActors` принимает `Level*`, а не `Actor*`.**
-   В `ClientBridge::appendNearbyActors` первым аргументом передавался
-   локальный игрок. По дизассемблеру функции:
-   - `x0` — `Level*` (код перед вызовом делает `ldr x0, [actor, #0x28]`);
-   - `x1` — `Vec3 const*` (полуразмеры, читаются как `ldp s1,s2,[x1]`);
-   - `x2` — маска типа (`0x100` мобы, `0x40`, `0x13f`, `-1`);
-   - `x8` — `std::vector<DistanceSortedActor>` (sret).
-   Из Actor объект уровня берётся по оффсету `+0x28`, поэтому добавлены
-   `offsets::kActorLevel = 0x28`, `offsets::kLevelBounds = 0x230`
-   (`Level+0x230` — указатель на 6 float границ) и
-   `ClientBridge::getLevel()`.
-   `DistanceSortedActor` подтверждён как 16 байт (`asr x8, x25, #4` в
-   самом `fetchNearbyActors`), `ActorVec` — `{begin, end, cap}`.
+**Симптом.** Если на экране уже лежит палец (идёшь/держишь кнопку) и
+срабатывает TriggerBot, он слал синтетический тап как `ACTION_DOWN` с
+`pointerId = 0` — поверх живого жеста. Android/игра получали «второй
+DOWN» без парного UP для уже существующего pointer'а: жест ломался, и
+касание «залипало» (визуально — экран будто зажат, кнопка/камера ведут
+себя как при постоянно нажатом пальце). Параллельно синтетический удар
+при зажатом пальце часто не засчитывался, из-за чего TriggerBot
+«вообще не бил».
 
-2. **`ClientInstance::getLocalPlayer` резолвился не в ту функцию.**
-   Найденная по сигнатуре функция копирует `std::vector` из
-   `ClientInstance+0x240` и возвращает `bool`; её результат
-   интерпретировался как `Actor*`, то есть локальным игроком становился
-   указатель на стек. После этого `getViewAngles()`/`getEyePosition()`
-   всегда падали, `updateTrigger()` не вызывался, `isOnTarget()` был
-   вечно `false` — отсюда «не бьёт».
-   Исправления:
-   - результат сигнатуры проверяется по vtable (`dladdr` →
-     `libminecraftpe.so`), а не принимается на веру;
-   - добавлен резервный поиск `LocalPlayer` сканированием полей
-     `ClientInstance`: кандидат должен быть Actor (`isPlayer`), иметь
-     валидный `+0x28` (Level), у которого `+0x230` указывает на
-     правдоподобные границы, и читаемый `ActorRotationComponent`;
-   - `clientUpdateDetour` больше не перезаписывает кеш игрока
-     результатом ошибочной сигнатуры; при смене `ClientInstance` кеш
-     сбрасывается.
+**Исправление** (`MinecraftActivity.kt`):
 
-3. Триггер стал щедрее к касанию: допуск `triggerBoxTolerance`
-   применяется по всем осям (X, Y, Z), а не половиной по вертикали —
-   луч, задевший хитбокс краем, уже считается попаданием.
+* Добавлен трекинг реальных пальцев `trackRealTouch()` (вызывается первым
+  в `dispatchTouchEvent`): карта `pointerId → координаты`, `downTime`
+  живого жеста.
+* `performInbuiltAttack()` больше не переиспользует `pointerId = 0`:
+  * если пальцев нет — обычный `ACTION_DOWN`/`ACTION_UP`;
+  * если палец уже на экране — тап идёт **дополнительным** pointer'ом
+    (`ACTION_POINTER_DOWN`/`ACTION_POINTER_UP`) со свободным id (берём
+    `MAX_POINTER_ID = 31` и понижаем до свободного), а `downTime` берётся
+    от живого жеста — как требует Android при добавлении pointer'а.
+* `createGameTouchEvent()` переписан под произвольное число pointer'ов
+  (`action | (index << ACTION_POINTER_INDEX_SHIFT)`).
+* Флаг `syntheticTapInFlight` не даёт наслаивать тапы: пока предыдущий
+  между DOWN и UP — новый не начинается.
+* UP/MOVE пересобирают список pointer'ов заново: если реальные пальцы
+  поднялись за время удержания, синтетический остаётся один и корректно
+  завершается обычным `ACTION_UP` (не оставляет «висящий» pointer).
 
-Диагностика (logcat):
-- `adb logcat -s AimAssist AimAssistBridge TriggerBot`
-- `AimAssistBridge`: `fetchNearbyActors(...)-> begin/end/cap`,
-  `local player resolved by scan: client+0xNN -> ...`
-- `AimAssist`: `trigger: player=… actors=… considered=… rejectedType=…
-  rejectedBounds=… eye=… dir=… view=… hit=… onTarget=…` (раз в секунду)
-- `TriggerBot`: `loop: hudOpen=… pause=… showingMenu=… modMenu=…
-  onTarget=…`, `attack dispatched=…`
+## 6. TriggerBot: удар нажатием экранной кнопки атаки
+
+Предыдущая попытка «нативного» удара (вызов `GameMode::attack` через
+vtable игры) убрана из дерева полностью: она трогала внутренности
+`libminecraftpe` и несла риск задеть остальные модули. Теперь удар идёт
+через уже существующую кнопку атаки на экране.
+
+**Как работает:**
+
+* `PojavControls.pressAttackButton()` находит в текущем профиле контрол с
+  `ControlData.SPECIALBTN_MOUSEPRI` — это штатная кнопка атаки (в дефолтном
+  профиле она называется `PRI`), включая кнопки внутри drawer'ов.
+* `PojavControlOverlay.RuntimeButton.tapForTriggerBot()` нажимает её
+  `dispatchTouchEvent(ACTION_DOWN)` и через 60 мс отпускает
+  `ACTION_UP` — те же события, что приходят от пальца, поэтому код
+  обработки не отличается от ручного тапа.
+* Игровая область экрана не получает ни одного касания: камера, ходьба и
+  остальные контролы не задеты. Отпускание гарантировано (в т.ч. через
+  `release()` при скрытии HUD/смене профиля), поэтому ничего не залипает.
+* Если пальца на кнопке уже держится (`pressed == true`), повторный DOWN
+  не отправляется — иначе сломался бы живой жест.
+* `MinecraftActivity.performTriggerBotAttack()` — порядок выбора:
+  1. кнопка атаки из Pojav Controls (`PojavControls.pressAttackButton()`);
+  2. нативная инъекция кнопки мыши (`PojavControlsMod`), если кнопки в
+     профиле нет;
+  3. старый синтетический тап (`performInbuiltAttack()`), если Pojav
+     Controls выключены.
+* `TriggerBotOverlay` вызывает `performTriggerBotAttack()` вместо
+  `performInbuiltAttack()`.
+
+**Проверка:** включить TriggerBot, подойти к мобу/игроку так, чтобы прицел
+попал в хитбокс, и убедиться, что удары идут, а камера не «зажата»
+(`adb logcat -s TriggerBot AimAssist`).

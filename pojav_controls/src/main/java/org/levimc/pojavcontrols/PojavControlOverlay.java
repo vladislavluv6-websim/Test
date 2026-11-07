@@ -106,6 +106,19 @@ final class PojavControlOverlay extends ViewGroup {
         }
     }
 
+    /**
+     * Нажимает кнопку атаки (SPECIALBTN_MOUSEPRI) из текущего профиля.
+     * Используется TriggerBot: удар уходит ровно в кнопку, а не тапом по
+     * центру экрана, поэтому камера/прочие контролы не задеваются.
+     */
+    boolean pressAttackButton() {
+        for (RuntimeButton button : buttons) {
+            if (!button.isAttackButton()) continue;
+            if (button.tapForTriggerBot()) return true;
+        }
+        return false;
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
@@ -560,6 +573,8 @@ final class PojavControlOverlay extends ViewGroup {
     }
 
     private static final class RuntimeButton extends TextView {
+        // Длительность нажатия кнопки атаки для TriggerBot (мс).
+        private static final long TAP_HOLD_MS = 60L;
         final ControlData data;
         private final PojavControlsHost host;
         private final SpecialActionHandler specialHandler;
@@ -659,6 +674,41 @@ final class PojavControlOverlay extends ViewGroup {
         @Override
         public boolean performClick() {
             super.performClick();
+            return true;
+        }
+
+        boolean isAttackButton() {
+            return data.primaryKeycode() == ControlData.SPECIALBTN_MOUSEPRI;
+        }
+
+        /**
+         * Нажатие «как пальцем»: dispatchTouchEvent с теми же MotionEvent,
+         * что приходят в onTouchEvent от реального касания. Ни игровая
+         * область, ни другие контролы при этом не затрагиваются, а
+         * отпускание гарантировано, поэтому ничего не «залипает».
+         */
+        boolean tapForTriggerBot() {
+            // Палец уже держит кнопку — второй DOWN только сломает жест.
+            if (pressed) return true;
+            // Кнопка ещё не разложена (скрытый HUD/меню) — нажать нельзя.
+            if (getWidth() <= 0 || getHeight() <= 0) return false;
+
+            final float x = getWidth() * 0.5f;
+            final float y = getHeight() * 0.5f;
+            final long downTime = SystemClock.uptimeMillis();
+
+            MotionEvent down = MotionEvent.obtain(downTime, downTime,
+                    MotionEvent.ACTION_DOWN, x, y, 0);
+            dispatchTouchEvent(down);
+            down.recycle();
+
+            postDelayed(() -> {
+                long when = SystemClock.uptimeMillis();
+                MotionEvent up = MotionEvent.obtain(downTime, when,
+                        MotionEvent.ACTION_UP, x, y, 0);
+                dispatchTouchEvent(up);
+                up.recycle();
+            }, TAP_HOLD_MS);
             return true;
         }
 
