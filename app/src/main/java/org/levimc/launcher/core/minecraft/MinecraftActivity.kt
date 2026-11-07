@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.AssetManager
 import android.graphics.Color
+import android.graphics.PointF
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.OpenableColumns
@@ -48,6 +49,20 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
     private var preloaderTextInput: PreloaderTextInput? = null
     private var previousInputFocus: View? = null
     private var inbuiltKeyDispatchDepth = 0
+
+    /**
+     * Реальные пальцы на экране: pointerId → последние координаты.
+     * Обновляется только из dispatchTouchEvent() — синтетические события
+     * идут через super.dispatchTouchEvent() и сюда не попадают.
+     * Нужно, чтобы синтетический тап (TriggerBot/AutoClicker) шёл
+     * отдельным pointer'ом и не ломал жест настоящего пальца.
+     */
+    private val activeTouchPointers = LinkedHashMap<Int, PointF>()
+    private var realGestureDownTime = 0L
+
+    /** true, пока синтетический тап между DOWN и UP — тапы не наслаиваются. */
+    @Volatile
+    private var syntheticTapInFlight = false
 
     /** id реального тачскрина: с deviceId 0 игра может отбросить событие. */
     private val touchDeviceId: Int by lazy {
@@ -388,6 +403,7 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        trackRealTouch(event)
         if (shouldConsumeMouseMotion(event)) {
             return true
         }
@@ -430,6 +446,58 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         return super.dispatchGenericMotionEvent(event)
     }
 
+    /** Трекинг настоящих пальцев: нужен, чтобы синтетический тап не
+     *  переиспользовал pointerId живого пальца (это и давало «залипание»). */
+    private fun trackRealTouch(event: MotionEvent) {
+        if ((event.source and InputDevice.SOURCE_TOUCHSCREEN) != InputDevice.SOURCE_TOUCHSCREEN) return
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                activeTouchPointers.clear()
+                realGestureDownTime = event.downTime
+                val index = event.actionIndex
+                activeTouchPointers[event.getPointerId(index)] =
+                    PointF(event.getX(index), event.getY(index))
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                val index = event.actionIndex
+                activeTouchPointers[event.getPointerId(index)] =
+                    PointF(event.getX(index), event.getY(index))
+            }
+            MotionEvent.ACTION_MOVE -> {
+                for (index in 0 until event.pointerCount) {
+                    val id = event.getPointerId(index)
+                    activeTouchPointers[id]?.set(event.getX(index), event.getY(index))
+                }
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                activeTouchPointers.remove(event.getPointerId(event.actionIndex))
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                activeTouchPointers.clear()
+                realGestureDownTime = 0L
+            }
+        }
+    }
+
+    private fun snapshotRealPointers(): List<Triple<Int, Float, Float>> {
+        val result = ArrayList<Triple<Int, Float, Float>>(activeTouchPointers.size)
+        for ((id, pos) in activeTouchPointers) {
+            result.add(Triple(id, pos.x, pos.y))
+        }
+        return result
+    }
+
+    /** Текущие реальные пальцы + синтетический pointer последним в списке. */
+    private fun pointersWithSynthetic(
+        syntheticId: Int,
+        syntheticX: Float,
+        syntheticY: Float
+    ): List<Triple<Int, Float, Float>> {
+        val result = snapshotRealPointers()
+        result.add(Triple(syntheticId, syntheticX, syntheticY))
+        return result
+    }
+
     fun dispatchTouchEventToGame(event: MotionEvent): Boolean {
         return super.dispatchTouchEvent(event)
     }
@@ -442,6 +510,11 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
      * Тап по центру экрана, отправленный в штатный onTouchEvent Minecraft.
      * Урон, анимация руки и пакет атаки формируются самим клиентом — для
      * сервера это обычное нажатие, а не синтезированный пакет.
+     *
+     * Если игрок держит палец на экране, тап идёт как ДОПОЛНИТЕЛЬНЫЙ
+     * pointer (ACTION_POINTER_DOWN/UP) со свободным pointerId. Раньше тап
+     * всегда слал ACTION_DOWN с id 0: при зажатом настоящем пальце это
+     * ломало жест, и касания «залипали» до следующего чистого DOWN.
      */
     fun performInbuiltAttack(): Boolean {
         if (!::gameManager.isInitialized) return false
@@ -461,9 +534,35 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         if (width <= 0 || height <= 0) return false
         val x = width / 2f
         val y = height / 2f
-        val downTime = SystemClock.uptimeMillis()
 
-        val down = createGameTouchEvent(downTime, downTime, MotionEvent.ACTION_DOWN, x, y)
+        // Не наслаиваем синтетические тапы: предыдущий ещё между DOWN и UP.
+        if (syntheticTapInFlight) return false
+
+        val realAtDown = snapshotRealPointers()
+        val usedIds = HashSet<Int>(realAtDown.size)
+        for (pointer in realAtDown) usedIds.add(pointer.first)
+        // Берём заведомо высокий свободный pointerId: система выдаёт
+        // реальным пальцам id по возрастанию от 0, поэтому 31 с ними
+        // не пересечётся (MAX_POINTER_ID = 31).
+        var syntheticId = MotionEvent.MAX_POINTER_ID
+        while (syntheticId in usedIds && syntheticId > 0) syntheticId--
+
+        val multi = realAtDown.isNotEmpty()
+        // При добавлении pointer'а к живому жесту Android ждёт downTime
+        // исходного жеста, а не текущее время.
+        val downTime = if (multi && realGestureDownTime > 0) {
+            realGestureDownTime
+        } else {
+            SystemClock.uptimeMillis()
+        }
+
+        val downPointers = ArrayList(realAtDown)
+        downPointers.add(Triple(syntheticId, x, y))
+        val downAction = if (multi) MotionEvent.ACTION_POINTER_DOWN else MotionEvent.ACTION_DOWN
+        val downIndex = if (multi) downPointers.size - 1 else 0
+        val down = createGameTouchEvent(
+            downTime, SystemClock.uptimeMillis(), downAction, downPointers, downIndex
+        )
         val handled = try {
             dispatchTouchEventToGame(down)
         } catch (throwable: Throwable) {
@@ -472,13 +571,15 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
             down.recycle()
         }
         if (!handled) return false
+        syntheticTapInFlight = true
 
         // Небольшой MOVE между DOWN и UP: некоторые gesture-детекторы
         // игнорируют идеально статичный тап, а с ним жест точно склеится.
         decor.postDelayed({
             if (isFinishing || isDestroyed) return@postDelayed
             val move = createGameTouchEvent(
-                downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, x + 0.5f, y + 0.5f
+                downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE,
+                pointersWithSynthetic(syntheticId, x + 0.5f, y + 0.5f), 0
             )
             try {
                 dispatchTouchEventToGame(move)
@@ -491,9 +592,17 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         // Длительность нажатия в человеческом диапазоне: 45-90 мс.
         val holdMs = 45L + kotlin.random.Random.nextInt(46).toLong()
         decor.postDelayed({
+            syntheticTapInFlight = false
             if (isFinishing || isDestroyed) return@postDelayed
+            // Список пересобираем заново: за время удержания настоящие
+            // пальцы могли подняться — тогда синтетический остаётся один
+            // и жест корректно завершается обычным ACTION_UP.
+            val upPointers = pointersWithSynthetic(syntheticId, x, y)
+            val stillMulti = upPointers.size > 1
+            val upAction = if (stillMulti) MotionEvent.ACTION_POINTER_UP else MotionEvent.ACTION_UP
+            val upIndex = if (stillMulti) upPointers.size - 1 else 0
             val up = createGameTouchEvent(
-                downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y
+                downTime, SystemClock.uptimeMillis(), upAction, upPointers, upIndex
             )
             try {
                 dispatchTouchEventToGame(up)
@@ -527,26 +636,42 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         }
     }
 
+    /**
+     * Событие касания с произвольным числом pointer'ов.
+     * [pointers] — тройки (pointerId, x, y); для ACTION_POINTER_DOWN/UP
+     * [actionIndex] — индекс добавляемого/удаляемого pointer'а в списке.
+     */
     private fun createGameTouchEvent(
         downTime: Long,
         eventTime: Long,
         action: Int,
-        x: Float,
-        y: Float
+        pointers: List<Triple<Int, Float, Float>>,
+        actionIndex: Int
     ): MotionEvent {
-        val pointer = MotionEvent.PointerProperties()
-        pointer.id = 0
-        pointer.toolType = MotionEvent.TOOL_TYPE_FINGER
+        val properties = Array(pointers.size) { MotionEvent.PointerProperties() }
+        val coords = Array(pointers.size) { MotionEvent.PointerCoords() }
+        for (index in pointers.indices) {
+            val (id, px, py) = pointers[index]
+            properties[index].id = id
+            properties[index].toolType = MotionEvent.TOOL_TYPE_FINGER
+            coords[index].x = px
+            coords[index].y = py
+            coords[index].pressure = 1.0f
+            coords[index].size = 1.0f
+        }
 
-        val coords = MotionEvent.PointerCoords()
-        coords.x = x
-        coords.y = y
-        coords.pressure = 1.0f
-        coords.size = 1.0f
+        val actionWithIndex = if (
+            action == MotionEvent.ACTION_POINTER_DOWN ||
+            action == MotionEvent.ACTION_POINTER_UP
+        ) {
+            action or (actionIndex shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+        } else {
+            action
+        }
 
         return MotionEvent.obtain(
-            downTime, eventTime, action, 1,
-            arrayOf(pointer), arrayOf(coords),
+            downTime, eventTime, actionWithIndex, pointers.size,
+            properties, coords,
             0, 0, 1.0f, 1.0f, touchDeviceId, 0,
             InputDevice.SOURCE_TOUCHSCREEN, 0
         )

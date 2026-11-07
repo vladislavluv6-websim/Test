@@ -46,6 +46,7 @@ public class InbuiltModManager {
     private static final String KEY_TRIGGER_BOT_INTERVAL = "trigger_bot_interval";
     private static final String KEY_TRIGGER_BOT_INTERVAL_JITTER = "trigger_bot_interval_jitter";
     private static final String KEY_TRIGGER_BOT_SKIP_CHANCE = "trigger_bot_skip_chance";
+    private static final String KEY_AUTO_CLICKER_CPS = "auto_clicker_cps";
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
     private static final String KEY_OVERLAY_BUTTON_SIZE_PREFIX = "overlay_button_size_";
     private static final String KEY_OVERLAY_OPACITY_PREFIX = "overlay_opacity_";
@@ -116,6 +117,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_TRIGGER_BOT_INTERVAL = 620;
     private static final int DEFAULT_TRIGGER_BOT_INTERVAL_JITTER = 170;
     private static final int DEFAULT_TRIGGER_BOT_SKIP_CHANCE = 6;
+    private static final int DEFAULT_AUTO_CLICKER_CPS = 10;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
@@ -473,12 +475,24 @@ public class InbuiltModManager {
                 Math.max(0, Math.min(50, percent))).apply();
     }
 
+    /** CPS автокликера (кликов в секунду). */
+    public int getAutoClickerCps() {
+        return Math.max(1, Math.min(20,
+                prefs.getInt(KEY_AUTO_CLICKER_CPS, DEFAULT_AUTO_CLICKER_CPS)));
+    }
+
+    public void setAutoClickerCps(int cps) {
+        prefs.edit().putInt(KEY_AUTO_CLICKER_CPS,
+                Math.max(1, Math.min(20, cps))).apply();
+    }
+
     public int getDefaultInbuiltModKeybind(String modId) {
         if (ModIds.ZOOM.equals(modId)) return KeyEvent.KEYCODE_C;
         if (ModIds.AUTO_SPRINT.equals(modId)) return KeyEvent.KEYCODE_CTRL_LEFT;
         if (ModIds.SPEED.equals(modId)) return KeyEvent.KEYCODE_V;
         if (ModIds.AIM_ASSIST.equals(modId)) return KeyEvent.KEYCODE_B;
         if (ModIds.TRIGGER_BOT.equals(modId)) return KeyEvent.KEYCODE_G;
+        if (ModIds.AUTO_CLICKER.equals(modId)) return KeyEvent.KEYCODE_J;
         if (ModIds.ESP.equals(modId)) return KeyEvent.KEYCODE_N;
         if (ModIds.SNAPLOOK.equals(modId)) return KeyEvent.KEYCODE_X;
         return KeyEvent.KEYCODE_UNKNOWN;

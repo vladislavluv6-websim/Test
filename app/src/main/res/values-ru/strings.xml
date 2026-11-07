@@ -673,6 +673,8 @@
     <string name="esp_mod_unavailable">ESP недоступен для этой версии игры</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Автоматически бьёт игроков и мобов в прицеле</string>
+    <string name="inbuilt_mod_auto_clicker">Автокликер</string>
+    <string name="inbuilt_mod_auto_clicker_desc">Бьёт непрерывно, пока включён (цель не нужна)</string>
     <string name="mod_config_aim_assist_range">Дальность наведения (блоки)</string>
     <string name="mod_config_aim_assist_strength">Сила наведения (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized-наведение (плавнее и менее заметно)</string>
@@ -702,6 +704,7 @@
     <string name="mod_config_trigger_bot_interval">Интервал ударов (мс)</string>
     <string name="mod_config_trigger_bot_interval_jitter">Разброс интервала (мс)</string>
     <string name="mod_config_trigger_bot_skip_chance">Шанс промаха (%)</string>
+    <string name="mod_config_auto_clicker_cps">Кликов в секунду (CPS)</string>
     <string name="aim_assist_mod_unavailable">Аим-ассист недоступен для этой версии игры</string>
     <string name="inbuilt_mod_chick_pet">Питомец-цыплёнок</string>
     <string name="inbuilt_mod_chick_pet_desc">Милый пиксельный цыплёнок, который гуляет, спит и убегает при касании!</string>

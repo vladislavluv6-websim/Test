@@ -9,6 +9,7 @@ public final class ModIds {
     public static final String AIM_ASSIST = "aim_assist";
     public static final String ESP = "esp";
     public static final String TRIGGER_BOT = "trigger_bot";
+    public static final String AUTO_CLICKER = "auto_clicker";
     public static final String CHICK_PET = "chick_pet";
     public static final String ZOOM = "zoom";
     public static final String FPS_DISPLAY = "fps_display";
