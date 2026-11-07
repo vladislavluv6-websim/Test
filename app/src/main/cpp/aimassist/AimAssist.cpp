@@ -64,7 +64,8 @@ bool rayIntersectsAabb(const Vec3 &origin, const Vec3 &dir, const Aabb &box,
   const float hi[3] = {box.max.x, box.max.y, box.max.z};
 
   for (int axis = 0; axis < 3; ++axis) {
-    if (std::fabs(d[axis]) < 1e-6f) {
+    if (std::fabs(d[axis]) < 1e-7f) {
+      // Луч параллелен этой оси
       if (o[axis] < lo[axis] || o[axis] > hi[axis]) return false;
       continue;
     }
@@ -78,7 +79,7 @@ bool rayIntersectsAabb(const Vec3 &origin, const Vec3 &dir, const Aabb &box,
   }
 
   hitT = tMin;
-  return tMin <= maxT;
+  return tMin >= 0.0f && tMin <= maxT;
 }
 
 
@@ -782,6 +783,18 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   }
 
   const Vec3 dir = directionFromAngles(view);
+  const float dirLength = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+  
+  // Проверка нормализации направления
+  if (dirLength < 0.9f || dirLength > 1.1f) {
+    __android_log_print(ANDROID_LOG_WARN, kTag, 
+                       "updateTrigger: abnormal direction length %.3f", dirLength);
+    m_triggerActor.store(nullptr, std::memory_order_release);
+    m_triggerDistance.store(0.0f, std::memory_order_relaxed);
+    m_onTarget.store(false, std::memory_order_release);
+    return;
+  }
+
   const float reach = clampf(settings.triggerRange, 2.0f, 5.0f);
   const float tolerance = clampf(settings.triggerBoxTolerance, 0.0f, 0.25f);
 
@@ -799,14 +812,14 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     Aabb bounds{};
     if (!m_bridge.getActorBounds(actor, bounds)) continue;
 
-    // Допуск по горизонтали: позиция актёра интерполируется, и хитбокс
-    // может отставать от фактического положения на кадр-два.
+    // Допуск равномерно по всем осям: позиция актёра интерполируется,
+    // и хитбокс может отставать от фактического положения на кадр-два.
     bounds.min.x -= tolerance;
+    bounds.min.y -= tolerance;
     bounds.min.z -= tolerance;
     bounds.max.x += tolerance;
+    bounds.max.y += tolerance;
     bounds.max.z += tolerance;
-    bounds.min.y -= tolerance * 0.5f;
-    bounds.max.y += tolerance * 0.5f;
 
     float hit = 0.0f;
     if (!rayIntersectsAabb(eye, dir, bounds, bestDistance, hit)) continue;

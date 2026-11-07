@@ -65,11 +65,14 @@ public class TriggerBotOverlay extends BaseOverlayButton {
 
             // isOnTarget теперь считается нативно по пересечению луча
             // прицела с хитбоксом (игроки + мобы), а не по цели aim assist.
-            if (!AimAssistMod.isOnTarget()) {
+            boolean onTarget = AimAssistMod.isOnTarget();
+            if (!onTarget) {
                 targetSince = 0L;
                 triggerHandler.postDelayed(this, 20L);
                 return;
             }
+            
+            // Цель обнаружена
             if (targetSince == 0L) {
                 targetSince = now;
             }
@@ -129,8 +132,9 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setTriggerDelay(manager.getTriggerBotDelay());
         // Reach ванильной атаки в Bedrock — 3.0 блока от глаз.
         AimAssistMod.setTriggerRange(3.0f);
-        // Небольшой допуск только на интерполяцию позиции между тиками.
-        AimAssistMod.setTriggerTolerance(0.03f);
+        // Увеличен допуск для более стабильной работы триггера.
+        // Включает компенсацию интерполяции и небольшую сетевую задержку.
+        AimAssistMod.setTriggerTolerance(0.05f);
         AimAssistMod.setTargetPlayers(true);
         AimAssistMod.setTargetMobs(true);
         // Humanization: реакция на новую цель + микро-тремор. Триггер

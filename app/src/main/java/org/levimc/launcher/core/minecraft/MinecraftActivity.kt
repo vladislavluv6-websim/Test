@@ -431,7 +431,14 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
     }
 
     fun dispatchTouchEventToGame(event: MotionEvent): Boolean {
-        return super.dispatchTouchEvent(event)
+        // Важно: синтетический тап должен идти ровно тем же путём, что и
+        // настоящий палец — через переопределённый dispatchTouchEvent(),
+        // который прокидывает событие в PreloaderInput.nativeOnTouch
+        // (реальный ввод Minecraft), а уже затем в super. Прямой вызов
+        // super.dispatchTouchEvent() обходил native-ввод, из-за чего
+        // TriggerBot отправлял "тап", который игра не видела, и удары
+        // не наносились.
+        return dispatchTouchEvent(event)
     }
 
     fun dispatchKeyEventToGame(event: KeyEvent): Boolean {
@@ -439,9 +446,11 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
     }
 
     /**
-     * Тап по центру экрана, отправленный в штатный onTouchEvent Minecraft.
-     * Урон, анимация руки и пакет атаки формируются самим клиентом — для
-     * сервера это обычное нажатие, а не синтезированный пакет.
+     * Тап по центру экрана, отправленный в штатный onTouchEvent Minecraft
+     * через тот же путь, что и настоящий палец (PreloaderInput.nativeOnTouch
+     * + super.dispatchTouchEvent). Урон, анимация руки и пакет атаки
+     * формируются самим клиентом — для сервера это обычное нажатие, а не
+     * синтезированный пакет.
      */
     fun performInbuiltAttack(): Boolean {
         if (!::gameManager.isInitialized) return false
@@ -456,15 +465,16 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         val downTime = SystemClock.uptimeMillis()
 
         val down = createGameTouchEvent(downTime, downTime, MotionEvent.ACTION_DOWN, x, y)
-        val handled = try {
+        try {
             dispatchTouchEventToGame(down)
         } catch (throwable: Throwable) {
-            false
         } finally {
             down.recycle()
         }
-        if (!handled) return false
 
+        // MOVE и UP досылаем всегда, даже если super не подтвердил DOWN:
+        // нативный ввод мог уже принять палец, и без UP он останется
+        // «зажатым», что ломает последующие тапы.
         // Небольшой MOVE между DOWN и UP: некоторые gesture-детекторы
         // игнорируют идеально статичный тап, а с ним жест точно склеится.
         decor.postDelayed({
