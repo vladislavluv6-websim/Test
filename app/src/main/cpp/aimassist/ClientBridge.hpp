@@ -73,6 +73,14 @@ public:
   // Заполняет vector без per-frame аллокаций: capacity сохраняется между кадрами.
   void fillNearbyActors(void *player, float range, std::vector<void *> &out) const;
 
+private:
+  // Читает один набор актёров и добавляет валидные указатели в out без
+  // дублей. actorType — фильтр, который принимает игровой fetchNearbyActors.
+  void appendNearbyActors(void *player, const Vec3 &extent, int actorType,
+                          std::vector<void *> &out) const;
+
+public:
+
   // Line-of-sight. Если сигнатура не найдена — возвращает true,
   // чтобы visibleCheck не блокировал наведение.
   bool hasLineOfSight(void *player, const Vec3 &from, const Vec3 &to) const;

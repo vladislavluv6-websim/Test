@@ -76,6 +76,30 @@ struct Settings {
   float strength = 100.0f;
   bool triggerBot = false;
   int triggerDelayMs = 250;
+
+  // Триггер работает по пересечению луча прицела с хитбоксом, а не по
+  // углу до цели aim assist. Дальность — до поверхности хитбокса.
+  // Ванильный предел атаки в Bedrock — 3.0 блока от глаз.
+  float triggerRange = 3.0f;
+  // Допуск по хитбоксу: компенсирует интерполяцию позиции между тиками
+  // и расхождение клиент/сервер. Больше 0.1 уже похоже на reach-хак.
+  float triggerBoxTolerance = 0.04f;
+
+  // ------------------------------------------------------------
+  // Humanization / устойчивость к серверным анти-читам
+  // (Polar, Matrix/ML, Geyser-прокси и т.п.)
+  // ------------------------------------------------------------
+  // Реакция перед началом доводки: живой игрок не начинает вести цель
+  // в тот же кадр, в котором она появилась.
+  bool humanize = true;
+  float reactionDelayMs = 130.0f;
+  float reactionJitterMs = 80.0f;
+  // Микро-тремор камеры. Ломает «идеально прямые» траектории, которые
+  // ищут эвристики анти-читов.
+  float aimTremorDeg = 0.02f;
+  // Верхний предел поворота за один серверный тик (50 мс). Защита от
+  // «телепорт-снапов», которые ловят rotation-check'и.
+  float maxTickDeltaDeg = 40.0f;
 };
 
 struct DebugState {
@@ -137,6 +161,11 @@ public:
   void setLegitMode(bool legit);
   void setTriggerBot(bool enabled);
   void setTriggerDelay(int delayMs);
+  void setTriggerRange(float range);
+  void setTriggerTolerance(float tolerance);
+  void setHumanization(bool enabled);
+  void setReactionDelay(int baseMs, int jitterMs);
+  void setAimTremor(float degrees);
   void setTouchActive(bool active);
   void notifyCameraLook();
   void setActivationHeld(bool held);
@@ -164,7 +193,10 @@ private:
   bool isSameTeam(void *local, void *other) const;
   Vec3 getTargetPoint(void *actor, TargetBone bone) const;
   Angles calculateAnglesToPoint(const Vec3 &point) const;
-  void findTargetInternal(void *player, const Settings &settings);
+  void findTargetInternal(void *player, const Settings &settings,
+                          bool actorsAlreadyFilled = false);
+  void updateTrigger(void *player, const Settings &settings,
+                     const ViewAngles &view, const Vec3 &eye);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,
                                    float dt, const Settings &settings);
   void clearTarget();
@@ -184,6 +216,10 @@ private:
   std::atomic<float> m_networkPitch{0.0f};
   std::atomic<bool> m_onTarget{false};
 
+  // Цель под прицелом (ray-vs-hitbox), независимая от aim assist.
+  std::atomic<void *> m_triggerActor{nullptr};
+  std::atomic<float> m_triggerDistance{0.0f};
+
   bool m_hasLocal = false;
 
   Target m_target;
@@ -195,6 +231,11 @@ private:
   int m_stickyLeft = 0;
   int m_targetGrace = 0;
   int64_t m_lastJitterMs = 0;
+  // Humanization state.
+  int64_t m_aimEngageAtMs = 0;
+  void *m_lastAimActor = nullptr;
+  float m_tremorYaw = 0.0f;
+  float m_tremorPitch = 0.0f;
   float m_jitterYaw = 0.0f;
   float m_jitterPitch = 0.0f;
 

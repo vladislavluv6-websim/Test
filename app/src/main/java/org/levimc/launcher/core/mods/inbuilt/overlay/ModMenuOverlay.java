@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.content.res.ColorStateList;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
+import android.util.Log;
 import android.util.TypedValue;
 import android.os.Handler;
 import android.os.Looper;
@@ -47,6 +48,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class ModMenuOverlay {
+    private static final String TAG = "ModMenuOverlay";
+
     private enum ModuleFilter {
         ALL,
         FAVORITES,
@@ -286,8 +289,16 @@ public class ModMenuOverlay {
             if (menuContainer != null && activeSection != MenuSection.HUD_EDITOR) {
                 animateMenuEnter(menuContainer);
             }
-        } catch (Exception e) {
-            showFallback();
+        } catch (Throwable e) {
+            Log.e(TAG, "showInternal failed, using in-content fallback", e);
+            try {
+                showFallback();
+            } catch (Throwable fallbackError) {
+                Log.e(TAG, "showFallback failed", fallbackError);
+                overlayView = null;
+                wmParams = null;
+                isShowing = false;
+            }
         }
     }
     

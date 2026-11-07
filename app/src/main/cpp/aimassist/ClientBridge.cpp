@@ -326,14 +326,12 @@ uint64_t ClientBridge::getActorFlags(void *) const {
   return 0;
 }
 
-void ClientBridge::fillNearbyActors(void *player, float range,
-                                    std::vector<void *> &out) const {
-  out.clear();
+void ClientBridge::appendNearbyActors(void *player, const Vec3 &extent,
+                                      int actorType,
+                                      std::vector<void *> &out) const {
   if (!player || !g_fetchNearbyActors) return;
 
-  const Vec3 extent{range, range, range};
-  const ActorVec actors = g_fetchNearbyActors(player, &extent,
-                                              offsets::kActorTypeMob);
+  const ActorVec actors = g_fetchNearbyActors(player, &extent, actorType);
   const auto begin = reinterpret_cast<uintptr_t>(actors.begin);
   const auto end = reinterpret_cast<uintptr_t>(actors.end);
   if (!isPlausiblePointer(begin) || !isPlausiblePointer(end) || end <= begin) {
@@ -344,7 +342,9 @@ void ClientBridge::fillNearbyActors(void *player, float range,
                  sizeof(DistanceSortedActor);
   if (count == 0) return;
   if (count > 512) count = 512;
-  out.reserve(count);
+  if (out.capacity() < out.size() + count) {
+    out.reserve(out.size() + count);
+  }
   for (size_t i = 0; i < count; ++i) {
     DistanceSortedActor entry{};
     if (!safeRead(begin + i * sizeof(DistanceSortedActor), entry)) break;
@@ -359,7 +359,39 @@ void ClientBridge::fillNearbyActors(void *player, float range,
         !isPlausiblePointer(stateVector)) {
       continue;
     }
-    out.push_back(entry.actor);
+    // Один и тот же актёр может прийти из двух наборов (mob + all).
+    bool duplicate = false;
+    for (void *existing : out) {
+      if (existing == entry.actor) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (!duplicate) {
+      out.push_back(entry.actor);
+    }
+  }
+}
+
+void ClientBridge::fillNearbyActors(void *player, float range,
+                                    std::vector<void *> &out) const {
+  out.clear();
+  if (!player || !g_fetchNearbyActors) return;
+
+  const Vec3 extent{range, range, range};
+  appendNearbyActors(player, extent, offsets::kActorTypeMob, out);
+
+  // На части сборок mob-маска не содержит игроков. Если игроков в списке
+  // нет — запрашиваем полный набор; дубликаты отсекаются в appendNearbyActors.
+  bool hasPlayer = false;
+  for (void *actor : out) {
+    if (isPlayer(actor)) {
+      hasPlayer = true;
+      break;
+    }
+  }
+  if (!hasPlayer) {
+    appendNearbyActors(player, extent, offsets::kActorTypeAll, out);
   }
 }
 

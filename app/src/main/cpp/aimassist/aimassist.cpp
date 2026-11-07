@@ -143,6 +143,36 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTrigg
   aimbot::AimAssist::instance().setTriggerDelay(delayMs);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerRange(
+    JNIEnv *, jclass, jfloat range) {
+  aimbot::AimAssist::instance().setTriggerRange(range);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerTolerance(
+    JNIEnv *, jclass, jfloat tolerance) {
+  aimbot::AimAssist::instance().setTriggerTolerance(tolerance);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetHumanization(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setHumanization(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetReactionDelay(
+    JNIEnv *, jclass, jint baseMs, jint jitterMs) {
+  aimbot::AimAssist::instance().setReactionDelay(baseMs, jitterMs);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetAimTremor(
+    JNIEnv *, jclass, jfloat degrees) {
+  aimbot::AimAssist::instance().setAimTremor(degrees);
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeIsOnTarget(
     JNIEnv *, jclass) {

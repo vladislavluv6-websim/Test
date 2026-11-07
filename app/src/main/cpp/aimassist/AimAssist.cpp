@@ -41,6 +41,46 @@ int64_t nowMs() {
       .count();
 }
 
+// Направление взгляда из углов Bedrock: pitch < 0 — вверх, yaw > 0 — вправо.
+Vec3 directionFromAngles(const ViewAngles &view) {
+  const float yaw = view.yaw * kDegToRad;
+  const float pitch = view.pitch * kDegToRad;
+  const float cp = std::cos(pitch);
+  Vec3 dir{};
+  dir.x = -std::sin(yaw) * cp;
+  dir.y = -std::sin(pitch);
+  dir.z = std::cos(yaw) * cp;
+  return dir;
+}
+
+// Пересечение луча с AABB (slab method). Возвращает ближайшее t в [0, maxT].
+bool rayIntersectsAabb(const Vec3 &origin, const Vec3 &dir, const Aabb &box,
+                       float maxT, float &hitT) {
+  float tMin = 0.0f;
+  float tMax = maxT;
+  const float o[3] = {origin.x, origin.y, origin.z};
+  const float d[3] = {dir.x, dir.y, dir.z};
+  const float lo[3] = {box.min.x, box.min.y, box.min.z};
+  const float hi[3] = {box.max.x, box.max.y, box.max.z};
+
+  for (int axis = 0; axis < 3; ++axis) {
+    if (std::fabs(d[axis]) < 1e-6f) {
+      if (o[axis] < lo[axis] || o[axis] > hi[axis]) return false;
+      continue;
+    }
+    const float inv = 1.0f / d[axis];
+    float t1 = (lo[axis] - o[axis]) * inv;
+    float t2 = (hi[axis] - o[axis]) * inv;
+    if (t1 > t2) std::swap(t1, t2);
+    if (t1 > tMin) tMin = t1;
+    if (t2 < tMax) tMax = t2;
+    if (tMin > tMax) return false;
+  }
+
+  hitT = tMin;
+  return tMin <= maxT;
+}
+
 
 } // namespace
 
@@ -67,6 +107,10 @@ void AimAssist::onEnable() {
   m_lastDelta = 0.0f;
   m_lastFactor = 0.0f;
   m_deadzoneHit = false;
+  m_aimEngageAtMs = 0;
+  m_lastAimActor = nullptr;
+  m_tremorYaw = 0.0f;
+  m_tremorPitch = 0.0f;
   m_onTarget.store(false, std::memory_order_release);
   // Release-публикация после сброса состояния: render-поток увидит
   // согласованные поля, а не полу-инициализированные.
@@ -243,6 +287,38 @@ void AimAssist::setTriggerDelay(int delayMs) {
   m_settings.triggerDelayMs = std::max(120, std::min(400, delayMs));
 }
 
+void AimAssist::setTriggerRange(float range) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.triggerRange = std::max(2.0f, std::min(5.0f, range));
+}
+
+void AimAssist::setTriggerTolerance(float tolerance) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.triggerBoxTolerance = std::max(0.0f, std::min(0.25f, tolerance));
+}
+
+void AimAssist::setHumanization(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.humanize = enabled;
+  if (!enabled) {
+    m_aimEngageAtMs = 0;
+    m_lastAimActor = nullptr;
+  }
+}
+
+void AimAssist::setReactionDelay(int baseMs, int jitterMs) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.reactionDelayMs =
+      static_cast<float>(std::max(0, std::min(600, baseMs)));
+  m_settings.reactionJitterMs =
+      static_cast<float>(std::max(0, std::min(400, jitterMs)));
+}
+
+void AimAssist::setAimTremor(float degrees) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.aimTremorDeg = std::max(0.0f, std::min(0.5f, degrees));
+}
+
 void AimAssist::setTouchActive(bool) {
   // Ручной look больше не ставит наведение на паузу. View всё равно
   // перечитывается каждый кадр, поэтому цель не теряется.
@@ -300,25 +376,26 @@ bool AimAssist::isActive(const Settings &settings) const {
 // Основной визуальный апдейт (каждый кадр)
 // ============================================================
 void AimAssist::updateVisual(float dt) {
-  if (!m_enabled.load(std::memory_order_acquire)) {
-    return;
-  }
-
   dt = clampf(dt, 0.0f, kMaxDt);
   m_lastDt = dt;
 
   void *player = m_bridge.getLocalPlayer();
   if (!player) {
+    m_onTarget.store(false, std::memory_order_release);
+    m_triggerActor.store(nullptr, std::memory_order_release);
     return;
   }
 
   ViewAngles current{};
   if (!m_bridge.getViewAngles(player, current)) {
+    m_onTarget.store(false, std::memory_order_release);
+    m_triggerActor.store(nullptr, std::memory_order_release);
     return;
   }
 
   Vec3 eyeNow{};
-  if (m_bridge.getEyePosition(player, eyeNow)) {
+  const bool haveEye = m_bridge.getEyePosition(player, eyeNow);
+  if (haveEye) {
     m_eye = eyeNow;
   }
 
@@ -330,6 +407,28 @@ void AimAssist::updateVisual(float dt) {
   m_localYaw.store(current.yaw, std::memory_order_relaxed);
   m_hasLocal = true;
 
+  // ---------------------------------------------------------------
+  // Триггер: работает всегда, даже когда aim assist выключен.
+  // Решение — пересечение луча прицела с хитбоксом игрока/моба,
+  // а не угол до цели, выбранной aim assist.
+  // ---------------------------------------------------------------
+  const float actorRange =
+      std::max(settings.range, settings.triggerRange + 0.5f);
+  if (settings.triggerBot || m_enabled.load(std::memory_order_acquire)) {
+    m_bridge.fillNearbyActors(player, actorRange, m_actors);
+  }
+  if (settings.triggerBot && haveEye) {
+    updateTrigger(player, settings, current, eyeNow);
+  } else {
+    m_onTarget.store(false, std::memory_order_release);
+    m_triggerActor.store(nullptr, std::memory_order_release);
+    m_triggerDistance.store(0.0f, std::memory_order_relaxed);
+  }
+
+  if (!m_enabled.load(std::memory_order_acquire)) {
+    return;
+  }
+
   if (!isActive(settings)) {
     clearTarget();
     return;
@@ -338,14 +437,15 @@ void AimAssist::updateVisual(float dt) {
   // Поиск цели каждый кадр: иначе цель, прошедшая рядом/сбоку, теряется
   // на несколько кадров. Список актёров переиспользует capacity.
   m_frameCounter++;
-  findTargetInternal(player, settings);
+  findTargetInternal(player, settings, true);
 
   if (!m_target.valid) {
     // Цели нет: не двигаем камеру вообще. Скорость гасим плавно,
     // чтобы при появлении цели не было накопленного импульса.
     m_velYaw *= 0.85f;
     m_velPitch *= 0.85f;
-    m_onTarget.store(false, std::memory_order_release);
+    m_lastAimActor = nullptr;
+    m_aimEngageAtMs = 0;
     return;
   }
 
@@ -364,14 +464,42 @@ void AimAssist::updateVisual(float dt) {
     return;
   }
 
+  const int64_t aimNow = nowMs();
+
+  // Человеческая реакция: на новую цель камера выходит не мгновенно.
+  // Триггер от этого не зависит и продолжает работать во время задержки.
+  if (settings.humanize) {
+    if (m_lastAimActor != m_target.actor) {
+      m_lastAimActor = m_target.actor;
+      int reactionJitter = 0;
+      if (settings.reactionJitterMs > 0.0f) {
+        std::uniform_real_distribution<float> dist(0.0f,
+                                                   settings.reactionJitterMs);
+        reactionJitter = static_cast<int>(dist(m_rng));
+      }
+      m_aimEngageAtMs = aimNow +
+                        static_cast<int64_t>(
+                            std::max(0.0f, settings.reactionDelayMs)) +
+                        reactionJitter;
+    }
+    if (aimNow < m_aimEngageAtMs) {
+      // Держим камеру неподвижно, но не копим скорость.
+      m_velYaw *= 0.6f;
+      m_velPitch *= 0.6f;
+      return;
+    }
+  } else {
+    m_lastAimActor = m_target.actor;
+    m_aimEngageAtMs = 0;
+  }
+
   const Vec3 point = smoothedPoint(m_target, settings);
   Angles aim = calculateAnglesToPoint(point);
 
   // Jitter по умолчанию 0. Если включён — обновляем редко, не каждый кадр.
   if (settings.randomJitterDeg > 0.0f) {
-    const int64_t now = nowMs();
-    if (now - m_lastJitterMs >= settings.randomJitterIntervalMs) {
-      m_lastJitterMs = now;
+    if (aimNow - m_lastJitterMs >= settings.randomJitterIntervalMs) {
+      m_lastJitterMs = aimNow;
       std::uniform_real_distribution<float> dist(-settings.randomJitterDeg,
                                                  settings.randomJitterDeg);
       m_jitterYaw = dist(m_rng);
@@ -379,6 +507,17 @@ void AimAssist::updateVisual(float dt) {
     }
     aim.yaw = normalizeYaw(aim.yaw + m_jitterYaw);
     aim.pitch = clampf(aim.pitch + m_jitterPitch, -89.9f, 89.9f);
+  }
+
+  // Микро-тремор: две несоизмеримые синусоиды дают непериодическое
+  // дрожание ~0.02°, которого достаточно, чтобы траектория не была
+  // идеально прямой (эвристики Polar/Matrix ловят именно такие линии).
+  if (settings.humanize && settings.aimTremorDeg > 0.0f) {
+    const float t = static_cast<float>(aimNow) * 0.001f;
+    m_tremorYaw = std::sin(t * 7.3f) * settings.aimTremorDeg;
+    m_tremorPitch = std::sin(t * 9.1f + 1.7f) * settings.aimTremorDeg * 0.7f;
+    aim.yaw = normalizeYaw(aim.yaw + m_tremorYaw);
+    aim.pitch = clampf(aim.pitch + m_tremorPitch, -89.9f, 89.9f);
   }
 
   const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
@@ -399,16 +538,7 @@ void AimAssist::updateVisual(float dt) {
   m_lastStepYaw = stepYaw;
   m_lastStepPitch = stepPitch;
 
-  // Готовность триггера считаем по реальному углу до цели, не по smoothed.
-  const float targetDeltaYaw =
-      shortestDelta(afterYaw, m_target.yaw);
-  const float targetDeltaPitch = m_target.pitch - afterPitch;
-  const float targetAngular =
-      std::sqrt(targetDeltaYaw * targetDeltaYaw + targetDeltaPitch * targetDeltaPitch);
-  const bool onTarget = settings.triggerBot &&
-                        targetAngular <= 2.0f &&
-                        m_target.distance <= 3.4f;
-  m_onTarget.store(onTarget, std::memory_order_release);
+  // m_onTarget здесь не трогаем: его владелец — updateTrigger (ray-vs-hitbox).
 
   if (settings.debugOverlay) {
     const auto now = std::chrono::steady_clock::now();
@@ -470,7 +600,8 @@ void AimAssist::findTarget() {
   findTargetInternal(player, settings);
 }
 
-void AimAssist::findTargetInternal(void *player, const Settings &settings) {
+void AimAssist::findTargetInternal(void *player, const Settings &settings,
+                                   bool actorsAlreadyFilled) {
   if (!player) return;
 
   Vec3 eye{};
@@ -480,7 +611,9 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
   }
   m_eye = eye;
 
-  m_bridge.fillNearbyActors(player, settings.range, m_actors);
+  if (!actorsAlreadyFilled) {
+    m_bridge.fillNearbyActors(player, settings.range, m_actors);
+  }
 
   Target bestAngle{};
   Target bestDistance{};
@@ -499,6 +632,14 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
 
   Target current = m_target;
   bool currentStillValid = false;
+
+  // Актёр, в чей хитбокс сейчас упирается прицел (посчитан updateTrigger).
+  // Его aim assist обязан вести первым: иначе доводка утащит камеру с
+  // хитбокса и триггер перестанет бить.
+  void *hitActor = settings.triggerBot
+                       ? m_triggerActor.load(std::memory_order_acquire)
+                       : nullptr;
+  Target triggerTarget{};
 
   for (void *actor : m_actors) {
     if (!actor || actor == player) continue;
@@ -539,6 +680,10 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
     candidate.pitch = angles.pitch;
     candidate.valid = true;
 
+    if (hitActor && actor == hitActor) {
+      triggerTarget = candidate;
+    }
+
     if (actor == current.actor) {
       current = candidate;
       currentStillValid = true;
@@ -556,8 +701,14 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
                       ? bestAngle
                       : bestDistance;
 
-  bool better = false;
-  if (currentStillValid && chosen.valid) {
+  // Приоритет цели триггера: не даём aim assist увести прицел с хитбокса.
+  const bool triggerOverride = triggerTarget.valid;
+  if (triggerOverride) {
+    chosen = triggerTarget;
+  }
+
+  bool better = triggerOverride;
+  if (!triggerOverride && currentStillValid && chosen.valid) {
     const bool directHit = chosen.actor != current.actor &&
                            chosen.angle <= 1.5f;
     if (settings.targetPriority == TargetPriority::Angle) {
@@ -616,6 +767,59 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings) {
   } else {
     clearTarget();
   }
+}
+
+// ============================================================
+// Триггер: луч прицела против хитбоксов
+// ============================================================
+void AimAssist::updateTrigger(void *player, const Settings &settings,
+                              const ViewAngles &view, const Vec3 &eye) {
+  if (!player || !settings.triggerBot) {
+    m_triggerActor.store(nullptr, std::memory_order_release);
+    m_triggerDistance.store(0.0f, std::memory_order_relaxed);
+    m_onTarget.store(false, std::memory_order_release);
+    return;
+  }
+
+  const Vec3 dir = directionFromAngles(view);
+  const float reach = clampf(settings.triggerRange, 2.0f, 5.0f);
+  const float tolerance = clampf(settings.triggerBoxTolerance, 0.0f, 0.25f);
+
+  void *bestActor = nullptr;
+  float bestDistance = reach + tolerance;
+
+  for (void *actor : m_actors) {
+    if (!actor || actor == player) continue;
+
+    const bool playerActor = m_bridge.isPlayer(actor);
+    if (playerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
+    if (settings.ignoreInvisible && isInvisible(actor)) continue;
+    if (settings.teamCheck && isSameTeam(player, actor)) continue;
+
+    Aabb bounds{};
+    if (!m_bridge.getActorBounds(actor, bounds)) continue;
+
+    // Допуск по горизонтали: позиция актёра интерполируется, и хитбокс
+    // может отставать от фактического положения на кадр-два.
+    bounds.min.x -= tolerance;
+    bounds.min.z -= tolerance;
+    bounds.max.x += tolerance;
+    bounds.max.z += tolerance;
+    bounds.min.y -= tolerance * 0.5f;
+    bounds.max.y += tolerance * 0.5f;
+
+    float hit = 0.0f;
+    if (!rayIntersectsAabb(eye, dir, bounds, bestDistance, hit)) continue;
+    if (hit >= bestDistance) continue;
+
+    bestDistance = hit;
+    bestActor = actor;
+  }
+
+  m_triggerActor.store(bestActor, std::memory_order_release);
+  m_triggerDistance.store(bestActor ? bestDistance : 0.0f,
+                          std::memory_order_relaxed);
+  m_onTarget.store(bestActor != nullptr, std::memory_order_release);
 }
 
 Angles AimAssist::calculateAngles(void *entity) const {
@@ -706,7 +910,12 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     const float proximity = clampf(magnitude / fullRange, 0.0f, 1.0f);
     // smoothstep: мягкий вход/выход без излома на границе fullSpeedRange.
     const float easedProximity = proximity * proximity * (3.0f - 2.0f * proximity);
-    const float localMaxVel = maxVel * easedProximity;
+    float localMaxVel = maxVel * easedProximity;
+    // Ограничение поворота на серверный тик: даже при максимальной
+    // скорости не выдаём «телепорт» больше maxTickDeltaDeg за 50 мс.
+    if (settings.maxTickDeltaDeg > 0.0f) {
+      localMaxVel = std::min(localMaxVel, settings.maxTickDeltaDeg / 0.05f);
+    }
 
     // Критически задемпфированная пружина: без перелёта и без рывков.
     float accelYaw = omega * omega * deltaYaw - 2.0f * omega * m_velYaw;
@@ -723,6 +932,12 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 
     float stepYaw = m_velYaw * h;
     float stepPitch = m_velPitch * h;
+
+    if (settings.maxTickDeltaDeg > 0.0f) {
+      const float stepCap = settings.maxTickDeltaDeg * (h / 0.05f);
+      stepYaw = clampf(stepYaw, -stepCap, stepCap);
+      stepPitch = clampf(stepPitch, -stepCap, stepCap);
+    }
 
     // Не проскакиваем цель даже на одном подшаге.
     if (std::fabs(stepYaw) > std::fabs(deltaYaw)) {
@@ -833,7 +1048,10 @@ void AimAssist::clearTarget() {
   m_targetGrace = 0;
   m_velYaw = 0.0f;
   m_velPitch = 0.0f;
-  m_onTarget.store(false, std::memory_order_release);
+  m_lastAimActor = nullptr;
+  m_aimEngageAtMs = 0;
+  // m_onTarget принадлежит триггеру: очистка цели aim assist не должна
+  // гасить триггер посреди кадра.
 }
 
 void AimAssist::syncLocalFromView(void *player) {

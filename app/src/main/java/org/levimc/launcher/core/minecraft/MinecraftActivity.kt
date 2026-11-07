@@ -49,6 +49,19 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
     private var previousInputFocus: View? = null
     private var inbuiltKeyDispatchDepth = 0
 
+    /** id реального тачскрина: с deviceId 0 игра может отбросить событие. */
+    private val touchDeviceId: Int by lazy {
+        try {
+            InputDevice.getDeviceIds().firstOrNull { id ->
+                val device = InputDevice.getDevice(id)
+                device != null &&
+                    (device.sources and InputDevice.SOURCE_TOUCHSCREEN) != 0
+            } ?: 0
+        } catch (throwable: Throwable) {
+            0
+        }
+    }
+
     private class PreloaderTextInput(context: Context) : AppCompatEditText(context) {
         override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
             val target = super.onCreateInputConnection(outAttrs) ?: return null
@@ -425,71 +438,88 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         return super.dispatchKeyEvent(event)
     }
 
+    /**
+     * Тап по центру экрана, отправленный в штатный onTouchEvent Minecraft.
+     * Урон, анимация руки и пакет атаки формируются самим клиентом — для
+     * сервера это обычное нажатие, а не синтезированный пакет.
+     */
     fun performInbuiltAttack(): Boolean {
         if (!::gameManager.isInitialized) return false
+        if (isFinishing || isDestroyed) return false
 
-        // Primary path: PojavControls' native primary-mouse button. This is the
-        // same input the on-screen "PRI" button uses and it produces a genuine
-        // vanilla attack packet, so anticheats see a normal click.
-        val nativeMouse = try {
-            PojavControlsMod.initialize() && PojavControlsMod.setEnabled(true)
-        } catch (throwable: Throwable) {
-            false
-        }
-        if (nativeMouse) {
-            try {
-                PojavControlsMod.nativeSendMouseButton(MotionEvent.BUTTON_PRIMARY, true)
-                window.decorView.postDelayed({
-                    try {
-                        PojavControlsMod.nativeSendMouseButton(MotionEvent.BUTTON_PRIMARY, false)
-                    } catch (ignored: Throwable) {
-                    }
-                }, 50L)
-                return true
-            } catch (ignored: Throwable) {
-            }
-        }
+        val decor = window.decorView
+        val width = if (decor.width > 0) decor.width else resources.displayMetrics.widthPixels
+        val height = if (decor.height > 0) decor.height else resources.displayMetrics.heightPixels
+        if (width <= 0 || height <= 0) return false
+        val x = width / 2f
+        val y = height / 2f
+        val downTime = SystemClock.uptimeMillis()
 
-        val metrics = resources.displayMetrics
-        val x = metrics.widthPixels / 2f
-        val y = metrics.heightPixels / 2f
-
-        val touchHandled = try {
-            PreloaderInput.onTouch(MotionEvent.ACTION_DOWN, 0, x, y)
-        } catch (throwable: Throwable) {
-            false
-        }
-        if (touchHandled) {
-            window.decorView.postDelayed({
-                try {
-                    PreloaderInput.onTouch(MotionEvent.ACTION_UP, 0, x, y)
-                } catch (ignored: Throwable) {
-                }
-            }, 45L)
-            return true
-        }
-
-        val now = SystemClock.uptimeMillis()
-        val downEvent = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
-        val downHandled = try {
-            dispatchTouchEventToGame(downEvent)
+        val down = createGameTouchEvent(downTime, downTime, MotionEvent.ACTION_DOWN, x, y)
+        val handled = try {
+            dispatchTouchEventToGame(down)
         } catch (throwable: Throwable) {
             false
         } finally {
-            downEvent.recycle()
+            down.recycle()
         }
-        if (!downHandled) return false
-        window.decorView.postDelayed({
-            val upTime = SystemClock.uptimeMillis()
-            val upEvent = MotionEvent.obtain(upTime, upTime, MotionEvent.ACTION_UP, x, y, 0)
+        if (!handled) return false
+
+        // Небольшой MOVE между DOWN и UP: некоторые gesture-детекторы
+        // игнорируют идеально статичный тап, а с ним жест точно склеится.
+        decor.postDelayed({
+            if (isFinishing || isDestroyed) return@postDelayed
+            val move = createGameTouchEvent(
+                downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, x + 0.5f, y + 0.5f
+            )
             try {
-                dispatchTouchEventToGame(upEvent)
+                dispatchTouchEventToGame(move)
             } catch (ignored: Throwable) {
             } finally {
-                upEvent.recycle()
+                move.recycle()
             }
-        }, 45L)
+        }, 18L)
+
+        // Длительность нажатия в человеческом диапазоне: 45-90 мс.
+        val holdMs = 45L + kotlin.random.Random.nextInt(46).toLong()
+        decor.postDelayed({
+            if (isFinishing || isDestroyed) return@postDelayed
+            val up = createGameTouchEvent(
+                downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y
+            )
+            try {
+                dispatchTouchEventToGame(up)
+            } catch (ignored: Throwable) {
+            } finally {
+                up.recycle()
+            }
+        }, holdMs)
         return true
+    }
+
+    private fun createGameTouchEvent(
+        downTime: Long,
+        eventTime: Long,
+        action: Int,
+        x: Float,
+        y: Float
+    ): MotionEvent {
+        val pointer = MotionEvent.PointerProperties()
+        pointer.id = 0
+        pointer.toolType = MotionEvent.TOOL_TYPE_FINGER
+
+        val coords = MotionEvent.PointerCoords()
+        coords.x = x
+        coords.y = y
+        coords.pressure = 1.0f
+        coords.size = 1.0f
+
+        return MotionEvent.obtain(
+            downTime, eventTime, action, 1,
+            arrayOf(pointer), arrayOf(coords),
+            0, 0, 1.0f, 1.0f, touchDeviceId, 0,
+            InputDevice.SOURCE_TOUCHSCREEN, 0
+        )
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {

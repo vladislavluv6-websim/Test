@@ -1,5 +1,6 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
+import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.text.TextUtils;
@@ -158,7 +159,14 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         int layout = viewType == VIEW_TYPE_MOD_COMPACT
             ? R.layout.item_mod_menu_compact
             : R.layout.item_mod_menu_card;
-        View v = LayoutInflater.from(parent.getContext()).inflate(layout, parent, false);
+        // MinecraftActivity runs on an AppCompat theme. Any Material widget in an
+        // item layout would throw "requires Theme.MaterialComponents" during the
+        // RecyclerView layout pass (outside the menu's own try/catch). Inflate the
+        // card with a Material theme so the menu cannot crash on the game activity.
+        Context themed = new androidx.appcompat.view.ContextThemeWrapper(
+            parent.getContext(),
+            com.google.android.material.R.style.Theme_MaterialComponents_NoActionBar);
+        View v = LayoutInflater.from(themed).inflate(layout, parent, false);
         return new ModViewHolder(v);
     }
 
@@ -173,6 +181,10 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         ModViewHolder modHolder = (ModViewHolder) holder;
         UnifiedMod mod = item.mod;
 
+        if (modHolder.name == null || modHolder.statusText == null ||
+                modHolder.favoriteBtn == null || modHolder.configBtn == null) {
+            return;
+        }
         modHolder.name.setText(mod.getName());
         if (modHolder.descText != null) {
             String desc = mod.getDescription();

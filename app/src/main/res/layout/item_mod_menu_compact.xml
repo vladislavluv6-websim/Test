@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="54dp"
@@ -8,12 +8,11 @@
     android:layout_marginEnd="4dp"
     android:layout_marginBottom="3dp"
     android:defaultFocusHighlightEnabled="false"
+    android:foreground="?attr/selectableItemBackground"
     app:cardBackgroundColor="#0F131C"
     app:cardCornerRadius="12dp"
     app:cardElevation="0dp"
-    app:strokeColor="#1AFFFFFF"
-    app:strokeWidth="1dp"
-    app:rippleColor="#1480B3FF">
+    app:cardPreventCornerOverlap="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -86,4 +85,4 @@
 
     </LinearLayout>
 
-</com.google.android.material.card.MaterialCardView>
+</androidx.cardview.widget.CardView>

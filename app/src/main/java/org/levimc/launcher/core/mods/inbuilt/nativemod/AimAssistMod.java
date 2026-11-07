@@ -123,6 +123,31 @@ public final class AimAssistMod {
         if (initialized) nativeSetTriggerDelay(delayMs);
     }
 
+    /** Reach триггера: до поверхности хитбокса, в блоках. */
+    public static void setTriggerRange(float range) {
+        if (initialized) nativeSetTriggerRange(range);
+    }
+
+    /** Допуск по хитбоксу для компенсации интерполяции, в блоках. */
+    public static void setTriggerTolerance(float tolerance) {
+        if (initialized) nativeSetTriggerTolerance(tolerance);
+    }
+
+    /** Включает humanization: реакция, микро-тремор, лимит поворота. */
+    public static void setHumanization(boolean enabled) {
+        if (initialized) nativeSetHumanization(enabled);
+    }
+
+    /** Задержка реакции на новую цель: база и случайный разброс, мс. */
+    public static void setReactionDelay(int baseMs, int jitterMs) {
+        if (initialized) nativeSetReactionDelay(baseMs, jitterMs);
+    }
+
+    /** Амплитуда микро-тремора камеры в градусах. */
+    public static void setAimTremor(float degrees) {
+        if (initialized) nativeSetAimTremor(degrees);
+    }
+
     public static boolean isOnTarget() {
         return initialized && nativeIsOnTarget();
     }
@@ -168,6 +193,11 @@ public final class AimAssistMod {
     private static native void nativeSetPreferClosest(boolean enabled);
     private static native void nativeSetTriggerBot(boolean enabled);
     private static native void nativeSetTriggerDelay(int delayMs);
+    private static native void nativeSetTriggerRange(float range);
+    private static native void nativeSetTriggerTolerance(float tolerance);
+    private static native void nativeSetHumanization(boolean enabled);
+    private static native void nativeSetReactionDelay(int baseMs, int jitterMs);
+    private static native void nativeSetAimTremor(float degrees);
     private static native boolean nativeIsOnTarget();
     private static native void nativeSetTouchActive(boolean active);
     private static native void nativeNotifyCameraLook();

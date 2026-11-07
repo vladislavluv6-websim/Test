@@ -105,6 +105,9 @@ inline constexpr uint64_t kFlagInvisible = 1ULL << 0;
 
 // ActorType, который возвращает fetchNearbyActors для мобов/игроков.
 inline constexpr int kActorTypeMob = 0x100;
+// Полный набор категорий: некоторые сборки под моб-маской не отдают
+// игроков, поэтому триггер дополнительно запрашивает всё и фильтрует сам.
+inline constexpr int kActorTypeAll = -1;
 
 // ============================================================
 // КОНСТАНТЫ ЦЕЛИ
