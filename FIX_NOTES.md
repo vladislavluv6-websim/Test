@@ -111,3 +111,29 @@ git submodule update --init --recursive
   будет `ModMenuOverlay: showInternal failed ...` с причиной.
 * `isOnTarget` становится true, когда прицел внутри хитбокса игрока/моба в
   пределах 3 блоков; удар сопровождается анимацией руки.
+## 4. TriggerBot: почему он «вообще не бил» (найдено позже)
+
+Две реальные причины, обе в Java-слое:
+
+1. **Модуль не был зарегистрирован в оверлей-менеджере.**
+   `InbuiltOverlayManager.showModOverlay()` не имел `case ModIds.TRIGGER_BOT`,
+   `KEYBIND_MOD_IDS` не содержал `TRIGGER_BOT`, а
+   `InbuiltModManager.getDefaultInbuiltModKeybind()` не задавал дефолтную
+   клавишу. Итог: включение модуля в меню ничего не показывало, а shortcut
+   отсутствовал. Добавлено: создание/показ/скрытие `TriggerBotOverlay`,
+   регистрация в keybind-списке, дефолтная клавиша **G**, восстановление
+   позиции и состояния.
+
+2. **Инвертированная проверка HUD в цикле ударов.**
+   `PreloaderInput.isHudScreenOpen()` == «идёт обычный геймплей» (так его
+   используют `showGameOverlays`, `handleKeyEvent` и `pojavIsMenuOpen`).
+   Старый guard останавливал триггер именно в геймплее:
+   `if (isHudScreenOpen() ...) return;`. Исправлено на
+   `if (!isHudScreenOpen() || isPauseMenuOpen() || isShowingMenu() || isModMenuShowing())`.
+
+Дополнительно: расширены настройки (10 параметров, категории
+`trigger_target` / `trigger_timing` / `appearance`):
+задержка и разброс реакции, дальность, допуск хитбокса, бить игроков,
+бить мобов, humanized-реакция, интервал и его разброс, шанс промаха,
+клавиша активации. Все значения сохраняются в prefs и применяются нативно
+через `AimAssistMod` (общие настройки триггера, Aim Assist не трогаем).

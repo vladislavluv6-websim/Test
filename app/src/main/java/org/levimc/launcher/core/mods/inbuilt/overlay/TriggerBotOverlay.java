@@ -32,11 +32,15 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     private long targetSince = 0L;
     private long nextAttackAt = 0L;
 
-    // Меч в Bedrock: cooldown ~620 мс. Держим интервал чуть выше него
-    // со случайным разбросом, чтобы CPS не был константным.
-    private static final long ATTACK_INTERVAL_BASE_MS = 620L;
-    private static final int ATTACK_INTERVAL_JITTER_MS = 170;
-    private static final int SKIP_CHANCE_PERCENT = 6;
+    // Поведение атаки (берётся из настроек модуля и кешируется).
+    private int reactionDelayMs = 280;
+    private int reactionJitterMs = 70;
+    private int attackIntervalMs = 620;
+    private int attackIntervalJitterMs = 170;
+    private int skipChancePercent = 6;
+    private boolean humanizationEnabled = true;
+    private float triggerRange = 3.0f;
+    private float triggerTolerance = 0.03f;
 
     private final Runnable triggerRunnable = new Runnable() {
         @Override
@@ -48,7 +52,9 @@ public class TriggerBotOverlay extends BaseOverlayButton {
                 return;
             }
             InbuiltOverlayManager overlayManager = InbuiltOverlayManager.getInstance();
-            if (PreloaderInput.isHudScreenOpen() || PreloaderInput.isPauseMenuOpen()
+            // isHudScreenOpen() == идёт обычный геймплей (HUD-экран открыт).
+            // Бьём только в геймплее и никогда — в меню/паузе/инвентаре.
+            if (!PreloaderInput.isHudScreenOpen() || PreloaderInput.isPauseMenuOpen()
                     || PreloaderInput.isShowingMenu()
                     || (overlayManager != null && overlayManager.isModMenuShowing())) {
                 // Меню клиента тоже перекрывает игру — не бьём сквозь него.
@@ -74,8 +80,11 @@ public class TriggerBotOverlay extends BaseOverlayButton {
                 targetSince = now;
             }
 
-            InbuiltModManager manager = InbuiltModManager.getInstance(activity);
-            int reaction = manager.getTriggerBotDelay() + random.nextInt(70);
+            int reaction = 0;
+            if (humanizationEnabled) {
+                reaction = reactionDelayMs + (reactionJitterMs > 0
+                        ? random.nextInt(reactionJitterMs + 1) : 0);
+            }
             if (now - targetSince < reaction || now < nextAttackAt) {
                 triggerHandler.postDelayed(this, 15L);
                 return;
@@ -83,12 +92,13 @@ public class TriggerBotOverlay extends BaseOverlayButton {
 
             boolean attacked = ((MinecraftActivity) activity).performInbuiltAttack();
             if (attacked) {
-                if (random.nextInt(100) < SKIP_CHANCE_PERCENT) {
+                if (skipChancePercent > 0 && random.nextInt(100) < skipChancePercent) {
                     // Пропущенный удар: живой игрок тоже иногда не кликает.
                     nextAttackAt = now + 90L + random.nextInt(120);
                 } else {
-                    nextAttackAt = now + ATTACK_INTERVAL_BASE_MS
-                            + random.nextInt(ATTACK_INTERVAL_JITTER_MS);
+                    int jitter = attackIntervalJitterMs > 0
+                            ? random.nextInt(attackIntervalJitterMs + 1) : 0;
+                    nextAttackAt = now + attackIntervalMs + jitter;
                 }
             } else {
                 // Событие не дошло до игры — не забиваем очередь, пробуем позже.
@@ -125,19 +135,22 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     }
 
     private void applyNativeSettings(InbuiltModManager manager) {
-        AimAssistMod.setRange(manager.getAimAssistRange());
-        AimAssistMod.setTriggerDelay(manager.getTriggerBotDelay());
-        // Reach ванильной атаки в Bedrock — 3.0 блока от глаз.
-        AimAssistMod.setTriggerRange(3.0f);
-        // Небольшой допуск только на интерполяцию позиции между тиками.
-        AimAssistMod.setTriggerTolerance(0.03f);
-        AimAssistMod.setTargetPlayers(true);
-        AimAssistMod.setTargetMobs(true);
-        // Humanization: реакция на новую цель + микро-тремор. Триггер
-        // при этом считается по реальному лучу/хитбоксу каждый кадр.
-        AimAssistMod.setHumanization(true);
-        AimAssistMod.setReactionDelay(120, 80);
-        AimAssistMod.setAimTremor(0.02f);
+        triggerRange = manager.getTriggerBotRange();
+        triggerTolerance = manager.getTriggerBotTolerance();
+        reactionDelayMs = manager.getTriggerBotDelay();
+        reactionJitterMs = manager.getTriggerBotReactionJitter();
+        attackIntervalMs = manager.getTriggerBotInterval();
+        attackIntervalJitterMs = manager.getTriggerBotIntervalJitter();
+        skipChancePercent = manager.getTriggerBotSkipChance();
+        humanizationEnabled = manager.isTriggerBotHumanization();
+
+        // Настройки самого триггера (не трогаем параметры aim assist, чтобы
+        // модули не перезаписывали друг друга).
+        AimAssistMod.setTriggerDelay(reactionDelayMs);
+        AimAssistMod.setTriggerRange(triggerRange);
+        AimAssistMod.setTriggerTolerance(triggerTolerance);
+        AimAssistMod.setTargetPlayers(manager.isTriggerBotTargetPlayers());
+        AimAssistMod.setTargetMobs(manager.isTriggerBotTargetMobs());
         AimAssistMod.setTriggerBot(true);
     }
 
@@ -151,8 +164,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             if (!wantActive || activity.isFinishing() || activity.isDestroyed()) return;
             if (ok) {
                 applyNativeSettings(InbuiltModManager.getInstance(activity));
-                startLoop();
                 isActive = true;
+                startLoop();
             } else {
                 isActive = false;
                 wantActive = false;

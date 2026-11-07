@@ -665,7 +665,7 @@
     <string name="mod_config_esp_mob_color">Mob box color</string>
     <string name="esp_mod_unavailable">ESP is unavailable for this game version</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
-    <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players under the crosshair</string>
+    <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players and mobs under the crosshair</string>
     <string name="mod_config_aim_assist_range">Aim range (blocks)</string>
     <string name="mod_config_aim_assist_strength">Aim strength (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized aim (slower, smoother, less detectable)</string>
@@ -686,6 +686,15 @@
     <string name="mod_config_aim_assist_deadzone">Deadzone (0.01°)</string>
     <string name="mod_config_aim_assist_full_range">Full-speed range (°)</string>
     <string name="mod_config_trigger_bot_delay">Trigger Bot reaction delay (ms)</string>
+    <string name="mod_config_trigger_bot_reaction_jitter">Reaction randomness (ms)</string>
+    <string name="mod_config_trigger_bot_range">Trigger reach (x0.1 block)</string>
+    <string name="mod_config_trigger_bot_tolerance">Hitbox tolerance (x0.01 block)</string>
+    <string name="mod_config_trigger_bot_target_players">Attack players</string>
+    <string name="mod_config_trigger_bot_target_mobs">Attack mobs</string>
+    <string name="mod_config_trigger_bot_humanization">Humanized reaction</string>
+    <string name="mod_config_trigger_bot_interval">Attack interval (ms)</string>
+    <string name="mod_config_trigger_bot_interval_jitter">Attack interval randomness (ms)</string>
+    <string name="mod_config_trigger_bot_skip_chance">Miss chance (%)</string>
     <string name="aim_assist_mod_unavailable">Aim assist is unavailable for this game version</string>
     <string name="inbuilt_mod_chick_pet">Chick Pet</string>
     <string name="inbuilt_mod_chick_pet_desc">A cute pixelated chick that walks around, sleeps, and runs when touched!</string>
@@ -1092,6 +1101,7 @@
     <string name="mod_config_category_slots">Slots</string>
     <string name="mod_config_category_aim_target">Target</string>
     <string name="mod_config_category_aim_motion">Aim</string>
+    <string name="mod_config_category_trigger_timing">Timing</string>
     <string name="mod_config_category_appearance">Appearance</string>
     <string name="mod_config_category_behavior">Behavior</string>
     <string name="mod_config_category_motion">Motion</string>

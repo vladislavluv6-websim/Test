@@ -37,6 +37,15 @@ public class InbuiltModManager {
     private static final String KEY_ESP_MOB_COLOR = "esp_mob_color";
     private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
     private static final String KEY_TRIGGER_BOT_DELAY = "trigger_bot_delay";
+    private static final String KEY_TRIGGER_BOT_REACTION_JITTER = "trigger_bot_reaction_jitter";
+    private static final String KEY_TRIGGER_BOT_RANGE = "trigger_bot_range";
+    private static final String KEY_TRIGGER_BOT_TOLERANCE = "trigger_bot_tolerance";
+    private static final String KEY_TRIGGER_BOT_TARGET_PLAYERS = "trigger_bot_target_players";
+    private static final String KEY_TRIGGER_BOT_TARGET_MOBS = "trigger_bot_target_mobs";
+    private static final String KEY_TRIGGER_BOT_HUMANIZATION = "trigger_bot_humanization";
+    private static final String KEY_TRIGGER_BOT_INTERVAL = "trigger_bot_interval";
+    private static final String KEY_TRIGGER_BOT_INTERVAL_JITTER = "trigger_bot_interval_jitter";
+    private static final String KEY_TRIGGER_BOT_SKIP_CHANCE = "trigger_bot_skip_chance";
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
     private static final String KEY_OVERLAY_BUTTON_SIZE_PREFIX = "overlay_button_size_";
     private static final String KEY_OVERLAY_OPACITY_PREFIX = "overlay_opacity_";
@@ -98,6 +107,15 @@ public class InbuiltModManager {
     private static final int DEFAULT_ESP_MOB_COLOR = 0xFFFFAA00;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
     private static final int DEFAULT_TRIGGER_BOT_DELAY = 280;
+    private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 70;
+    private static final int DEFAULT_TRIGGER_BOT_RANGE = 30;
+    private static final int DEFAULT_TRIGGER_BOT_TOLERANCE = 3;
+    private static final boolean DEFAULT_TRIGGER_BOT_TARGET_PLAYERS = true;
+    private static final boolean DEFAULT_TRIGGER_BOT_TARGET_MOBS = true;
+    private static final boolean DEFAULT_TRIGGER_BOT_HUMANIZATION = true;
+    private static final int DEFAULT_TRIGGER_BOT_INTERVAL = 620;
+    private static final int DEFAULT_TRIGGER_BOT_INTERVAL_JITTER = 170;
+    private static final int DEFAULT_TRIGGER_BOT_SKIP_CHANCE = 6;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
@@ -361,11 +379,106 @@ public class InbuiltModManager {
                 Math.max(120, Math.min(400, delayMs))).apply();
     }
 
+    public int getTriggerBotReactionJitter() {
+        return Math.max(0, Math.min(300,
+                prefs.getInt(KEY_TRIGGER_BOT_REACTION_JITTER, DEFAULT_TRIGGER_BOT_REACTION_JITTER)));
+    }
+
+    public void setTriggerBotReactionJitter(int jitterMs) {
+        prefs.edit().putInt(KEY_TRIGGER_BOT_REACTION_JITTER,
+                Math.max(0, Math.min(300, jitterMs))).apply();
+    }
+
+    /** Дальность триггера в десятых долях блока (30 = 3.0 блока). */
+    public int getTriggerBotRangeRaw() {
+        return Math.max(20, Math.min(50,
+                prefs.getInt(KEY_TRIGGER_BOT_RANGE, DEFAULT_TRIGGER_BOT_RANGE)));
+    }
+
+    public float getTriggerBotRange() {
+        return getTriggerBotRangeRaw() / 10.0f;
+    }
+
+    public void setTriggerBotRange(int tenths) {
+        prefs.edit().putInt(KEY_TRIGGER_BOT_RANGE,
+                Math.max(20, Math.min(50, tenths))).apply();
+    }
+
+    /** Допуск по хитбоксу в сотых долях блока (3 = 0.03 блока). */
+    public int getTriggerBotToleranceRaw() {
+        return Math.max(0, Math.min(25,
+                prefs.getInt(KEY_TRIGGER_BOT_TOLERANCE, DEFAULT_TRIGGER_BOT_TOLERANCE)));
+    }
+
+    public float getTriggerBotTolerance() {
+        return getTriggerBotToleranceRaw() / 100.0f;
+    }
+
+    public void setTriggerBotTolerance(int hundredths) {
+        prefs.edit().putInt(KEY_TRIGGER_BOT_TOLERANCE,
+                Math.max(0, Math.min(25, hundredths))).apply();
+    }
+
+    public boolean isTriggerBotTargetPlayers() {
+        return prefs.getBoolean(KEY_TRIGGER_BOT_TARGET_PLAYERS, DEFAULT_TRIGGER_BOT_TARGET_PLAYERS);
+    }
+
+    public void setTriggerBotTargetPlayers(boolean enabled) {
+        prefs.edit().putBoolean(KEY_TRIGGER_BOT_TARGET_PLAYERS, enabled).apply();
+    }
+
+    public boolean isTriggerBotTargetMobs() {
+        return prefs.getBoolean(KEY_TRIGGER_BOT_TARGET_MOBS, DEFAULT_TRIGGER_BOT_TARGET_MOBS);
+    }
+
+    public void setTriggerBotTargetMobs(boolean enabled) {
+        prefs.edit().putBoolean(KEY_TRIGGER_BOT_TARGET_MOBS, enabled).apply();
+    }
+
+    public boolean isTriggerBotHumanization() {
+        return prefs.getBoolean(KEY_TRIGGER_BOT_HUMANIZATION, DEFAULT_TRIGGER_BOT_HUMANIZATION);
+    }
+
+    public void setTriggerBotHumanization(boolean enabled) {
+        prefs.edit().putBoolean(KEY_TRIGGER_BOT_HUMANIZATION, enabled).apply();
+    }
+
+    public int getTriggerBotInterval() {
+        return Math.max(200, Math.min(1200,
+                prefs.getInt(KEY_TRIGGER_BOT_INTERVAL, DEFAULT_TRIGGER_BOT_INTERVAL)));
+    }
+
+    public void setTriggerBotInterval(int intervalMs) {
+        prefs.edit().putInt(KEY_TRIGGER_BOT_INTERVAL,
+                Math.max(200, Math.min(1200, intervalMs))).apply();
+    }
+
+    public int getTriggerBotIntervalJitter() {
+        return Math.max(0, Math.min(400,
+                prefs.getInt(KEY_TRIGGER_BOT_INTERVAL_JITTER, DEFAULT_TRIGGER_BOT_INTERVAL_JITTER)));
+    }
+
+    public void setTriggerBotIntervalJitter(int jitterMs) {
+        prefs.edit().putInt(KEY_TRIGGER_BOT_INTERVAL_JITTER,
+                Math.max(0, Math.min(400, jitterMs))).apply();
+    }
+
+    public int getTriggerBotSkipChance() {
+        return Math.max(0, Math.min(50,
+                prefs.getInt(KEY_TRIGGER_BOT_SKIP_CHANCE, DEFAULT_TRIGGER_BOT_SKIP_CHANCE)));
+    }
+
+    public void setTriggerBotSkipChance(int percent) {
+        prefs.edit().putInt(KEY_TRIGGER_BOT_SKIP_CHANCE,
+                Math.max(0, Math.min(50, percent))).apply();
+    }
+
     public int getDefaultInbuiltModKeybind(String modId) {
         if (ModIds.ZOOM.equals(modId)) return KeyEvent.KEYCODE_C;
         if (ModIds.AUTO_SPRINT.equals(modId)) return KeyEvent.KEYCODE_CTRL_LEFT;
         if (ModIds.SPEED.equals(modId)) return KeyEvent.KEYCODE_V;
         if (ModIds.AIM_ASSIST.equals(modId)) return KeyEvent.KEYCODE_B;
+        if (ModIds.TRIGGER_BOT.equals(modId)) return KeyEvent.KEYCODE_G;
         if (ModIds.ESP.equals(modId)) return KeyEvent.KEYCODE_N;
         if (ModIds.SNAPLOOK.equals(modId)) return KeyEvent.KEYCODE_X;
         return KeyEvent.KEYCODE_UNKNOWN;

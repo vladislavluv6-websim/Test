@@ -52,6 +52,15 @@ public final class InbuiltModuleProvider {
     private static final String CFG_ESP_PLAYER_COLOR = "esp_player_color";
     private static final String CFG_ESP_MOB_COLOR = "esp_mob_color";
     private static final String CFG_TRIGGER_BOT_DELAY = "trigger_bot_delay";
+    private static final String CFG_TRIGGER_BOT_REACTION_JITTER = "trigger_bot_reaction_jitter";
+    private static final String CFG_TRIGGER_BOT_RANGE = "trigger_bot_range";
+    private static final String CFG_TRIGGER_BOT_TOLERANCE = "trigger_bot_tolerance";
+    private static final String CFG_TRIGGER_BOT_TARGET_PLAYERS = "trigger_bot_target_players";
+    private static final String CFG_TRIGGER_BOT_TARGET_MOBS = "trigger_bot_target_mobs";
+    private static final String CFG_TRIGGER_BOT_HUMANIZATION = "trigger_bot_humanization";
+    private static final String CFG_TRIGGER_BOT_INTERVAL = "trigger_bot_interval";
+    private static final String CFG_TRIGGER_BOT_INTERVAL_JITTER = "trigger_bot_interval_jitter";
+    private static final String CFG_TRIGGER_BOT_SKIP_CHANCE = "trigger_bot_skip_chance";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
     private static final String CFG_ZOOM_TRANSITION = "zoom_transition";
@@ -171,6 +180,7 @@ public final class InbuiltModuleProvider {
         boolean cursor = ModIds.VIRTUAL_CURSOR.equals(modId);
         boolean pojav = ModIds.POJAV_CONTROLS.equals(modId);
         boolean aim = ModIds.AIM_ASSIST.equals(modId);
+        boolean trigger = ModIds.TRIGGER_BOT.equals(modId);
         boolean esp = ModIds.ESP.equals(modId);
         try {
             JSONArray categories = new JSONArray();
@@ -207,6 +217,14 @@ public final class InbuiltModuleProvider {
                         R.string.mod_config_category_aim_motion));
                 categories.put(configCategory(context, "appearance",
                         R.string.mod_config_category_appearance));
+            } else if (trigger) {
+                defaultCategory = "trigger_target";
+                categories.put(configCategory(context, "trigger_target",
+                        R.string.mod_config_category_aim_target));
+                categories.put(configCategory(context, "trigger_timing",
+                        R.string.mod_config_category_trigger_timing));
+                categories.put(configCategory(context, "appearance",
+                        R.string.mod_config_category_appearance));
             } else if (esp) {
                 defaultCategory = "appearance";
                 categories.put(configCategory(context, "appearance",
@@ -236,6 +254,10 @@ public final class InbuiltModuleProvider {
                         && !CFG_AIM_ASSIST_LEGIT.equals(config.key)
                         && !CFG_AIM_ASSIST_WALL_CHECK.equals(config.key)) {
                     category = "aim_target";
+                } else if (trigger && isTriggerTimingKey(config.key)) {
+                    category = "trigger_timing";
+                } else if (trigger && config.key.startsWith("trigger_bot_")) {
+                    category = "trigger_target";
                 } else if (esp && (CFG_ESP_PLAYER_COLOR.equals(config.key)
                         || CFG_ESP_MOB_COLOR.equals(config.key))) {
                     category = "appearance";
@@ -261,6 +283,14 @@ public final class InbuiltModuleProvider {
                 || CFG_AIM_ASSIST_ACCEL.equals(key)
                 || CFG_AIM_ASSIST_DEADZONE.equals(key)
                 || CFG_AIM_ASSIST_FULL_RANGE.equals(key);
+    }
+
+    private static boolean isTriggerTimingKey(String key) {
+        return CFG_TRIGGER_BOT_DELAY.equals(key)
+                || CFG_TRIGGER_BOT_REACTION_JITTER.equals(key)
+                || CFG_TRIGGER_BOT_INTERVAL.equals(key)
+                || CFG_TRIGGER_BOT_INTERVAL_JITTER.equals(key)
+                || CFG_TRIGGER_BOT_SKIP_CHANCE.equals(key);
     }
 
     private static JSONObject configCategory(Context context, String id, int titleRes) throws JSONException {
@@ -506,8 +536,53 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "250", "120", "400",
+                    "280", "120", "400",
                     String.valueOf(manager.getTriggerBotDelay())));
+            configs.add(config(CFG_TRIGGER_BOT_REACTION_JITTER,
+                    context.getString(R.string.mod_config_trigger_bot_reaction_jitter),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "70", "0", "300",
+                    String.valueOf(manager.getTriggerBotReactionJitter())));
+            configs.add(config(CFG_TRIGGER_BOT_RANGE,
+                    context.getString(R.string.mod_config_trigger_bot_range),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "30", "20", "50",
+                    String.valueOf(manager.getTriggerBotRangeRaw())));
+            configs.add(config(CFG_TRIGGER_BOT_TOLERANCE,
+                    context.getString(R.string.mod_config_trigger_bot_tolerance),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "3", "0", "25",
+                    String.valueOf(manager.getTriggerBotToleranceRaw())));
+            configs.add(config(CFG_TRIGGER_BOT_TARGET_PLAYERS,
+                    context.getString(R.string.mod_config_trigger_bot_target_players),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isTriggerBotTargetPlayers())));
+            configs.add(config(CFG_TRIGGER_BOT_TARGET_MOBS,
+                    context.getString(R.string.mod_config_trigger_bot_target_mobs),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isTriggerBotTargetMobs())));
+            configs.add(config(CFG_TRIGGER_BOT_HUMANIZATION,
+                    context.getString(R.string.mod_config_trigger_bot_humanization),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isTriggerBotHumanization())));
+            configs.add(config(CFG_TRIGGER_BOT_INTERVAL,
+                    context.getString(R.string.mod_config_trigger_bot_interval),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "620", "200", "1200",
+                    String.valueOf(manager.getTriggerBotInterval())));
+            configs.add(config(CFG_TRIGGER_BOT_INTERVAL_JITTER,
+                    context.getString(R.string.mod_config_trigger_bot_interval_jitter),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "170", "0", "400",
+                    String.valueOf(manager.getTriggerBotIntervalJitter())));
+            configs.add(config(CFG_TRIGGER_BOT_SKIP_CHANCE,
+                    context.getString(R.string.mod_config_trigger_bot_skip_chance),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "6", "0", "50",
+                    String.valueOf(manager.getTriggerBotSkipChance())));
         } else if (ModIds.VIRTUAL_CURSOR.equals(modId)) {
             configs.add(config(CFG_CURSOR_SENSITIVITY,
                     context.getString(R.string.mod_config_cursor_sensitivity_percent),
@@ -705,6 +780,33 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_TRIGGER_BOT_DELAY:
                 manager.setTriggerBotDelay(parseInt(value, manager.getTriggerBotDelay()));
+                break;
+            case CFG_TRIGGER_BOT_REACTION_JITTER:
+                manager.setTriggerBotReactionJitter(parseInt(value, manager.getTriggerBotReactionJitter()));
+                break;
+            case CFG_TRIGGER_BOT_RANGE:
+                manager.setTriggerBotRange(parseInt(value, manager.getTriggerBotRangeRaw()));
+                break;
+            case CFG_TRIGGER_BOT_TOLERANCE:
+                manager.setTriggerBotTolerance(parseInt(value, manager.getTriggerBotToleranceRaw()));
+                break;
+            case CFG_TRIGGER_BOT_TARGET_PLAYERS:
+                manager.setTriggerBotTargetPlayers(parseBoolean(value));
+                break;
+            case CFG_TRIGGER_BOT_TARGET_MOBS:
+                manager.setTriggerBotTargetMobs(parseBoolean(value));
+                break;
+            case CFG_TRIGGER_BOT_HUMANIZATION:
+                manager.setTriggerBotHumanization(parseBoolean(value));
+                break;
+            case CFG_TRIGGER_BOT_INTERVAL:
+                manager.setTriggerBotInterval(parseInt(value, manager.getTriggerBotInterval()));
+                break;
+            case CFG_TRIGGER_BOT_INTERVAL_JITTER:
+                manager.setTriggerBotIntervalJitter(parseInt(value, manager.getTriggerBotIntervalJitter()));
+                break;
+            case CFG_TRIGGER_BOT_SKIP_CHANCE:
+                manager.setTriggerBotSkipChance(parseInt(value, manager.getTriggerBotSkipChance()));
                 break;
             case CFG_CURSOR_SENSITIVITY:
                 manager.setCursorSensitivity(parseInt(value, manager.getCursorSensitivity()));
