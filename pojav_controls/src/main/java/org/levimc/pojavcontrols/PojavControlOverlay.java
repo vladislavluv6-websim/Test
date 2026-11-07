@@ -431,6 +431,10 @@ final class PojavControlOverlay extends ViewGroup {
             boolean visible = specialToggle || (controlsVisible && button.isVisibleForMode(menu));
             DrawerPlacement placement = drawerPlacements.get(button);
             if (placement != null) visible &= placement.runtime.open;
+            // Hiding a pressed button must release its key too, otherwise the
+            // game never sees ACTION_UP and the key stays stuck (menu open,
+            // controls toggled off, drawer closed, mode change).
+            if (!visible) button.release();
             button.setVisibility(visible ? VISIBLE : GONE);
         }
         for (RuntimeJoystick joystick : joysticks) {
@@ -438,6 +442,7 @@ final class PojavControlOverlay extends ViewGroup {
             joystick.setVisibility(visible ? VISIBLE : GONE);
             if (!visible) joystick.release();
         }
+        if (!controlsVisible) runtimeSurface.release();
     }
 
     private void layoutDrawerChild(View child, DrawerPlacement placement, int screenWidth, int screenHeight) {
@@ -566,6 +571,7 @@ final class PojavControlOverlay extends ViewGroup {
         private boolean virtualMouseActive;
         private float passThroughX;
         private float passThroughY;
+        private int activePointerId = -1;
 
         RuntimeButton(Context context, ControlData data, PojavControlsHost host,
                       SpecialActionHandler specialHandler) {
@@ -591,6 +597,9 @@ final class PojavControlOverlay extends ViewGroup {
         public boolean onTouchEvent(MotionEvent event) {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+                if (activePointerId == -1) {
+                    activePointerId = event.getPointerId(event.getActionIndex());
+                }
                 outside = false;
                 passThroughX = event.getX();
                 passThroughY = event.getY();
@@ -619,6 +628,11 @@ final class PojavControlOverlay extends ViewGroup {
                 outside = nowOutside;
                 return true;
             }
+            if (action == MotionEvent.ACTION_POINTER_UP) {
+                // Ignore lift of a finger that does not own this button; only
+                // the tracked pointer may finish the press.
+                if (event.getPointerId(event.getActionIndex()) != activePointerId) return true;
+            }
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
                 if (rawPassThrough) sendTouchToGame(event);
                 if (data.isToggle && !virtualMouseButton && !outside) {
@@ -628,6 +642,7 @@ final class PojavControlOverlay extends ViewGroup {
                 if (!outside) performClick();
                 outside = false;
                 rawPassThrough = false;
+                activePointerId = -1;
                 return true;
             }
             if (action == MotionEvent.ACTION_CANCEL) {
@@ -635,6 +650,7 @@ final class PojavControlOverlay extends ViewGroup {
                 if (!data.isToggle || virtualMouseButton) press(false);
                 outside = false;
                 rawPassThrough = false;
+                activePointerId = -1;
                 return true;
             }
             return true;
@@ -654,6 +670,7 @@ final class PojavControlOverlay extends ViewGroup {
             setScaleX(1f);
             setScaleY(1f);
             rawPassThrough = false;
+            activePointerId = -1;
         }
 
         void setVirtualMouseState(boolean active) {

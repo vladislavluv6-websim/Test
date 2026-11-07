@@ -34,7 +34,7 @@ public class ModConfigView {
         if (RuntimeConfigView.render(context, container, mod, compact, onConfigChanged)) return;
 
         float density = context.getResources().getDisplayMetrics().density;
-        int accent = 0xFF80B3FF;
+        int accent = 0xFFFF63CA;
         ScrollView scroll = new ScrollView(context);
         scroll.setFillViewport(true);
         LinearLayout content = new LinearLayout(context);

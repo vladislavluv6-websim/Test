@@ -59,7 +59,7 @@ final class RuntimeConfigView {
     private static final Map<String, String> LAST_SELECTED_CATEGORIES = new HashMap<>();
     private static final Map<String, Parcelable> CONTENT_SCROLL_STATES = new HashMap<>();
     private static final Map<String, Parcelable> CATEGORY_SCROLL_STATES = new HashMap<>();
-    private static final int ACCENT = 0xFF80B3FF;
+    private static final int ACCENT = 0xFFFF63CA;
     private static final int TEXT_PRIMARY = 0xFFCECFD2;
     private static final int TEXT_SECONDARY = 0xFF85888E;
     private static final int CARD = 0xFF0F131C;
@@ -1091,7 +1091,7 @@ final class RuntimeConfigView {
     private void tintSwitch(Switch control) {
         int[][] states = {{android.R.attr.state_checked}, {}};
         control.setThumbTintList(new ColorStateList(states, new int[]{ACCENT, 0xFF85888E}));
-        control.setTrackTintList(new ColorStateList(states, new int[]{0x8880B3FF, 0xFF2A2E36}));
+        control.setTrackTintList(new ColorStateList(states, new int[]{0x88FF63CA, 0xFF2A2E36}));
     }
 
     private void setEnabledRecursive(View view, boolean enabled) {

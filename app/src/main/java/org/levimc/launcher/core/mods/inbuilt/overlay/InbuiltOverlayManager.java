@@ -915,6 +915,13 @@ public class InbuiltOverlayManager {
         for (List<String> mods : pressed) {
             for (String modId : mods) releaseKeybindAction(modId);
         }
+        // On-screen Pojav controls hold keys/joysticks outside this map. Release
+        // them too so pausing, losing focus or opening the menu never leaves the
+        // player walking by himself.
+        try {
+            org.levimc.pojavcontrols.PojavControls.releaseInputs();
+        } catch (Throwable ignored) {
+        }
     }
 
     public boolean handleScrollEvent(float scrollDelta) {

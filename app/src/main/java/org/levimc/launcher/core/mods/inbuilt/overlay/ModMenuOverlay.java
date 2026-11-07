@@ -126,6 +126,7 @@ public class ModMenuOverlay {
     private boolean updatingHudButtonSize = false;
     private boolean compactMode = false;
     private GridLayoutManager modsLayoutManager;
+    private SolsticeModulesView solsticeView;
     
     private List<UnifiedMod> allMods = new ArrayList<>();
     private List<UnifiedMod> filteredMods = new ArrayList<>();
@@ -199,7 +200,7 @@ public class ModMenuOverlay {
     }
 
     private int getAccentColor() {
-        return 0xFF80B3FF;
+        return 0xFFFF63CA;
     }
     
     public interface ModMenuCallback {
@@ -347,6 +348,7 @@ public class ModMenuOverlay {
         searchInput = overlayView.findViewById(R.id.search_input);
         clearSearchBtn = overlayView.findViewById(R.id.btn_clear_search);
         modsRecycler = overlayView.findViewById(R.id.mods_grid_recycler);
+        solsticeView = overlayView.findViewById(R.id.solstice_modules);
         navModules = overlayView.findViewById(R.id.nav_modules);
         navSettings = overlayView.findViewById(R.id.nav_settings);
         navHudEditor = overlayView.findViewById(R.id.nav_hud_editor);
@@ -602,6 +604,41 @@ public class ModMenuOverlay {
             }
         });
         modsRecycler.setAdapter(adapter);
+        if (solsticeView != null) {
+            solsticeView.setListener(new SolsticeModulesView.Listener() {
+                @Override
+                public void onToggle(UnifiedMod mod, boolean enabled) {
+                    InbuiltModManager modManager = InbuiltModManager.getInstance(activity);
+                    if (enabled && modManager.isNotificationsEnabled()) {
+                        notificationManager.show(mod.getName(), mod.getStableKey());
+                    }
+                    if (callback != null) {
+                        callback.onModToggled(mod.getStableKey(), enabled);
+                    }
+                    if (activeFilter == ModuleFilter.ENABLED) {
+                        applyFilters();
+                    }
+                }
+
+                @Override
+                public void onConfig(UnifiedMod mod) {
+                    showConfigSection(mod);
+                }
+
+                @Override
+                public void onFavorite(UnifiedMod mod, boolean favorite) {
+                    InbuiltModManager.getInstance(activity).setModFavorite(mod.getStableKey(), favorite);
+                    if (favorite) {
+                        favoriteKeys.add(mod.getStableKey());
+                    } else {
+                        favoriteKeys.remove(mod.getStableKey());
+                    }
+                    if (activeFilter == ModuleFilter.FAVORITES) {
+                        applyFilters();
+                    }
+                }
+            });
+        }
         applyCompactModeLayout(compactMode);
     }
 
@@ -1083,16 +1120,16 @@ public class ModMenuOverlay {
                 params.width = ViewGroup.LayoutParams.MATCH_PARENT;
                 params.height = ViewGroup.LayoutParams.MATCH_PARENT;
                 params.gravity = Gravity.CENTER;
-                params.setMargins(dp(24), dp(16), dp(24), dp(16));
-                params.setMarginStart(dp(24));
-                params.setMarginEnd(dp(24));
+                params.setMargins(dp(10), dp(10), dp(10), dp(10));
+                params.setMarginStart(dp(10));
+                params.setMarginEnd(dp(10));
             }
             menuContainer.setLayoutParams(params);
         }
 
         if (modMenuSidebar != null) {
             ViewGroup.LayoutParams params = modMenuSidebar.getLayoutParams();
-            params.width = dp(compact ? 62 : 172);
+            params.width = dp(compact ? 62 : 150);
             modMenuSidebar.setLayoutParams(params);
             if (modMenuSidebar instanceof android.widget.LinearLayout) {
                 ((android.widget.LinearLayout) modMenuSidebar).setGravity(compact ? Gravity.TOP | Gravity.CENTER_HORIZONTAL : Gravity.NO_GRAVITY);
@@ -1129,6 +1166,10 @@ public class ModMenuOverlay {
         if (modsRecycler != null) {
             int padding = dp(compact ? 4 : 10);
             modsRecycler.setPadding(padding, padding, padding, padding);
+            modsRecycler.setVisibility(View.GONE);
+        }
+        if (solsticeView != null) {
+            solsticeView.setVisibility(View.VISIBLE);
         }
         menuContainer.requestLayout();
     }
@@ -1238,6 +1279,9 @@ public class ModMenuOverlay {
         if (adapter != null) {
             adapter.updateMods(filteredMods, favoriteKeys);
         }
+        if (solsticeView != null) {
+            solsticeView.setContent(filteredMods, favoriteKeys);
+        }
         updateEmptyState();
         updateModuleCount();
     }
@@ -1335,12 +1379,12 @@ public class ModMenuOverlay {
             boolean selected = entry.getKey().equals(activeCategory)
                 && activeSection == MenuSection.MODULES;
             TextView view = entry.getValue();
-            view.setTextColor(selected ? 0xFF80B3FF : 0xFF85888E);
+            view.setTextColor(selected ? 0xFFFF63CA : 0xFF85888E);
             view.setAlpha(selected ? 1f : 1f);
             view.setBackgroundResource(selected
                 ? R.drawable.bg_zenix_nav_active : R.drawable.bg_zenix_nav);
             android.content.res.ColorStateList tint = android.content.res.ColorStateList.valueOf(
-                selected ? 0xFF80B3FF : 0xFF85888E);
+                selected ? 0xFFFF63CA : 0xFF85888E);
             view.setCompoundDrawableTintList(tint);
         }
         if (navCategories != null) {
@@ -1420,7 +1464,7 @@ public class ModMenuOverlay {
 
     private void updateFilterButton(TextView view, boolean selected) {
         if (view == null) return;
-        view.setTextColor(selected ? 0xFF80B3FF : 0xFF85888E);
+        view.setTextColor(selected ? 0xFFFF63CA : 0xFF85888E);
         view.setAlpha(1f);
         view.setBackgroundResource(selected
             ? R.drawable.bg_zenix_chip_active : R.drawable.bg_zenix_chip);

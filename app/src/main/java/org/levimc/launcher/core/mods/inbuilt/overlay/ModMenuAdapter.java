@@ -148,8 +148,8 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             title.setLayoutParams(params);
             title.setGravity(Gravity.CENTER_VERTICAL);
             title.setPadding((int) (6 * density), 0, (int) (6 * density), 0);
-            title.setTextColor(0xFF80B3FF);
-            title.setTextSize(11);
+            title.setTextColor(0xFFFF63CA);
+            title.setTextSize(10);
             title.setTypeface(null, Typeface.BOLD);
             title.setSingleLine(true);
             title.setEllipsize(TextUtils.TruncateAt.END);
@@ -278,7 +278,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((Switch) holder.statusText).setChecked(enabled);
         } else if (enabled) {
             holder.statusText.setText(R.string.mod_status_enabled);
-            holder.statusText.setTextColor(0xFF80B3FF);
+            holder.statusText.setTextColor(0xFFFF63CA);
             holder.statusText.setBackgroundResource(R.drawable.bg_zenix_status_on);
         } else {
             holder.statusText.setText(R.string.mod_status_disabled);
@@ -290,11 +290,14 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     private void updateCardState(ModViewHolder holder, boolean enabled) {
         holder.itemView.setAlpha(1f);
-        holder.name.setTextColor(enabled ? 0xFFCECFD2 : 0xFF85888E);
+        holder.name.setTextColor(enabled ? 0xFFFFFFFF : 0xFFC9C9C9);
+        if (holder.indicator != null) {
+            holder.indicator.setVisibility(enabled ? View.VISIBLE : View.INVISIBLE);
+        }
 
         if (holder.itemView instanceof androidx.cardview.widget.CardView) {
             androidx.cardview.widget.CardView cv = (androidx.cardview.widget.CardView) holder.itemView;
-            cv.setCardBackgroundColor(enabled ? 0xFF141A24 : 0xFF0F131C);
+            cv.setCardBackgroundColor(enabled ? 0xFF241C2E : 0xFF1B1B1B);
             cv.setCardElevation(0f);
         }
     }
@@ -362,6 +365,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         TextView descText;
         ImageButton favoriteBtn;
         ImageButton configBtn;
+        View indicator;
 
         ModViewHolder(View itemView) {
             super(itemView);
@@ -371,6 +375,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             descText = itemView.findViewById(R.id.mod_card_desc);
             favoriteBtn = itemView.findViewById(R.id.mod_card_favorite);
             configBtn = itemView.findViewById(R.id.mod_card_config);
+            indicator = itemView.findViewById(R.id.mod_card_indicator);
         }
     }
 }

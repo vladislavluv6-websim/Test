@@ -447,6 +447,14 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         if (!::gameManager.isInitialized) return false
         if (isFinishing || isDestroyed) return false
 
+        // When Pojav Controls is enabled its full-screen RuntimeSurface consumes
+        // every touch event, so a synthetic tap never reaches the game and the
+        // TriggerBot cannot hit. Inject a native mouse button instead; it goes
+        // through the Pojav input pipeline straight into the game.
+        if (PojavControlsMod.isEnabled()) {
+            return performNativeMouseAttack()
+        }
+
         val decor = window.decorView
         val width = if (decor.width > 0) decor.width else resources.displayMetrics.widthPixels
         val height = if (decor.height > 0) decor.height else resources.displayMetrics.heightPixels
@@ -495,6 +503,28 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
             }
         }, holdMs)
         return true
+    }
+
+    /**
+     * Нажатие ЛКМ через нативный инжектор Pojav Controls (libinbuiltmods).
+     * Работает даже когда поверх игры висит полноэкранный RuntimeSurface.
+     */
+    private fun performNativeMouseAttack(): Boolean {
+        val holdMs = 45L + kotlin.random.Random.nextInt(36).toLong()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val release = Runnable {
+            try {
+                PojavControlsMod.nativeSendMouseButton(MotionEvent.BUTTON_PRIMARY, false)
+            } catch (ignored: Throwable) {
+            }
+        }
+        return try {
+            PojavControlsMod.nativeSendMouseButton(MotionEvent.BUTTON_PRIMARY, true)
+            handler.postDelayed(release, holdMs)
+            true
+        } catch (ignored: Throwable) {
+            false
+        }
     }
 
     private fun createGameTouchEvent(

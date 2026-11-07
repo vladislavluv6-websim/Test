@@ -2,15 +2,15 @@
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="58dp"
-    android:layout_marginStart="5dp"
-    android:layout_marginTop="4dp"
-    android:layout_marginEnd="5dp"
-    android:layout_marginBottom="4dp"
+    android:layout_height="48dp"
+    android:layout_marginStart="4dp"
+    android:layout_marginTop="2dp"
+    android:layout_marginEnd="4dp"
+    android:layout_marginBottom="2dp"
     android:defaultFocusHighlightEnabled="false"
     android:foreground="?attr/selectableItemBackground"
-    app:cardBackgroundColor="#0F131C"
-    app:cardCornerRadius="12dp"
+    app:cardBackgroundColor="#1B1B1B"
+    app:cardCornerRadius="8dp"
     app:cardElevation="0dp"
     app:cardPreventCornerOverlap="true">
 
@@ -19,8 +19,16 @@
         android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
-        android:paddingEnd="8dp">
+        android:paddingStart="10dp"
+        android:paddingEnd="6dp">
+
+        <View
+            android:id="@+id/mod_card_indicator"
+            android:layout_width="3dp"
+            android:layout_height="26dp"
+            android:layout_marginEnd="9dp"
+            android:background="@drawable/bg_solstice_indicator"
+            android:visibility="invisible" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -34,8 +42,8 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#CECFD2"
-                android:textSize="14sp"
+                android:textColor="#F2F2F2"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -45,7 +53,7 @@
                 android:layout_marginTop="1dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#727279"
+                android:textColor="#FF63CA"
                 android:textSize="9sp"
                 android:visibility="gone" />
 
@@ -56,8 +64,8 @@
                 android:layout_marginTop="1dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#727279"
-                android:textSize="11sp" />
+                android:textColor="#9A9A9A"
+                android:textSize="10sp" />
 
         </LinearLayout>
 
@@ -68,19 +76,19 @@
             android:layout_marginStart="4dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:defaultFocusHighlightEnabled="false"
-            android:padding="6dp"
+            android:padding="7dp"
             android:src="@drawable/ic_star"
-            android:tint="#727279" />
+            android:tint="#8A8A8A" />
 
         <ImageButton
             android:id="@+id/mod_card_config"
-            android:layout_width="26dp"
-            android:layout_height="26dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:defaultFocusHighlightEnabled="false"
-            android:padding="6dp"
+            android:padding="7dp"
             android:src="@drawable/ic_settings"
-            android:tint="#727279" />
+            android:tint="#8A8A8A" />
 
         <Switch
             android:id="@+id/mod_card_status"
@@ -91,7 +99,8 @@
             android:showText="false"
             android:switchMinWidth="38dp"
             android:thumbTint="@color/zenix_switch_thumb"
-            android:trackTint="@color/zenix_switch_track" />
+            android:trackTint="@color/zenix_switch_track"
+            android:visibility="gone" />
 
     </LinearLayout>
 

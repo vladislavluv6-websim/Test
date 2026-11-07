@@ -64,6 +64,15 @@ public final class PojavControls {
         if (overlay != null) overlay.reloadProfile();
     }
 
+    /**
+     * Releases every key/joystick currently held by the on-screen controls.
+     * Must be called whenever gameplay input can no longer reach the game
+     * (activity paused, focus lost, menu opened) to avoid stuck movement.
+     */
+    public static synchronized void releaseInputs() {
+        if (overlay != null) overlay.releaseAll();
+    }
+
     private static void attach(Activity activity, PojavControlsHost host) {
         Activity current = attachedActivity.get();
         if (overlay != null && current == activity && overlay.isAttachedToWindow()) {
