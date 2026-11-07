@@ -203,3 +203,43 @@ vtable игры) убрана из дерева полностью: она тр�
 **Проверка:** включить TriggerBot, подойти к мобу/игроку так, чтобы прицел
 попал в хитбокс, и убедиться, что удары идут, а камера не «зажата»
 (`adb logcat -s TriggerBot AimAssist`).
+
+## 7. TriggerBot: удар нативно через GameMode::attack (как в VHax)
+
+Кнопочный вариант не сработал на устройстве, поэтому удар перенесён в
+нативный слой — туда же, где живут ESP и aim assist, и туда же, где
+атакуют внутренние читы (VHax `Aura`/`Killaura`): прямой вызов игрового
+`GameMode::attack` на игровом потоке, без инъекции касаний.
+
+**Проверено по `libminecraftpe.so` 1.26.60.04_RC3:**
+
+* `ClientInstance + 0xA08` -> `GameMode*` (`SurvivalMode`); конструктор
+  клиента делает `str x23,[x19,#0xA08]`, `GameMode` хранит обратную
+  ссылку на владельца в `+0x8` (`stp x8,x1,[x0]`). Это и есть валидация
+  объекта: `[gameMode+8] == clientInstance`.
+* Слот 16 vtable `SurvivalMode` (`0x13d22900 + 16*8`) -> `0x100a11c8`:
+  `mov x3,x2; mov w2,#1; b 0x1009cba4`, то есть
+  `attack(Actor&, Vec3 const&)` с обязательным указателем на точку удара.
+  `nullptr` в третьем аргументе роняет колбэк транзакции (он читает
+  `Vec3` по этому указателю), поэтому передаётся точка пересечения луча
+  прицела с хитбоксом.
+* Внутри собирается `ItemUseOnActorInventoryTransaction` и уходит через
+  `InventoryTransactionManager` — для сервера это обычная атака.
+
+**Как работает:**
+
+* `ClientBridge::getGameMode()` читает `[client+0xA08]`, проверяет
+  обратную ссылку на клиент и адрес слота 16 через `dladdr`
+  (`libminecraftpe.so`).
+* `ClientBridge::attackActor(actor, hitPoint)` вызывает слот 16 — ту же
+  виртуальную функцию, что и сам клиент.
+* `AimAssist::updateTrigger()` после проверки луча сам выдерживает
+  реакцию (`triggerDelayMs`) и интервал (`triggerIntervalMs`) и бьёт
+  найденного актёра. Всё это на игровом потоке (`ClientInstance::update`).
+* Java-цикл `TriggerBotOverlay` больше не инжектит касания: он только
+  включает/выключает модуль и передаёт настройки в native.
+* Новый JNI-метод: `AimAssistMod.setTriggerInterval(int)` /
+  `nativeSetTriggerInterval`.
+
+**Проверка:** включить TriggerBot, навести прицел на моба/игрока в
+пределах reach и убедиться, что удары идут (`adb logcat -s AimAssist`).

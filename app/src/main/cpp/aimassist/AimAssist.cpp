@@ -25,6 +25,12 @@ float clampf(float value, float minValue, float maxValue) {
   return std::max(minValue, std::min(maxValue, value));
 }
 
+int64_t monotonicMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 float normalizeYaw(float yaw) {
   yaw = std::fmod(yaw + 180.0f, 360.0f);
   if (yaw < 0.0f) yaw += 360.0f;
@@ -285,6 +291,11 @@ void AimAssist::setTriggerBot(bool enabled) {
 void AimAssist::setTriggerDelay(int delayMs) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.triggerDelayMs = std::max(120, std::min(400, delayMs));
+}
+
+void AimAssist::setTriggerInterval(int intervalMs) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.triggerIntervalMs = std::max(150, std::min(2000, intervalMs));
 }
 
 void AimAssist::setTriggerRange(float range) {
@@ -820,6 +831,35 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   m_triggerDistance.store(bestActor ? bestDistance : 0.0f,
                           std::memory_order_relaxed);
   m_onTarget.store(bestActor != nullptr, std::memory_order_release);
+
+  if (!bestActor) {
+    m_triggerSinceActor = nullptr;
+    m_triggerSinceMs = 0;
+    return;
+  }
+
+  // Атака выполняется прямо здесь, на игровом потоке: тот же путь, что у
+  // внутренних читов (Killaura/Aura) — GameMode::attack, без инъекции
+  // касаний и без участия UI-потока.
+  const int64_t now = monotonicMs();
+  if (m_triggerSinceActor != bestActor) {
+    m_triggerSinceActor = bestActor;
+    m_triggerSinceMs = now;
+  }
+  if (now - m_triggerSinceMs < settings.triggerDelayMs) return;
+  if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
+
+  Vec3 hitPoint{};
+  hitPoint.x = eye.x + dir.x * bestDistance;
+  hitPoint.y = eye.y + dir.y * bestDistance;
+  hitPoint.z = eye.z + dir.z * bestDistance;
+
+  if (m_bridge.attackActor(bestActor, hitPoint)) {
+    m_nextAttackAtMs = now + settings.triggerIntervalMs;
+  } else {
+    // GameMode ещё не готов (меню/загрузка) — не долбим каждый кадр.
+    m_nextAttackAtMs = now + 100;
+  }
 }
 
 Angles AimAssist::calculateAngles(void *entity) const {

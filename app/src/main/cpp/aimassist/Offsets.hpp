@@ -120,6 +120,18 @@ inline constexpr float kChestFraction = 0.62f;
 inline constexpr float kLegsFraction = 0.25f;
 
 // ============================================================
+// GAMEMODE (атака)
+// ============================================================
+// ClientInstance -> GameMode* (SurvivalMode). Проверено по 1.26.60.04_RC3:
+// ClientInstance::ctor делает str x23,[x19,#0xA08]; GameMode::ctor кладёт
+// владельца (ClientInstance&) в +0x8: stp x8,x1,[x0].
+inline constexpr uintptr_t kClientInstanceGameMode = 0xA08;
+inline constexpr uintptr_t kGameModeOwner = 0x8;
+// Слот 16 vtable GameMode: attack(Actor&, Vec3 const&) -> внутри
+// actionType=1 и вызов 4-арг GameMode::attack(Actor&, int, Vec3 const&).
+inline constexpr size_t kGameModeAttackSlot = 16;
+
+// ============================================================
 // ESP RENDER OFFSETS
 // ============================================================
 inline constexpr uintptr_t kScreenContextTessellator = 0xB0;

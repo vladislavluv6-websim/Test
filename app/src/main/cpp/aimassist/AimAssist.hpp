@@ -76,6 +76,8 @@ struct Settings {
   float strength = 100.0f;
   bool triggerBot = false;
   int triggerDelayMs = 250;
+  // Пауза между ударами триггера (мс). Реакция берётся из triggerDelayMs.
+  int triggerIntervalMs = 620;
 
   // Триггер работает по пересечению луча прицела с хитбоксом, а не по
   // углу до цели aim assist. Дальность — до поверхности хитбокса.
@@ -161,6 +163,7 @@ public:
   void setLegitMode(bool legit);
   void setTriggerBot(bool enabled);
   void setTriggerDelay(int delayMs);
+  void setTriggerInterval(int intervalMs);
   void setTriggerRange(float range);
   void setTriggerTolerance(float tolerance);
   void setHumanization(bool enabled);
@@ -219,6 +222,11 @@ private:
   // Цель под прицелом (ray-vs-hitbox), независимая от aim assist.
   std::atomic<void *> m_triggerActor{nullptr};
   std::atomic<float> m_triggerDistance{0.0f};
+
+  // Таймер атаки триггера. Живёт на игровом потоке (ClientInstance::update).
+  int64_t m_triggerSinceMs = 0;
+  int64_t m_nextAttackAtMs = 0;
+  void *m_triggerSinceActor = nullptr;
 
   bool m_hasLocal = false;
 

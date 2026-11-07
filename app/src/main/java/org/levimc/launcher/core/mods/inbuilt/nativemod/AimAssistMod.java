@@ -123,6 +123,11 @@ public final class AimAssistMod {
         if (initialized) nativeSetTriggerDelay(delayMs);
     }
 
+    /** Пауза между ударами триггера, мс. */
+    public static void setTriggerInterval(int intervalMs) {
+        if (initialized) nativeSetTriggerInterval(intervalMs);
+    }
+
     /** Reach триггера: до поверхности хитбокса, в блоках. */
     public static void setTriggerRange(float range) {
         if (initialized) nativeSetTriggerRange(range);
@@ -193,6 +198,7 @@ public final class AimAssistMod {
     private static native void nativeSetPreferClosest(boolean enabled);
     private static native void nativeSetTriggerBot(boolean enabled);
     private static native void nativeSetTriggerDelay(int delayMs);
+    private static native void nativeSetTriggerInterval(int intervalMs);
     private static native void nativeSetTriggerRange(float range);
     private static native void nativeSetTriggerTolerance(float tolerance);
     private static native void nativeSetHumanization(boolean enabled);

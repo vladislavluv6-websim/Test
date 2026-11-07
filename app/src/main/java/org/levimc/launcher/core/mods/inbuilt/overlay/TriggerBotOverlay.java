@@ -149,6 +149,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         // Настройки самого триггера (не трогаем параметры aim assist, чтобы
         // модули не перезаписывали друг друга).
         AimAssistMod.setTriggerDelay(reactionDelayMs);
+        AimAssistMod.setTriggerInterval(attackIntervalMs);
         AimAssistMod.setTriggerRange(triggerRange);
         AimAssistMod.setTriggerTolerance(triggerTolerance);
         AimAssistMod.setTargetPlayers(manager.isTriggerBotTargetPlayers());
@@ -205,10 +206,12 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     }
 
     private void startLoop() {
+        // Удар выполняет нативный слой на игровом потоке (GameMode::attack),
+        // поэтому UI-цикл больше не инжектит касания: он нужен только для
+        // сброса состояния кнопки.
         triggerHandler.removeCallbacks(triggerRunnable);
         targetSince = 0L;
         nextAttackAt = 0L;
-        triggerHandler.post(triggerRunnable);
     }
 
     private void stopLoop() {

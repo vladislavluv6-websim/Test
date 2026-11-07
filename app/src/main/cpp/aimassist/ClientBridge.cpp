@@ -456,6 +456,57 @@ bool ClientBridge::getEyePosition(void *player, Vec3 &out) const {
   return true;
 }
 
+void *ClientBridge::getGameMode() const {
+  void *client = getClientInstance();
+  if (!client) return nullptr;
+
+  uintptr_t gameMode = 0;
+  if (!safeRead(reinterpret_cast<uintptr_t>(client) +
+                    offsets::kClientInstanceGameMode,
+                gameMode) ||
+      !isPlausiblePointer(gameMode)) {
+    return nullptr;
+  }
+
+  uintptr_t owner = 0;
+  if (!safeRead(gameMode + offsets::kGameModeOwner, owner) ||
+      owner != reinterpret_cast<uintptr_t>(client)) {
+    return nullptr;
+  }
+
+  return reinterpret_cast<void *>(gameMode);
+}
+
+bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
+  if (!actor) return false;
+
+  void *gameMode = getGameMode();
+  if (!gameMode) return false;
+
+  uintptr_t vtable = 0;
+  if (!safeRead(reinterpret_cast<uintptr_t>(gameMode), vtable) ||
+      !isPlausiblePointer(vtable)) {
+    return false;
+  }
+
+  uintptr_t attackFn = 0;
+  if (!safeRead(vtable + offsets::kGameModeAttackSlot * sizeof(uintptr_t),
+                attackFn)) {
+    return false;
+  }
+  if (!mem::isGameAddress(reinterpret_cast<const void *>(attackFn))) {
+    return false;
+  }
+
+  // GameMode::attack(Actor&, Vec3 const&): слот сам выставляет actionType=1
+  // и уходит в 4-арг реализацию, которая собирает и отправляет
+  // ItemUseOnActorInventoryTransaction. hitPoint обязателен — по нему
+  // считается точка удара, nullptr роняет колбэк транзакции.
+  using AttackFn = void (*)(void *, void *, const Vec3 *);
+  reinterpret_cast<AttackFn>(attackFn)(gameMode, actor, &hitPoint);
+  return true;
+}
+
 uint32_t ClientBridge::getActorCategories(void *actor) const {
   if (!actor) return 0;
   uint32_t categories = 0;

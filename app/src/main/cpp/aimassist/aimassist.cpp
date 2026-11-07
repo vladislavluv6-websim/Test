@@ -144,6 +144,12 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTrigg
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerInterval(
+    JNIEnv *, jclass, jint intervalMs) {
+  aimbot::AimAssist::instance().setTriggerInterval(intervalMs);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerRange(
     JNIEnv *, jclass, jfloat range) {
   aimbot::AimAssist::instance().setTriggerRange(range);

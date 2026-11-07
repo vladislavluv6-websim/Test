@@ -73,6 +73,13 @@ public:
   // Заполняет vector без per-frame аллокаций: capacity сохраняется между кадрами.
   void fillNearbyActors(void *player, float range, std::vector<void *> &out) const;
 
+  // GameMode текущего ClientInstance (SurvivalMode). Валидируется обратной
+  // ссылкой на клиент и адресом attack-слота в libminecraftpe.
+  void *getGameMode() const;
+  // Реальная атака игровым методом GameMode::attack(Actor&, Vec3 const&).
+  // Вызывать только с игрового потока (ClientInstance::update).
+  bool attackActor(void *actor, const Vec3 &hitPoint);
+
 private:
   // Читает один набор актёров и добавляет валидные указатели в out без
   // дублей. actorType — фильтр, который принимает игровой fetchNearbyActors.
