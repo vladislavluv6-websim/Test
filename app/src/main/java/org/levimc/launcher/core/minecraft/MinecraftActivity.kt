@@ -38,6 +38,8 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
 
     companion object {
         private const val PRELOADER_DOCUMENT_REQUEST = 0x4C50
+        // Максимальный pointerId в Android (InputDispatcher::MAX_POINTER_ID).
+        private const val MAX_POINTER_ID = 31
     }
 
     private lateinit var gameManager: GamePackageManager
@@ -493,7 +495,7 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         syntheticX: Float,
         syntheticY: Float
     ): List<Triple<Int, Float, Float>> {
-        val result = snapshotRealPointers()
+        val result = ArrayList(snapshotRealPointers())
         result.add(Triple(syntheticId, syntheticX, syntheticY))
         return result
     }
@@ -544,7 +546,7 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         // Берём заведомо высокий свободный pointerId: система выдаёт
         // реальным пальцам id по возрастанию от 0, поэтому 31 с ними
         // не пересечётся (MAX_POINTER_ID = 31).
-        var syntheticId = MotionEvent.MAX_POINTER_ID
+        var syntheticId = MAX_POINTER_ID
         while (syntheticId in usedIds && syntheticId > 0) syntheticId--
 
         val multi = realAtDown.isNotEmpty()
