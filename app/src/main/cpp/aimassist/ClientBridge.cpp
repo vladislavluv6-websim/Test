@@ -55,9 +55,6 @@ using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
 // Touch-HUD builder: принимает указатель на объект-layout с вектором контролов.
 using ControlBuilderFn = void (*)(void *);
-// ClientInstance::getGameMode(this) — `ldr x0,[x0,#0xa08]; ret`. Возвращает
-// реальный GameMode, который использует игра; хук ловит точный указатель.
-using GetGameModeFn = void *(*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientUpdateOriginal = nullptr;
@@ -66,7 +63,6 @@ ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 ControlBuilderFn g_controlBuilderOriginal = nullptr;
-GetGameModeFn g_getGameModeOriginal = nullptr;
 
 std::atomic<void *> g_clientInstance{nullptr};
 std::atomic<void *> g_localPlayer{nullptr};
@@ -271,7 +267,6 @@ bool dumpAttackControl() {
 
 std::atomic<uintptr_t> g_gameModeOffset{0};
 std::atomic<uintptr_t> g_gameModeDirect{0};
-std::atomic<uintptr_t> g_gameModeOwner{0};
 std::atomic<bool> g_scanRunning{false};
 std::atomic<uintptr_t> g_scanClient{0};
 
@@ -903,7 +898,9 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
                   static_cast<size_t>(clientVtable - maps.libStart), libHits,
                   heapCheap, structHits, scanned >> 20);
 
-  if (bestAddr != 0) {
+  // Слабый кандидат (score 0) не отдаём: вызов attack на чужом объекте
+  // роняет игру. Точный проход выше — основной источник GameMode.
+  if (bestAddr != 0 && bestScore >= 2) {
     storageAddr = bestAddr;
     aimbot::diagLog(kTag,
                     "gm scan: gm=%p level=%p aux=%p flag=%d scanned=%zu MB",
@@ -979,34 +976,6 @@ float frameDelta() {
       std::chrono::duration<float>(now - g_lastFrame).count();
   g_lastFrame = now;
   return std::clamp(dt, 0.0f, 0.05f);
-}
-
-// Ловит точный GameMode, который игра получает через ClientInstance+0xA08.
-// getGameMode вызывается сотни раз за кадр, поэтому структурную проверку
-// результата делаем с ограничением частоты (не чаще 10 раз в секунду).
-void *getGameModeDetour(void *owner) {
-  void *result = g_getGameModeOriginal ? g_getGameModeOriginal(owner) : nullptr;
-  if (result) {
-    static std::chrono::steady_clock::time_point s_lastCheck{};
-    static uint64_t s_checks = 0;
-    const auto now = std::chrono::steady_clock::now();
-    // Не чаще 10 раз в секунду: getGameMode зовётся сотни раз за кадр.
-    if (std::chrono::duration<float>(now - s_lastCheck).count() >= 0.1f) {
-      s_lastCheck = now;
-      const uintptr_t gm = reinterpret_cast<uintptr_t>(result);
-      if (isGameModeLike(gm)) {
-        g_gameModeDirect.store(gm, std::memory_order_relaxed);
-        g_gameModeOwner.store(reinterpret_cast<uintptr_t>(owner),
-                              std::memory_order_relaxed);
-        if (s_checks < 8) {
-          aimbot::diagLog(kTag, "getGameMode hook: owner=%p gm=%p", owner,
-                          result);
-        }
-      }
-      ++s_checks;
-    }
-  }
-  return result;
 }
 
 void *clientUpdateDetour(void *client, bool value, bool second) {
@@ -1166,25 +1135,9 @@ bool ClientBridge::initialize() {
     } else {
       aimbot::diagLog(kTag, "touch builder signature not found");
     }
-    // Хук ClientInstance::getGameMode (`ldr x0,[x0,#0xa08]; ret`) — даёт
-    // точный GameMode, который использует игра, без перебора кучи.
-    const uintptr_t gameLibBase =
-        mem::gameBase(reinterpret_cast<const void *>(normalTick));
-    const uintptr_t getGameMode =
-        gameLibBase ? gameLibBase + 0x102095c4 : 0;
-    if (validGameFn(getGameMode)) {
-      if (pl::memory::hook(
-              reinterpret_cast<pl::memory::FuncPtr>(getGameMode),
-              reinterpret_cast<pl::memory::FuncPtr>(&getGameModeDetour),
-              reinterpret_cast<pl::memory::FuncPtr *>(
-                  &g_getGameModeOriginal)) != 0) {
-        aimbot::diagLog(kTag, "getGameMode hook failed @0x%zx", getGameMode);
-      } else {
-        aimbot::diagLog(kTag, "getGameMode hooked @0x%zx", getGameMode);
-      }
-    } else {
-      aimbot::diagLog(kTag, "getGameMode address invalid");
-    }
+    // ClientInstance::getGameMode (`ldr x0,[x0,#0xa08]; ret`) НЕ хукаем:
+    // функция длиной 8 байт, inline-хук портит соседний код и роняет игру.
+    // GameMode ищем только чтением памяти (безопасно) — см. scanHeapForGameMode.
     g_hooksInstalled.store(true, std::memory_order_release);
   }
 
