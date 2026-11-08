@@ -397,7 +397,15 @@ void AimAssist::updateVisual(float dt) {
   dt = clampf(dt, 0.0f, kMaxDt);
   m_lastDt = dt;
 
+  static uint64_t s_visualCalls = 0;
+  const uint64_t visualCall = ++s_visualCalls;
+
   void *player = m_bridge.getLocalPlayer();
+  if (visualCall <= 3 || (visualCall % 600) == 0) {
+    aimbot::diagLog(kTag, "updateVisual#%llu client=%p player=%p",
+                    static_cast<unsigned long long>(visualCall),
+                    m_bridge.getClientInstance(), player);
+  }
   if (!player) {
     m_onTarget.store(false, std::memory_order_release);
     m_triggerActor.store(nullptr, std::memory_order_release);
@@ -414,6 +422,11 @@ void AimAssist::updateVisual(float dt) {
   if (!m_bridge.getViewAngles(player, current)) {
     m_onTarget.store(false, std::memory_order_release);
     m_triggerActor.store(nullptr, std::memory_order_release);
+    static uint64_t s_noAngles = 0;
+    if ((++s_noAngles % 240) == 1) {
+      aimbot::diagLog(kTag, "updateVisual: getViewAngles failed (player=%p)",
+                      player);
+    }
     return;
   }
 
@@ -453,8 +466,7 @@ void AimAssist::updateVisual(float dt) {
   // Помогает понять, где именно обрывается цепочка на устройстве.
   static uint64_t s_diagFrame = 0;
   if ((++s_diagFrame % 120) == 0) {
-    __android_log_print(
-        ANDROID_LOG_INFO, kTag,
+    aimbot::diagLog(kTag,
         "diag player=%p view=(%.1f,%.1f) eye=(%.2f,%.2f,%.2f) actors=%zu "
         "trigger=%d range=%.2f target=%p onTarget=%d gm=%p",
         player, static_cast<double>(current.pitch),
@@ -588,8 +600,7 @@ void AimAssist::updateVisual(float dt) {
         std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastDebug)
                 .count() >= 1000) {
       m_lastDebug = now;
-      __android_log_print(
-          ANDROID_LOG_INFO, kTag,
+      aimbot::diagLog(kTag,
           "local=(p %.2f y %.2f) target=(p %.2f y %.2f) delta=%.2f "
           "factor=%.3f step=(p %.3f y %.3f) dt=%.4f deadzone=%d target=%p",
           afterPitch, afterYaw, m_target.pitch, m_target.yaw, m_lastDelta,
@@ -830,6 +841,13 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   void *bestActor = nullptr;
   float bestDistance = reach + tolerance;
 
+  int tested = 0;
+  int skippedBounds = 0;
+  float minAngle = 1e9f;
+  float minAngleDist = 0.0f;
+  Vec3 minAngleCenter{};
+  void *minAngleActor = nullptr;
+
   for (void *actor : m_actors) {
     if (!actor || actor == player) continue;
 
@@ -839,7 +857,32 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     if (settings.teamCheck && isSameTeam(player, actor)) continue;
 
     Aabb bounds{};
-    if (!m_bridge.getActorBounds(actor, bounds)) continue;
+    if (!m_bridge.getActorBounds(actor, bounds)) {
+      ++skippedBounds;
+      continue;
+    }
+
+    {
+      const Vec3 center{(bounds.min.x + bounds.max.x) * 0.5f,
+                        (bounds.min.y + bounds.max.y) * 0.5f,
+                        (bounds.min.z + bounds.max.z) * 0.5f};
+      const float dx = center.x - eye.x;
+      const float dy = center.y - eye.y;
+      const float dz = center.z - eye.z;
+      const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+      if (len > 1e-4f) {
+        const float dot =
+            clampf((dir.x * dx + dir.y * dy + dir.z * dz) / len, -1.0f, 1.0f);
+        const float angle = std::acos(dot) * kRadToDeg;
+        if (angle < minAngle) {
+          minAngle = angle;
+          minAngleDist = len;
+          minAngleCenter = center;
+          minAngleActor = actor;
+        }
+      }
+    }
+    ++tested;
 
     // Допуск по горизонтали: позиция актёра интерполируется, и хитбокс
     // может отставать от фактического положения на кадр-два.
@@ -856,6 +899,24 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
 
     bestDistance = hit;
     bestActor = actor;
+  }
+
+  static uint64_t s_triggerLog = 0;
+  if ((++s_triggerLog % 60) == 1) {
+    aimbot::diagLog(
+        kTag,
+        "trigger actors=%zu tested=%d noBounds=%d dir=(%.2f,%.2f,%.2f) "
+        "eye=(%.2f,%.2f,%.2f) minAng=%.1f minDist=%.2f center=(%.2f,%.2f,%.2f) "
+        "minActor=%p best=%p bestDist=%.2f reach=%.2f p=%d m=%d",
+        m_actors.size(), tested, skippedBounds, static_cast<double>(dir.x),
+        static_cast<double>(dir.y), static_cast<double>(dir.z),
+        static_cast<double>(eye.x), static_cast<double>(eye.y),
+        static_cast<double>(eye.z), static_cast<double>(minAngle),
+        static_cast<double>(minAngleDist), static_cast<double>(minAngleCenter.x),
+        static_cast<double>(minAngleCenter.y),
+        static_cast<double>(minAngleCenter.z), minAngleActor, bestActor,
+        static_cast<double>(bestDistance), static_cast<double>(reach),
+        settings.targetPlayers ? 1 : 0, settings.targetMobs ? 1 : 0);
   }
 
   m_triggerActor.store(bestActor, std::memory_order_release);

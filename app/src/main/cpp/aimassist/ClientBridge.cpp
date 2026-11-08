@@ -120,6 +120,14 @@ float frameDelta() {
 }
 
 void *clientUpdateDetour(void *client, bool value, bool second) {
+  static uint64_t s_updateCalls = 0;
+  const uint64_t updateCall = ++s_updateCalls;
+  if (updateCall <= 3 || (updateCall % 600) == 0) {
+    aimbot::diagLog(kTag, "clientUpdate#%llu client=%p orig=%p",
+                    static_cast<unsigned long long>(updateCall), client,
+                    reinterpret_cast<void *>(g_clientUpdateOriginal));
+  }
+
   void *result = g_clientUpdateOriginal
                      ? g_clientUpdateOriginal(client, value, second)
                      : nullptr;
@@ -141,6 +149,13 @@ void *clientUpdateDetour(void *client, bool value, bool second) {
 void normalTickDetour(void *actor) {
   if (g_normalTickOriginal) {
     g_normalTickOriginal(actor);
+  }
+  static uint64_t s_tickCalls = 0;
+  const uint64_t tickCall = ++s_tickCalls;
+  if (tickCall <= 3 || (tickCall % 600) == 0) {
+    aimbot::diagLog(kTag, "normalTick#%llu actor=%p local=%p",
+                    static_cast<unsigned long long>(tickCall), actor,
+                    g_localPlayer.load(std::memory_order_relaxed));
   }
   // Тик локального игрока — 20 Гц. Сетевую синхронизацию делаем только здесь.
   if (actor && actor == g_localPlayer.load(std::memory_order_relaxed)) {
@@ -520,8 +535,8 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
   }
 
   if (logThis) {
-    __android_log_print(
-        ANDROID_LOG_INFO, kTag,
+    aimbot::diagLog(
+        kTag,
         "attack #%d gm=%p fn=%p actor=%p hit=(%.2f,%.2f,%.2f)", logIndex,
         gameMode, reinterpret_cast<void *>(attackFn), actor,
         static_cast<double>(hitPoint.x), static_cast<double>(hitPoint.y),
