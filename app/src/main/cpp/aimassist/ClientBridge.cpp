@@ -270,13 +270,18 @@ std::atomic<uintptr_t> g_gameModeDirect{0};
 std::atomic<bool> g_scanRunning{false};
 std::atomic<uintptr_t> g_scanClient{0};
 
-// Диагностика анимации удара. g_tickCount тикает на каждом нормалтике
-// локального игрока; g_lastRealAttackTick запоминается в detour'е реального
-// удара игры (actionType&1). После настоящего удара на ~30 тиков включаем
-// диффпамять игрока, чтобы найти поля состояния взмаха руки (mSwinging/
-// mSwingTime) — их выставляет игра, но не наш прямой вызов 0x1009cba4.
+// Анимация взмаха руки. Оффсеты найдены дифф-пробой (лог 18): сразу после
+// настоящего удара на локальном игроке игра выставляет
+//   +0x404 float — прогресс взмаха (0..1, шаг 1/6 за тик),
+//   +0x408 int   — счётчик тиков взмаха (0..5),
+//   +0x435 bool  — mSwinging (1 во время взмаха).
+// Наш прямой вызов 0x1009cba4 этих полей не трогает, поэтому рука не машет.
+// g_tickCount тикает на каждом нормалтике локального игрока; после выставления
+// полей несколько тиков пишем их значения — проверить, что движок сам
+// продвигает анимацию.
 std::atomic<uint64_t> g_tickCount{0};
-std::atomic<uint64_t> g_lastRealAttackTick{0};
+std::atomic<uint64_t> g_lastSwingTick{0};
+std::atomic<int> g_swingTriggers{0};
 
 // Хук на обработчик списка атак (0xce2c78c): каждый тик получает WeakPtr на
 // настоящий ClientInstance (arg2), лочит его и читает [ClientInstance+0xA08].
@@ -1134,18 +1139,6 @@ void *attackListDetour(void *a0, void *a1, void *a2, void *a3) {
 // Заодно ищем, по какому оффсету gm лежит в ClientInstance/LocalPlayer —
 // чтобы в будущем брать его без удара игрока.
 int attackImplDetour(void *gm, void *actor, int actionType, const void *pos) {
-  // actionType&1 == настоящий удар игры (GameMode::attack зовёт impl с w2=1),
-  // наш auto-clicker зовёт напрямую с type=0. Используем это как метку для
-  // запуска дифф-пробы состояния взмаха руки.
-  if (actionType & 1) {
-    const uint64_t t = g_tickCount.load(std::memory_order_relaxed);
-    const uint64_t prevAtk =
-        g_lastRealAttackTick.exchange(t, std::memory_order_relaxed);
-    if (prevAtk != t) {
-      aimbot::diagLog(kTag, "swing probe: real attack type=%d actor=%p tick=%llu",
-                      actionType, actor, static_cast<unsigned long long>(t));
-    }
-  }
   // Игра сама передаёт в 0x1009cba4 валидный GameMode (x0) при каждом ударе.
   // Доверяем ему напрямую: любые структурные проверки лишь отсекали настоящий
   // объект (поля Level/aux у разных режимов лежат иначе). Запоминаем x0 как
@@ -1203,80 +1196,28 @@ int attackImplDetour(void *gm, void *actor, int actionType, const void *pos) {
   return orig ? orig(gm, actor, actionType, pos) : 0;
 }
 
-// Дифф памяти локального игрока после настоящего удара. Ищем поля, которые
-// меняются ровно в момент удара: bool-флаг (mSwinging) и прогресс-float/счётчик
-// (mSwingTime). Логируем только правдоподобные bool/float в [-1,1], чтобы не
-// утонуть в позициях/поворотах. Базовая линия обновляется каждый тик, поэтому
-// видно и установку флага (0->1) на самом ударе.
-void swingProbeTick(void *base) {
-  constexpr uintptr_t kLo = 0x100;
-  constexpr uintptr_t kHi = 0x1000;
-  constexpr size_t kWords = (kHi - kLo) / 4;
-  static uint32_t s_prev[kWords];
-  static void *s_prevBase = nullptr;
-  static bool s_have = false;
-
-  if (base != s_prevBase) {
-    s_prevBase = base;
-    s_have = false;
-  }
-  if (!s_have) {
-    for (size_t i = 0; i < kWords; ++i) {
-      uint32_t v = 0;
-      if (!safeRead(reinterpret_cast<uintptr_t>(base) + kLo + i * 4, v)) {
-        v = 0;
-      }
-      s_prev[i] = v;
-    }
-    s_have = true;
-    aimbot::diagLog(kTag, "swing probe: baseline captured @%p", base);
-    return;
-  }
-
+// Проверка анимации: после выставления полей взмаха несколько тиков логируем
+// состояние игрока. Движок должен сам наращивать +0x404 (прогресс) и +0x408
+// (счётчик), а через ~6 тиков снять mSwinging (+0x435). Если значения не
+// двигаются — поля/путь неверные.
+void verifySwingTick(void *base) {
   const uint64_t tick = g_tickCount.load(std::memory_order_relaxed);
-  const uint64_t lastAtk = g_lastRealAttackTick.load(std::memory_order_relaxed);
-  const bool inWindow =
-      lastAtk != 0 && tick >= lastAtk && (tick - lastAtk) < 30;
-  int lines = 0;
-  for (size_t i = 0; i < kWords; ++i) {
-    uint32_t cur = 0;
-    if (!safeRead(reinterpret_cast<uintptr_t>(base) + kLo + i * 4, cur)) {
-      continue;
-    }
-    const uint32_t old = s_prev[i];
-    if (cur == old) {
-      continue;
-    }
-    s_prev[i] = cur;
-    if (!inWindow) {
-      continue;
-    }
-    bool boolish = false;
-    for (int b = 0; b < 4; ++b) {
-      const uint32_t ob = (old >> (b * 8)) & 0xFF;
-      const uint32_t nb = (cur >> (b * 8)) & 0xFF;
-      if (ob <= 1 && nb <= 1 && ob != nb) {
-        boolish = true;
-        break;
-      }
-    }
-    float fo = 0.0f;
-    float fn = 0.0f;
-    std::memcpy(&fo, &old, sizeof(fo));
-    std::memcpy(&fn, &cur, sizeof(fn));
-    const bool floatish = std::isfinite(fo) && std::isfinite(fn) && fo >= -1.05f &&
-                          fo <= 1.05f && fn >= -1.05f && fn <= 1.05f &&
-                          std::fabs(fn - fo) < 0.6f;
-    if ((boolish || floatish) && lines < 48) {
-      aimbot::diagLog(kTag,
-                      "swing diff age=%llu @+0x%zx [%c] %08x -> %08x (f %.4f -> "
-                      "%.4f)",
-                      static_cast<unsigned long long>(tick - lastAtk),
-                      static_cast<size_t>(kLo + i * 4), boolish ? 'B' : 'F',
-                      old, cur, fo, fn);
-      ++lines;
-    }
-  }
+  const uint64_t last = g_lastSwingTick.load(std::memory_order_relaxed);
+  if (last == 0 || tick < last || tick - last >= 10) return;
+  if (g_swingTriggers.load(std::memory_order_relaxed) > 5) return;
+
+  const uintptr_t p = reinterpret_cast<uintptr_t>(base);
+  float time = 0.0f;
+  int32_t counter = 0;
+  uint8_t swinging = 0;
+  safeRead(p + offsets::kPlayerSwingTime, time);
+  safeRead(p + offsets::kPlayerSwingTicks, counter);
+  safeRead(p + offsets::kPlayerSwinging, swinging);
+  aimbot::diagLog(kTag,
+                  "swing verify age=%llu counter=%d time=%.4f swinging=%u",
+                  static_cast<unsigned long long>(tick - last),
+                  static_cast<int>(counter), static_cast<double>(time),
+                  static_cast<unsigned>(swinging));
 }
 
 void normalTickDetour(void *actor) {
@@ -1294,7 +1235,7 @@ void normalTickDetour(void *actor) {
   if (actor && actor == g_localPlayer.load(std::memory_order_relaxed)) {
     g_tickCount.fetch_add(1, std::memory_order_relaxed);
     if (aimbot::diagLogActive()) {
-      swingProbeTick(actor);
+      verifySwingTick(actor);
     }
     AimAssist::instance().onTick();
   }
@@ -1878,6 +1819,40 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
 
   using AttackFn = void (*)(void *, void *, int, const Vec3 *);
   reinterpret_cast<AttackFn>(attackFn)(gameMode, actor, 0, &hitPoint);
+
+  // Анимация взмаха руки. Прямой вызов 0x1009cba4 не трогает поля взмаха,
+  // поэтому выставляем их на локальном игроке так, как это делает игра:
+  // счётчик и прогресс в 0, mSwinging = 1. Дальше движок сам наращивает
+  // прогресс и снимает флаг через 6 тиков.
+  void *swingPlayer = g_localPlayer.load(std::memory_order_relaxed);
+  if (swingPlayer) {
+    const uintptr_t p = reinterpret_cast<uintptr_t>(swingPlayer);
+    int32_t oldCounter = 0;
+    float oldTime = 0.0f;
+    uint8_t oldSwinging = 0;
+    safeRead(p + offsets::kPlayerSwingTicks, oldCounter);
+    safeRead(p + offsets::kPlayerSwingTime, oldTime);
+    safeRead(p + offsets::kPlayerSwinging, oldSwinging);
+
+    const int32_t swingCounter = 0;
+    const float swingTime = 0.0f;
+    const uint8_t swinging = 1;
+    mem::write(p + offsets::kPlayerSwingTicks, swingCounter);
+    mem::write(p + offsets::kPlayerSwingTime, swingTime);
+    mem::write(p + offsets::kPlayerSwinging, swinging);
+
+    g_lastSwingTick.store(g_tickCount.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+    const int n = g_swingTriggers.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (n <= 8) {
+      aimbot::diagLog(kTag,
+                      "swing trigger #%d player=%p before counter=%d time=%.4f "
+                      "swinging=%u",
+                      n, swingPlayer, static_cast<int>(oldCounter),
+                      static_cast<double>(oldTime),
+                      static_cast<unsigned>(oldSwinging));
+    }
+  }
   return true;
 }
 
