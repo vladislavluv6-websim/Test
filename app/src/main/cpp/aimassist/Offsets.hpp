@@ -49,6 +49,8 @@ inline constexpr uintptr_t kControlRect = 0x24;          // 32-байтовый 
 inline constexpr uintptr_t kControlPosX = 0x54;          // float
 inline constexpr uintptr_t kControlPosY = 0x58;          // float
 inline constexpr uintptr_t kControlScale = 0x64;         // float
+inline constexpr uintptr_t kControlIcon = 0x70;          // std::string
+inline constexpr uintptr_t kControlIconPressed = 0x88;   // std::string
 inline constexpr size_t kControlStride = 0xA0;
 // Вектор контролов внутри объекта-layout'а: begin/end/cap.
 inline constexpr uintptr_t kControlVectorBegin = 0x18;

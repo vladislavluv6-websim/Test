@@ -101,7 +101,13 @@ bool controlActionEquals(uintptr_t control, const char *expected) {
   char buf[64];
   if (len >= sizeof(buf)) return false;
   const uintptr_t stringAddr = control + offsets::kControlActionString;
+  // libc++ SSO: данные короткой строки могут начинаться с +0 или с +1
+  // (в __short первый байт — __size_, дальше __data_). Пробуем оба.
   if (mem::read(stringAddr, buf, len) &&
+      std::memcmp(buf, expected, len) == 0) {
+    return true;
+  }
+  if (mem::read(stringAddr + 1, buf, len) &&
       std::memcmp(buf, expected, len) == 0) {
     return true;
   }
@@ -154,10 +160,60 @@ uintptr_t findAttackControl(uintptr_t layout) {
 uintptr_t scanHeapForAttackControl();
 void *ctlScanThread(void *);
 
+// Сырой дамп структуры контрола + попытка прочитать action-строку. Нужен,
+// чтобы разобрать кандидата, даже если его action не из известного списка.
+void logControlRaw(uintptr_t ctl, const char *why) {
+  unsigned char raw[offsets::kControlStride];
+  if (!mem::read(ctl, raw, sizeof(raw))) return;
+  char action[48] = {0};
+  char head[8] = {0};
+  if (mem::read(ctl, head, 7) && std::memcmp(head, "button.", 7) == 0) {
+    std::memcpy(action, head, 7);
+    mem::read(ctl + 7, action + 7, sizeof(action) - 8);
+  } else {
+    uintptr_t p = 0;
+    if (mem::read(ctl, p) && mem::isPlausiblePointer(p)) {
+      mem::read(p, action, sizeof(action) - 1);
+    }
+  }
+  for (size_t i = 0; i < sizeof(action); ++i) {
+    if (action[i] < 0x20 || action[i] > 0x7e) {
+      action[i] = 0;
+      break;
+    }
+  }
+  aimbot::diagLog(kTag, "ctl scan: cand %s @0x%zx action='%s'", why, ctl,
+                  action);
+  for (size_t off = 0; off < sizeof(raw); off += 16) {
+    aimbot::diagLog(kTag,
+                    "  %02zx: %02x %02x %02x %02x %02x %02x %02x %02x "
+                    "%02x %02x %02x %02x %02x %02x %02x %02x",
+                    off, raw[off + 0], raw[off + 1], raw[off + 2],
+                    raw[off + 3], raw[off + 4], raw[off + 5], raw[off + 6],
+                    raw[off + 7], raw[off + 8], raw[off + 9], raw[off + 10],
+                    raw[off + 11], raw[off + 12], raw[off + 13], raw[off + 14],
+                    raw[off + 15]);
+  }
+  float rect[8];
+  std::memcpy(rect, raw + offsets::kControlRect, sizeof(rect));
+  aimbot::diagLog(kTag,
+                  "  rect24: %.5f %.5f %.5f %.5f | %.5f %.5f %.5f %.5f",
+                  rect[0], rect[1], rect[2], rect[3], rect[4], rect[5],
+                  rect[6], rect[7]);
+  float posX = 0.0f;
+  float posY = 0.0f;
+  float scale = 0.0f;
+  std::memcpy(&posX, raw + offsets::kControlPosX, sizeof(posX));
+  std::memcpy(&posY, raw + offsets::kControlPosY, sizeof(posY));
+  std::memcpy(&scale, raw + offsets::kControlScale, sizeof(scale));
+  aimbot::diagLog(kTag, "  pos54=%.5f pos58=%.5f scale64=%.5f", posX, posY,
+                  scale);
+}
+
 // Дамп структуры найденной кнопки атаки. Нужен, чтобы по рантайм-значениям
 // вычислить, в каком поле лежит экранная позиция (в файле она нулевая и
 // выставляется layout-проходом уже после конструктора).
-void dumpAttackControl() {
+bool dumpAttackControl() {
   const uintptr_t layout = g_controlLayout.load(std::memory_order_relaxed);
   uintptr_t ctl = findAttackControl(layout);
   if (!ctl) {
@@ -173,13 +229,13 @@ void dumpAttackControl() {
   }
   if (!ctl) {
     aimbot::diagLog(kTag, "touch ctl: not captured yet (layout=0x%zx)", layout);
-    return;
+    return false;
   }
   g_attackControl.store(ctl, std::memory_order_relaxed);
   unsigned char raw[offsets::kControlStride];
   if (!mem::read(ctl, raw, sizeof(raw))) {
     aimbot::diagLog(kTag, "touch ctl: read failed @0x%zx", ctl);
-    return;
+    return false;
   }
   aimbot::diagLog(kTag, "touch ctl @0x%zx raw:", ctl);
   for (size_t off = 0; off < sizeof(raw); off += 16) {
@@ -206,6 +262,7 @@ void dumpAttackControl() {
   std::memcpy(&scale, raw + offsets::kControlScale, sizeof(scale));
   aimbot::diagLog(kTag, "  pos54=%.5f pos58=%.5f scale64=%.5f", posX, posY,
                   scale);
+  return true;
 }
 
 std::atomic<uintptr_t> g_gameModeOffset{0};
@@ -339,91 +396,232 @@ MapsInfo readMaps() {
   return info;
 }
 
-// Резервный поиск кнопки атаки по куче (см. scanHeapForAttackControl).
+// Резервный поиск кнопки атаки по куче. Сканируем весь rw-heap (приоритет —
+// malloc/scudo/[heap]), ищем сразу несколько action-строк и иконку атаки,
+// чтобы понять, какой именно контрол и строка используются в текущей схеме.
 uintptr_t scanHeapForAttackControl() {
-  const char *literal = offsets::kAttackActionName;
-  const size_t litLen = std::strlen(literal);
-  const MapsInfo maps = readMaps();
-  if (maps.rw.empty()) {
+  static const char *const kActions[] = {
+      "button.destroy_or_attack",
+      "button.build_or_attack",
+      "button.build_or_attack_or_block_select",
+      "button.destroy_or_interact",
+      "button.build_or_interact",
+      "button.interact",
+      "button.block_select",
+  };
+  constexpr size_t kActionCount = sizeof(kActions) / sizeof(kActions[0]);
+  auto isAttackAction = [](uintptr_t ctl) {
+    for (const char *a : kActions) {
+      if (controlActionEquals(ctl, a)) return true;
+    }
+    return false;
+  };
+
+  struct Region {
+    uintptr_t start;
+    uintptr_t end;
+    int prio;
+  };
+  std::vector<Region> regions;
+  FILE *file = std::fopen("/proc/self/maps", "r");
+  if (file) {
+    char line[512];
+    while (std::fgets(line, sizeof(line), file)) {
+      unsigned long long start = 0;
+      unsigned long long end = 0;
+      char perms[8] = {0};
+      char path[256] = {0};
+      const int fields =
+          std::sscanf(line, "%llx-%llx %7s %*s %*s %*s %255s", &start, &end,
+                      perms, path);
+      if (fields < 3) continue;
+      if (!(perms[0] == 'r' && perms[1] == 'w')) continue;
+      int prio = 2;
+      if (std::strstr(path, "libc_malloc") || std::strstr(path, "scudo") ||
+          std::strstr(path, "[heap]")) {
+        prio = 0;
+      } else if (std::strstr(path, "libminecraftpe.so")) {
+        prio = 1;
+      }
+      regions.push_back({static_cast<uintptr_t>(start),
+                         static_cast<uintptr_t>(end), prio});
+    }
+    std::fclose(file);
+  }
+  if (regions.empty()) {
     aimbot::diagLog(kTag, "ctl scan: no rw regions");
     return 0;
   }
-  constexpr size_t kChunk = 1u << 20;
-  constexpr size_t kLimit = 1024u << 20;
-  std::vector<unsigned char> buffer(kChunk);
+  std::stable_sort(regions.begin(), regions.end(),
+                   [](const Region &a, const Region &b) {
+                     return a.prio < b.prio;
+                   });
 
-  std::vector<uintptr_t> literalAddrs;
-  size_t scanned = 0;
-  for (const auto &region : maps.rw) {
-    for (uintptr_t pos = region.first;
-         pos < region.second && scanned < kLimit; pos += kChunk) {
+  struct Needle {
+    const char *s;
+    size_t len;
+    bool action;
+  };
+  Needle needles[kActionCount + 3];
+  size_t needleCount = 0;
+  for (size_t i = 0; i < kActionCount; ++i) {
+    needles[needleCount++] = {kActions[i], std::strlen(kActions[i]), true};
+  }
+  needles[needleCount++] = {"textures/ui/attack", 18, false};
+  needles[needleCount++] = {"textures/ui/attack_pressed", 25, false};
+  needles[needleCount++] = {"textures/ui/interact", 20, false};
+
+  constexpr size_t kChunk = 1u << 20;
+  std::vector<unsigned char> buffer(kChunk);
+  std::vector<size_t> counts(needleCount, 0);
+  std::vector<uintptr_t> iconAddrs;
+  std::vector<uintptr_t> actionAddrs;
+
+  size_t totalMB = 0;
+  size_t heapMB = 0;
+  size_t heapRegions = 0;
+  for (const auto &r : regions) {
+    totalMB += (r.end - r.start) >> 20;
+    if (r.prio == 0) {
+      heapMB += (r.end - r.start) >> 20;
+      ++heapRegions;
+    }
+  }
+  aimbot::diagLog(kTag, "ctl scan: rw regions=%zu total=%zu MB heap=%zu/%zu MB",
+                  regions.size(), totalMB, heapRegions, heapMB);
+
+  // heap/malloc-регионы сканируем целиком, прочие — до 512 МБ суммарно.
+  size_t otherBudget = 512u << 20;
+  for (const auto &region : regions) {
+    const bool full = region.prio <= 1;
+    for (uintptr_t pos = region.start; pos < region.end; pos += kChunk) {
       const size_t size = static_cast<size_t>(
-          std::min<uintptr_t>(kChunk, region.second - pos));
+          std::min<uintptr_t>(kChunk, region.end - pos));
+      if (!full) {
+        if (otherBudget <= size) break;
+        otherBudget -= size;
+      }
       if (!mem::read(pos, buffer.data(), size)) continue;
-      scanned += size;
       const unsigned char *base = buffer.data();
-      const unsigned char *p = base;
       const unsigned char *end = base + size;
-      while (p + litLen <= end) {
-        const void *hit = std::memchr(p, static_cast<int>(literal[0]),
-                                      static_cast<size_t>(end - p - litLen + 1));
-        if (!hit) break;
-        const auto *h = static_cast<const unsigned char *>(hit);
-        if (std::memcmp(h, literal, litLen) == 0 &&
-            literalAddrs.size() < 32) {
-          literalAddrs.push_back(pos + static_cast<uintptr_t>(h - base));
+      for (size_t k = 0; k < needleCount; ++k) {
+        const char *lit = needles[k].s;
+        const size_t L = needles[k].len;
+        const unsigned char *p = base;
+        while (p + L <= end) {
+          const void *hit = std::memchr(p, static_cast<int>(lit[0]),
+                                        static_cast<size_t>(end - p - L + 1));
+          if (!hit) break;
+          const auto *h = static_cast<const unsigned char *>(hit);
+          if (std::memcmp(h, lit, L) == 0) {
+            ++counts[k];
+            const uintptr_t at = pos + static_cast<uintptr_t>(h - base);
+            if (needles[k].action) {
+              if (actionAddrs.size() < 64) actionAddrs.push_back(at);
+            } else if (L == 18) {
+              if (iconAddrs.size() < 64) iconAddrs.push_back(at);
+            }
+          }
+          p = h + 1;
         }
-        p = h + 1;
       }
     }
   }
-  aimbot::diagLog(kTag, "ctl scan: literal hits=%zu scanned=%zu MB",
-                  literalAddrs.size(), scanned >> 20);
-  if (literalAddrs.empty()) return 0;
+  for (size_t k = 0; k < needleCount; ++k) {
+    aimbot::diagLog(kTag, "ctl scan: '%s' hits=%zu", needles[k].s, counts[k]);
+  }
 
-  scanned = 0;
-  for (const auto &region : maps.rw) {
-    for (uintptr_t pos = region.first;
-         pos < region.second && scanned < kLimit; pos += kChunk) {
+  // Путь 1: иконка атаки inline в контроле. Контрол 8-выровнен, поэтому
+  // правильная дельта даёт выровненный ctl с валидной action-строкой.
+  for (uintptr_t a : iconAddrs) {
+    for (int delta = 0x6C; delta <= 0x7A; ++delta) {
+      if (a < static_cast<uintptr_t>(delta)) continue;
+      const uintptr_t ctl = a - static_cast<uintptr_t>(delta);
+      if ((ctl & 7) != 0) continue;
+      if (isAttackAction(ctl)) {
+        aimbot::diagLog(kTag, "ctl scan: icon->control @0x%zx (delta=0x%x)",
+                        ctl, delta);
+        return ctl;
+      }
+    }
+  }
+
+  // Путь 2: короткая action-строка inline (SSO) в контроле (+0 или +1).
+  for (uintptr_t a : actionAddrs) {
+    const uintptr_t candidates[2] = {a, a - 1};
+    for (uintptr_t ctl : candidates) {
+      if ((ctl & 7) != 0) continue;
+      bool iconOk = false;
+      char icon[24] = {0};
+      for (uintptr_t ioff : {offsets::kControlIcon,
+                             offsets::kControlIcon + 1}) {
+        if (mem::read(ctl + ioff, icon, 18) &&
+            std::memcmp(icon, "textures/ui/attack", 18) == 0) {
+          iconOk = true;
+          break;
+        }
+      }
+      if (iconOk) {
+        aimbot::diagLog(kTag, "ctl scan: action->control @0x%zx", ctl);
+        return ctl;
+      }
+    }
+  }
+
+  // Путь 3: длинная action-строка в куче — ищем указатель на неё (+0x00).
+  for (const auto &region : regions) {
+    for (uintptr_t pos = region.start; pos < region.end; pos += kChunk) {
       const size_t size = static_cast<size_t>(
-          std::min<uintptr_t>(kChunk, region.second - pos));
+          std::min<uintptr_t>(kChunk, region.end - pos));
       if (!mem::read(pos, buffer.data(), size)) continue;
-      scanned += size;
       for (size_t i = 0; i + 8 <= size; i += 8) {
         uintptr_t value = 0;
         std::memcpy(&value, buffer.data() + i, sizeof(value));
-        bool matchesLiteral = false;
-        for (uintptr_t addr : literalAddrs) {
-          if (value == addr) {
-            matchesLiteral = true;
+        bool isLit = false;
+        for (uintptr_t lit : actionAddrs) {
+          if (value == lit) {
+            isLit = true;
             break;
           }
         }
-        if (!matchesLiteral) continue;
-        const uintptr_t control = pos + i;
-        if ((control & 7) != 0) continue;
-        uint64_t stringSize = 0;
-        if (!mem::read(control + 0x08, stringSize) ||
-            stringSize != litLen) {
-          continue;
+        if (!isLit) continue;
+        const uintptr_t ctl = pos + i;
+        if ((ctl & 7) != 0) continue;
+        if (isAttackAction(ctl)) {
+          aimbot::diagLog(kTag, "ctl scan: ptr->control @0x%zx", ctl);
+          return ctl;
         }
-        uintptr_t iconPtr = 0;
-        char icon[24];
-        bool iconOk = mem::read(control + 0x70, icon, 18) &&
-                      std::memcmp(icon, "textures/ui/attack", 18) == 0;
-        if (!iconOk && mem::read(control + 0x70, iconPtr) &&
-            mem::isPlausiblePointer(iconPtr) &&
-            mem::read(iconPtr, icon, 18) &&
-            std::memcmp(icon, "textures/ui/attack", 18) == 0) {
-          iconOk = true;
-        }
-        if (!iconOk) {
-          continue;
-        }
-        return control;
       }
     }
   }
+
+  // Диагностика: иконка найдена, но action не из списка — снимаем сырые
+  // кандидаты, чтобы увидеть фактическую action-строку.
+  int dumped = 0;
+  for (uintptr_t a : iconAddrs) {
+    const uintptr_t cands[2] = {a - 0x71, a - 0x70};
+    for (uintptr_t ctl : cands) {
+      if ((ctl & 7) != 0) continue;
+      char head[8] = {0};
+      bool looks = false;
+      if (mem::read(ctl, head, 7) && std::memcmp(head, "button.", 7) == 0) {
+        looks = true;
+      } else {
+        uintptr_t p = 0;
+        if (mem::read(ctl, p) && mem::isPlausiblePointer(p) &&
+            mem::read(p, head, 7) && std::memcmp(head, "button.", 7) == 0) {
+          looks = true;
+        }
+      }
+      if (!looks) continue;
+      logControlRaw(ctl, "icon");
+      if (++dumped >= 3) {
+        aimbot::diagLog(kTag, "ctl scan: no control matched");
+        return 0;
+      }
+    }
+  }
+
   aimbot::diagLog(kTag, "ctl scan: no control matched");
   return 0;
 }
@@ -668,15 +866,18 @@ void *clientUpdateDetour(void *client, bool value, bool second) {
     // уже после конструктора, поэтому нужен рантайм-дамп).
     static std::chrono::steady_clock::time_point s_lastCtlDump{};
     static int s_ctlDumps = 0;
+    static int s_ctlTries = 0;
     if (aimbot::diagLogActive() &&
         g_localPlayer.load(std::memory_order_relaxed) != nullptr &&
-        s_ctlDumps < 10) {
+        s_ctlDumps < 10 && s_ctlTries < 150) {
       const auto now = std::chrono::steady_clock::now();
       if (s_lastCtlDump.time_since_epoch().count() == 0 ||
           std::chrono::duration<float>(now - s_lastCtlDump).count() >= 1.0f) {
         s_lastCtlDump = now;
-        ++s_ctlDumps;
-        dumpAttackControl();
+        ++s_ctlTries;
+        if (dumpAttackControl()) {
+          ++s_ctlDumps;
+        }
       }
     }
     // ClientInstance::update вызывается в кадровом цикле.
