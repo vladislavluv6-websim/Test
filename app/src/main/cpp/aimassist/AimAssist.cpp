@@ -116,9 +116,13 @@ void AimAssist::onEnable() {
   m_lastFactor = 0.0f;
   m_deadzoneHit = false;
   m_aimEngageAtMs = 0;
+  m_targetLockMs = 0;
   m_lastAimActor = nullptr;
-  m_tremorYaw = 0.0f;
-  m_tremorPitch = 0.0f;
+  m_jitterYaw = 0.0f;
+  m_jitterPitch = 0.0f;
+  m_lastSwitchMs = 0;
+  m_triggerDelayForTargetMs = 0;
+  resetHumanProfile();
   m_onTarget.store(false, std::memory_order_release);
   // Release-публикация после сброса состояния: render-поток увидит
   // согласованные поля, а не полу-инициализированные.
@@ -267,18 +271,21 @@ void AimAssist::setLegitMode(bool legit) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.legit = legit;
   if (legit) {
-    // Плавный, но быстрый критически задемпфированный довод.
-    m_settings.smoothingSpeed = 18.0f;
-    m_settings.maxDegPerSecond = 650.0f;
-    m_settings.maxAccelDegPerSecond2 = 2600.0f;
-    m_settings.deadzoneDeg = 0.10f;
-    m_settings.fullSpeedRangeDeg = 12.0f;
+    // Мягкий довод с заметным лагом и «мёртвой зоной»: камера не прилипает
+    // к центру хитбокса и не повторяет одинаковые шаги каждый кадр.
+    m_settings.smoothingSpeed = 15.0f;
+    m_settings.maxDegPerSecond = 560.0f;
+    m_settings.maxAccelDegPerSecond2 = 2200.0f;
+    m_settings.deadzoneDeg = 0.30f;
+    m_settings.fullSpeedRangeDeg = 18.0f;
+    m_settings.targetSmoothFrames = 6;
   } else {
     m_settings.smoothingSpeed = 24.0f;
-    m_settings.maxDegPerSecond = 850.0f;
+    m_settings.maxDegPerSecond = 900.0f;
     m_settings.maxAccelDegPerSecond2 = 3600.0f;
-    m_settings.deadzoneDeg = 0.08f;
-    m_settings.fullSpeedRangeDeg = 14.0f;
+    m_settings.deadzoneDeg = 0.18f;
+    m_settings.fullSpeedRangeDeg = 16.0f;
+    m_settings.targetSmoothFrames = 3;
   }
 }
 
@@ -287,6 +294,7 @@ void AimAssist::setTriggerBot(bool enabled) {
   m_settings.triggerBot = enabled;
   m_triggerSinceActor = nullptr;
   m_triggerSinceMs = 0;
+  m_triggerDelayForTargetMs = 0;
   m_nextAttackAtMs = 0;
   if (!enabled) {
     m_onTarget.store(false, std::memory_order_release);
@@ -321,6 +329,8 @@ void AimAssist::setHumanization(bool enabled) {
   if (!enabled) {
     m_aimEngageAtMs = 0;
     m_lastAimActor = nullptr;
+    m_targetLockMs = 0;
+    resetHumanProfile();
   }
 }
 
@@ -335,6 +345,21 @@ void AimAssist::setReactionDelay(int baseMs, int jitterMs) {
 void AimAssist::setAimTremor(float degrees) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.aimTremorDeg = std::max(0.0f, std::min(0.5f, degrees));
+}
+
+void AimAssist::setAntiCheatMode(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.antiCheatMode = enabled;
+}
+
+void AimAssist::setAssistCone(float degrees) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.assistConeDeg = clampf(degrees, 10.0f, 180.0f);
+}
+
+void AimAssist::setAttackMissChance(float chance) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.attackMissChance = clampf(chance, 0.0f, 0.35f);
 }
 
 void AimAssist::setTouchActive(bool) {
@@ -500,6 +525,8 @@ void AimAssist::updateVisual(float dt) {
     m_velPitch *= 0.85f;
     m_lastAimActor = nullptr;
     m_aimEngageAtMs = 0;
+    m_targetLockMs = 0;
+    resetHumanProfile();
     return;
   }
 
@@ -525,11 +552,13 @@ void AimAssist::updateVisual(float dt) {
   if (settings.humanize) {
     if (m_lastAimActor != m_target.actor) {
       m_lastAimActor = m_target.actor;
+      // Новая цель — новый моторный профиль. Ошибки/смещения прошлой цели
+      // не переносятся, иначе переключение выглядит как «телепорт» точки.
+      resetHumanProfile();
       int reactionJitter = 0;
       if (settings.reactionJitterMs > 0.0f) {
-        std::uniform_real_distribution<float> dist(0.0f,
-                                                   settings.reactionJitterMs);
-        reactionJitter = static_cast<int>(dist(m_rng));
+        reactionJitter =
+            randomInt(0, static_cast<int>(settings.reactionJitterMs));
       }
       m_aimEngageAtMs = aimNow +
                         static_cast<int64_t>(
@@ -543,12 +572,39 @@ void AimAssist::updateVisual(float dt) {
       return;
     }
   } else {
+    if (m_lastAimActor != m_target.actor) {
+      resetHumanProfile();
+    }
     m_lastAimActor = m_target.actor;
     m_aimEngageAtMs = 0;
   }
 
   const Vec3 point = smoothedPoint(m_target, settings);
   Angles aim = calculateAnglesToPoint(point);
+
+  // Одноразовый перелёт: на захвате цель «пролетается» на несколько
+  // процентов начальной ошибки и затем доводится. Живая рука не тормозит
+  // точно в центре с первого движения.
+  if (m_targetLockMs == 0) {
+    m_targetLockMs = aimNow;
+    if (settings.humanize && settings.overshootFactor > 0.0f) {
+      const float curYaw = m_localYaw.load(std::memory_order_relaxed);
+      const float curPitch = m_localPitch.load(std::memory_order_relaxed);
+      const float dy = shortestDelta(curYaw, aim.yaw);
+      const float dp = aim.pitch - curPitch;
+      const float jitter = randomFloat(0.6f, 1.35f);
+      m_overYaw = clampf(dy * settings.overshootFactor * jitter, -6.0f, 6.0f);
+      m_overPitch =
+          clampf(dp * settings.overshootFactor * jitter, -4.0f, 4.0f);
+    }
+  }
+
+  if (settings.humanize) {
+    updateHumanProfile(settings, dt, aimNow);
+    aim.yaw = normalizeYaw(aim.yaw + m_restYaw + m_noiseYaw + m_overYaw);
+    aim.pitch = clampf(
+        aim.pitch + m_restPitch + m_noisePitch + m_overPitch, -89.9f, 89.9f);
+  }
 
   // Jitter по умолчанию 0. Если включён — обновляем редко, не каждый кадр.
   if (settings.randomJitterDeg > 0.0f) {
@@ -561,17 +617,6 @@ void AimAssist::updateVisual(float dt) {
     }
     aim.yaw = normalizeYaw(aim.yaw + m_jitterYaw);
     aim.pitch = clampf(aim.pitch + m_jitterPitch, -89.9f, 89.9f);
-  }
-
-  // Микро-тремор: две несоизмеримые синусоиды дают непериодическое
-  // дрожание ~0.02°, которого достаточно, чтобы траектория не была
-  // идеально прямой (эвристики Polar/Matrix ловят именно такие линии).
-  if (settings.humanize && settings.aimTremorDeg > 0.0f) {
-    const float t = static_cast<float>(aimNow) * 0.001f;
-    m_tremorYaw = std::sin(t * 7.3f) * settings.aimTremorDeg;
-    m_tremorPitch = std::sin(t * 9.1f + 1.7f) * settings.aimTremorDeg * 0.7f;
-    aim.yaw = normalizeYaw(aim.yaw + m_tremorYaw);
-    aim.pitch = clampf(aim.pitch + m_tremorPitch, -89.9f, 89.9f);
   }
 
   const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
@@ -683,6 +728,12 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   const float localPitch =
       hasView ? view.pitch : m_localPitch.load(std::memory_order_relaxed);
 
+  // Жёсткий конус захвата даже при FOV=360. Развороты на 90-180° —
+  // самый явный маркер aimbot/aimassist для серверных эвристик.
+  const float assistFov =
+      settings.antiCheatMode ? std::min(settings.fovDeg, settings.assistConeDeg)
+                             : settings.fovDeg;
+
   Target current = m_target;
   bool currentStillValid = false;
 
@@ -717,7 +768,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
 
     if (distance > settings.range) continue;
-    if (settings.fovDeg < 359.5f && angular > settings.fovDeg) continue;
+    if (assistFov < 359.5f && angular > assistFov) continue;
 
     if (settings.visibleCheck &&
         !m_bridge.hasLineOfSight(player, eye, point)) {
@@ -761,9 +812,9 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   }
 
   bool better = triggerOverride;
+  bool directHit = false;
   if (!triggerOverride && currentStillValid && chosen.valid) {
-    const bool directHit = chosen.actor != current.actor &&
-                           chosen.angle <= 1.5f;
+    directHit = chosen.actor != current.actor && chosen.angle <= 1.5f;
     if (settings.targetPriority == TargetPriority::Angle) {
       better = directHit ||
                chosen.angle + settings.switchHysteresisDeg < current.angle;
@@ -771,6 +822,13 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
       better = directHit ||
                (chosen.distance + 1.0f < current.distance &&
                 chosen.angle <= current.angle + 10.0f);
+    }
+    // Минимальное время удержания цели. Без него assist перескакивает
+    // между двумя близкими целями каждый кадр (multi-aura паттерн).
+    const int64_t switchNow = nowMs();
+    if (!directHit && settings.switchDelayMs > 0 && m_lastSwitchMs != 0 &&
+        switchNow - m_lastSwitchMs < settings.switchDelayMs) {
+      better = false;
     }
   }
 
@@ -799,6 +857,10 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
       m_velPitch = 0.0f;
       m_targetHistory.clear();
       m_historyActor = chosen.actor;
+      m_aimEngageAtMs = 0;
+      m_lastAimActor = nullptr;
+      m_lastSwitchMs = nowMs();
+      resetHumanProfile();
     }
     m_stickyLeft = std::max(0, settings.stickyTicks);
     m_target.valid = true;
@@ -840,9 +902,6 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
 
   void *bestActor = nullptr;
   float bestDistance = reach + tolerance;
-  void *nearestActor = nullptr;
-  float nearestDist = 1e9f;
-  Vec3 nearestCenter{};
 
   int tested = 0;
   int skippedBounds = 0;
@@ -874,11 +933,6 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
       const float dz = center.z - eye.z;
       const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
       if (len > 1e-4f) {
-        if (len < nearestDist) {
-          nearestDist = len;
-          nearestActor = actor;
-          nearestCenter = center;
-        }
         const float dot =
             clampf((dir.x * dx + dir.y * dy + dir.z * dz) / len, -1.0f, 1.0f);
         const float angle = std::acos(dot) * kRadToDeg;
@@ -909,13 +963,16 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     bestActor = actor;
   }
 
-  // Авто-кликер: если прицел не пересекает хитбокс, бьём ближайшего актёра
-  // в радиусе — бот бьёт «всегда», а не только при точном наведении.
-  bool nearestFallback = false;
-  if (!bestActor && nearestActor && nearestDist <= reach) {
-    bestActor = nearestActor;
-    bestDistance = nearestDist;
-    nearestFallback = true;
+  // Мягкое добивание допустимо только в не-legit режиме и только когда
+  // прицел почти на цели (малый угол), а не «ближайший в радиусе». Удар
+  // при взгляде в сторону — прямой триггер aim/killaura-проверок
+  // (Polar, FairPlay AimbotTargetOffset, GhostAC aim window).
+  bool angleFallback = false;
+  if (!bestActor && minAngleActor && minAngleDist <= reach &&
+      !settings.legitAttackOnly && minAngle <= settings.attackMaxAngleDeg) {
+    bestActor = minAngleActor;
+    bestDistance = minAngleDist;
+    angleFallback = true;
   }
 
   static uint64_t s_triggerLog = 0;
@@ -954,13 +1011,29 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   if (m_triggerSinceActor != bestActor) {
     m_triggerSinceActor = bestActor;
     m_triggerSinceMs = now;
+    // Реакция на новую цель — со случайным разбросом, а не константа.
+    m_triggerDelayForTargetMs = settings.triggerDelayMs;
+    if (settings.humanize && settings.triggerDelayJitterMs > 0) {
+      m_triggerDelayForTargetMs +=
+          randomInt(0, settings.triggerDelayJitterMs);
+    }
   }
-  if (now - m_triggerSinceMs < settings.triggerDelayMs) return;
+  if (now - m_triggerSinceMs < m_triggerDelayForTargetMs) return;
   if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
 
+  // Не бьём сразу после смены цели и иногда «промахиваемся» (не жмём).
+  if (settings.humanize) {
+    if (m_lastSwitchMs != 0 && now - m_lastSwitchMs < 120) return;
+    if (settings.attackMissChance > 0.0f &&
+        randomFloat(0.0f, 1.0f) < settings.attackMissChance) {
+      m_nextAttackAtMs = now + randomInt(80, 220);
+      return;
+    }
+  }
+
   Vec3 hitPoint{};
-  if (nearestFallback) {
-    hitPoint = nearestCenter;
+  if (angleFallback) {
+    hitPoint = minAngleCenter;
   } else {
     hitPoint.x = eye.x + dir.x * bestDistance;
     hitPoint.y = eye.y + dir.y * bestDistance;
@@ -978,7 +1051,16 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     }
   }
   if (m_bridge.attackActor(bestActor, hitPoint)) {
-    m_nextAttackAtMs = now + settings.triggerIntervalMs;
+    // Интервал между ударами: база + разброс + редкая «задумчивость».
+    int64_t next = now + settings.triggerIntervalMs;
+    if (settings.attackIntervalJitterMs > 0) {
+      next += randomInt(-settings.attackIntervalJitterMs,
+                        settings.attackIntervalJitterMs);
+    }
+    if (settings.humanize && randomFloat(0.0f, 1.0f) < 0.08f) {
+      next += randomInt(120, 320);
+    }
+    m_nextAttackAtMs = std::max(now + 120, next);
   } else {
     // GameMode ещё не готов (меню/загрузка) — не долбим каждый кадр.
     m_nextAttackAtMs = now + 100;
@@ -1051,14 +1133,23 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
   const float deadzone = std::max(0.0f, settings.deadzoneDeg);
   const float fullRange = std::max(0.001f, settings.fullSpeedRangeDeg);
 
+  // Медленная вариация «мотора»: скорость и ускорение не постоянны от
+  // секунды к секунде. Убирает одинаковые шаги поворота (проверки
+  // step modulo / step quotient у FairPlay и аналогов).
+  const float motor = clampf(m_motorScale, 0.5f, 1.5f);
+
   {
     const float curYaw = m_localYaw.load(std::memory_order_relaxed);
     const float curPitch = m_localPitch.load(std::memory_order_relaxed);
     const float deltaYaw = shortestDelta(curYaw, targetYaw);
     const float deltaPitch = targetPitch - curPitch;
 
-    if (std::fabs(deltaYaw) <= deadzone &&
-        std::fabs(deltaPitch) <= deadzone) {
+    // Гистерезис мёртвой зоны: войти в неё сложнее, чем остаться. Не даёт
+    // камере «зудеть» на границе и генерировать пачки микродельт.
+    const float enter = deadzone;
+    const float stay = deadzone * 1.7f;
+    const float limit = m_deadzoneHit ? stay : enter;
+    if (std::fabs(deltaYaw) <= limit && std::fabs(deltaPitch) <= limit) {
       // Не обнуляем скорость мгновенно: плавно тормозим в зоне.
       m_velYaw *= 0.5f;
       m_velPitch *= 0.5f;
@@ -1073,19 +1164,23 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     const float proximity = clampf(magnitude / fullRange, 0.0f, 1.0f);
     // smoothstep: мягкий вход/выход без излома на границе fullSpeedRange.
     const float easedProximity = proximity * proximity * (3.0f - 2.0f * proximity);
-    float localMaxVel = maxVel * easedProximity;
+    float localMaxVel = maxVel * motor * easedProximity;
     // Ограничение поворота на серверный тик: даже при максимальной
     // скорости не выдаём «телепорт» больше maxTickDeltaDeg за 50 мс.
     if (settings.maxTickDeltaDeg > 0.0f) {
       localMaxVel = std::min(localMaxVel, settings.maxTickDeltaDeg / 0.05f);
     }
 
-    // Критически задемпфированная пружина: без перелёта и без рывков.
-    float accelYaw = omega * omega * deltaYaw - 2.0f * omega * m_velYaw;
-    float accelPitch = omega * omega * deltaPitch - 2.0f * omega * m_velPitch;
+    // Слегка недодемпфированная пружина (zeta ~0.88): довод имеет
+    // естественный перелёт на 1-3%, который затем гасится. Идеально
+    // критический довод даёт «прилипание» и подозрительно нулевую ошибку.
+    const float damping = 1.76f * omega;
+    float accelYaw = omega * omega * deltaYaw - damping * m_velYaw;
+    float accelPitch = omega * omega * deltaPitch - damping * m_velPitch;
     if (maxAccel > 0.0f) {
-      accelYaw = clampf(accelYaw, -maxAccel, maxAccel);
-      accelPitch = clampf(accelPitch, -maxAccel, maxAccel);
+      const float maxAccelScaled = maxAccel * motor;
+      accelYaw = clampf(accelYaw, -maxAccelScaled, maxAccelScaled);
+      accelPitch = clampf(accelPitch, -maxAccelScaled, maxAccelScaled);
     }
 
     m_velYaw += accelYaw * h;
@@ -1125,6 +1220,80 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
                        : 0.0f;
     m_deadzoneHit = false;
   }
+}
+
+// ============================================================
+// Человеческий моторный профиль
+// ============================================================
+float AimAssist::randomFloat(float lo, float hi) {
+  if (hi <= lo) return lo;
+  std::uniform_real_distribution<float> dist(lo, hi);
+  return dist(m_rng);
+}
+
+int AimAssist::randomInt(int lo, int hi) {
+  if (hi <= lo) return lo;
+  std::uniform_int_distribution<int> dist(lo, hi);
+  return dist(m_rng);
+}
+
+void AimAssist::resetHumanProfile() {
+  m_noiseYaw = 0.0f;
+  m_noisePitch = 0.0f;
+  m_restYaw = 0.0f;
+  m_restPitch = 0.0f;
+  m_overYaw = 0.0f;
+  m_overPitch = 0.0f;
+  m_motorScale = 1.0f;
+  m_nextMotorMs = 0;
+  m_nextRestMs = 0;
+  m_targetLockMs = 0;
+}
+
+void AimAssist::updateHumanProfile(const Settings &settings, float dt,
+                                   int64_t now) {
+  dt = clampf(dt, 0.0f, kMaxDt);
+
+  // Медленная вариация силы/скорости движения руки.
+  if (now >= m_nextMotorMs) {
+    const float var = clampf(settings.motorVariation, 0.0f, 0.45f);
+    m_motorScale = randomFloat(1.0f - var, 1.0f + var);
+    m_nextMotorMs = now + randomInt(180, 480);
+  }
+
+  // Gauss-Markov (OU) шум сопровождения. В отличие от синусоид он не
+  // периодичен, но и не «дребезжит» каждый кадр: соседние значения
+  // коррелированы, поэтому детекторы jitter/направлений не видят
+  // искусственно высокой частоты смены знака.
+  const float sigma =
+      std::max(0.0f, settings.trackingNoiseDeg + settings.aimTremorDeg);
+  if (sigma > 0.0001f && dt > 0.0f) {
+    const float tau = 0.55f;
+    const float a = dt / tau;
+    const float k = sigma * std::sqrt(2.0f * a);
+    std::normal_distribution<float> normal(0.0f, 1.0f);
+    m_noiseYaw += -m_noiseYaw * a + normal(m_rng) * k;
+    m_noisePitch += -m_noisePitch * a + normal(m_rng) * k * 0.7f;
+    const float limit = sigma * 2.5f;
+    m_noiseYaw = clampf(m_noiseYaw, -limit, limit);
+    m_noisePitch = clampf(m_noisePitch, -limit, limit);
+  } else {
+    m_noiseYaw = 0.0f;
+    m_noisePitch = 0.0f;
+  }
+
+  // Точка покоя не в математическом центре хитбокса и медленно блуждает.
+  if (now >= m_nextRestMs) {
+    const float rest = std::max(0.0f, settings.restOffsetDeg);
+    m_restYaw = randomFloat(-rest, rest);
+    m_restPitch = randomFloat(-rest, rest) * 0.6f;
+    m_nextRestMs = now + randomInt(500, 1400);
+  }
+
+  // Перелёт затухает за ~0.18 с — это скорость коррекции живой руки.
+  const float decay = std::exp(-dt / 0.18f);
+  m_overYaw *= decay;
+  m_overPitch *= decay;
 }
 
 // ============================================================
@@ -1213,6 +1382,8 @@ void AimAssist::clearTarget() {
   m_velPitch = 0.0f;
   m_lastAimActor = nullptr;
   m_aimEngageAtMs = 0;
+  m_targetLockMs = 0;
+  resetHumanProfile();
   // m_onTarget принадлежит триггеру: очистка цели aim assist не должна
   // гасить триггер посреди кадра.
 }

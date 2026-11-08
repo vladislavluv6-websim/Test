@@ -153,6 +153,21 @@ public final class AimAssistMod {
         if (initialized) nativeSetAimTremor(degrees);
     }
 
+    /** Anti-cheat профиль: конус захвата, шум сопровождения, без снапов. */
+    public static void setAntiCheatMode(boolean enabled) {
+        if (initialized) nativeSetAntiCheatMode(enabled);
+    }
+
+    /** Жёсткий конус захвата цели в градусах (10..180). */
+    public static void setAssistCone(float degrees) {
+        if (initialized) nativeSetAssistCone(degrees);
+    }
+
+    /** Вероятность пропуска удара триггера (0..0.35). */
+    public static void setAttackMissChance(float chance) {
+        if (initialized) nativeSetAttackMissChance(chance);
+    }
+
     public static boolean isOnTarget() {
         return initialized && nativeIsOnTarget();
     }
@@ -211,6 +226,9 @@ public final class AimAssistMod {
     private static native void nativeSetHumanization(boolean enabled);
     private static native void nativeSetReactionDelay(int baseMs, int jitterMs);
     private static native void nativeSetAimTremor(float degrees);
+    private static native void nativeSetAntiCheatMode(boolean enabled);
+    private static native void nativeSetAssistCone(float degrees);
+    private static native void nativeSetAttackMissChance(float chance);
     private static native boolean nativeIsOnTarget();
     private static native void nativeSetTouchActive(boolean active);
     private static native void nativeNotifyCameraLook();

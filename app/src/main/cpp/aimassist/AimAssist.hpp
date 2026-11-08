@@ -41,21 +41,23 @@ struct Settings {
   ActivationMode activationMode = ActivationMode::Always;
   int activationKey = 0;
 
-  float fovDeg = 360.0f;
-  float range = 11.68f;
-  float smoothingSpeed = 18.0f;
-  float maxDegPerSecond = 650.0f;
-  float maxAccelDegPerSecond2 = 2600.0f;
-  float deadzoneDeg = 0.10f;
-  float fullSpeedRangeDeg = 12.0f;
+  float fovDeg = 90.0f;
+  float range = 8.0f;
+  float smoothingSpeed = 15.0f;
+  float maxDegPerSecond = 560.0f;
+  float maxAccelDegPerSecond2 = 2200.0f;
+  float deadzoneDeg = 0.30f;
+  float fullSpeedRangeDeg = 18.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
   TargetBone targetBone = TargetBone::Head;
 
-  int stickyTicks = 4;
-  float switchHysteresisDeg = 3.0f;
-  int targetSmoothFrames = 0;
-  int targetGraceFrames = 12;
+  int stickyTicks = 6;
+  float switchHysteresisDeg = 4.0f;
+  // EMA-лаг позиции цели (в кадрах при 120 Гц). Даёт «догоняющее» наведение,
+  // как у живой руки, вместо мгновенной привязки к центру хитбокса.
+  int targetSmoothFrames = 6;
+  int targetGraceFrames = 10;
 
   float randomJitterDeg = 0.0f;
   int randomJitterIntervalMs = 150;
@@ -89,19 +91,52 @@ struct Settings {
 
   // ------------------------------------------------------------
   // Humanization / устойчивость к серверным анти-читам
-  // (Polar, Matrix/ML, Geyser-прокси и т.п.)
+  // (Polar ML, FairPlay, GhostAC/NovaAC, Geyser-прокси и т.п.)
   // ------------------------------------------------------------
   // Реакция перед началом доводки: живой игрок не начинает вести цель
   // в тот же кадр, в котором она появилась.
   bool humanize = true;
-  float reactionDelayMs = 130.0f;
-  float reactionJitterMs = 80.0f;
-  // Микро-тремор камеры. Ломает «идеально прямые» траектории, которые
-  // ищут эвристики анти-читов.
-  float aimTremorDeg = 0.02f;
+  float reactionDelayMs = 140.0f;
+  float reactionJitterMs = 90.0f;
+  // Дополнительный вклад в шум сопровождения (0 — только trackingNoiseDeg).
+  float aimTremorDeg = 0.0f;
   // Верхний предел поворота за один серверный тик (50 мс). Защита от
   // «телепорт-снапов», которые ловят rotation-check'и.
-  float maxTickDeltaDeg = 40.0f;
+  float maxTickDeltaDeg = 26.0f;
+
+  // ------------------------------------------------------------
+  // Anti-cheat профиль (включён по умолчанию)
+  // ------------------------------------------------------------
+  // Жёсткий конус захвата. Даже если FOV выставлен в 360, assist не
+  // разворачивается на цель за спиной: снапы на 90-180° — главный маркер
+  // aim-эвристик.
+  bool antiCheatMode = true;
+  float assistConeDeg = 90.0f;
+  // Шум сопровождения (Gauss-Markov / OU): плавно «плавает» вокруг цели,
+  // из-за чего траектория не является точной функцией угла до цели.
+  float trackingNoiseDeg = 0.20f;
+  // Постоянное смещение точки прицеливания от центра хитбокса. Игрок не
+  // держит прицел математически точно в центре; это ломает проверки
+  // "aim placement"/"target offset" и статистику идеальной точности.
+  float restOffsetDeg = 0.28f;
+  // Одноразовый перелёт при захвате новой цели (доля начальной ошибки).
+  float overshootFactor = 0.10f;
+  // Медленная вариация «моторной» скорости (доля единицы).
+  float motorVariation = 0.18f;
+  // Минимальное время удержания текущей цели перед переключением, мс.
+  int switchDelayMs = 240;
+  // Триггер: максимальный угол от прицела до центра цели для «мягкого»
+  // добивания, если луч не попал в AABB. В legit-режиме не используется.
+  float attackMaxAngleDeg = 3.5f;
+  // Вероятность «промаха» (пропуска удара) для humanization.
+  float attackMissChance = 0.05f;
+  // Разброс интервала между ударами, мс (±).
+  int attackIntervalJitterMs = 180;
+  // Задержка реакции триггера на новую цель (разброс), мс.
+  int triggerDelayJitterMs = 120;
+  // Бить только когда луч реально пересекает хитбокс (без «добивания»
+  // по минимальному углу). Это самая шумная для анти-читов ветка.
+  bool legitAttackOnly = true;
 };
 
 struct DebugState {
@@ -169,6 +204,9 @@ public:
   void setHumanization(bool enabled);
   void setReactionDelay(int baseMs, int jitterMs);
   void setAimTremor(float degrees);
+  void setAntiCheatMode(bool enabled);
+  void setAssistCone(float degrees);
+  void setAttackMissChance(float chance);
   void setTouchActive(bool active);
   void notifyCameraLook();
   void setActivationHeld(bool held);
@@ -206,6 +244,13 @@ private:
   void syncLocalFromView(void *player);
   Vec3 smoothedPoint(const Target &target, const Settings &settings);
 
+  // Human motor model: OU-шум сопровождения, «дрожащая» точка покоя,
+  // одноразовый перелёт и медленная вариация скорости.
+  void resetHumanProfile();
+  void updateHumanProfile(const Settings &settings, float dt, int64_t now);
+  float randomFloat(float lo, float hi);
+  int randomInt(int lo, int hi);
+
   ClientBridge &m_bridge = ClientBridge::instance();
 
   mutable std::mutex m_settingsMutex;
@@ -226,7 +271,9 @@ private:
   // Таймер атаки триггера. Живёт на игровом потоке (ClientInstance::update).
   int64_t m_triggerSinceMs = 0;
   int64_t m_nextAttackAtMs = 0;
+  int m_triggerDelayForTargetMs = 0;
   void *m_triggerSinceActor = nullptr;
+  int64_t m_lastSwitchMs = 0;
 
   bool m_hasLocal = false;
 
@@ -241,11 +288,24 @@ private:
   int64_t m_lastJitterMs = 0;
   // Humanization state.
   int64_t m_aimEngageAtMs = 0;
+  int64_t m_targetLockMs = 0;
   void *m_lastAimActor = nullptr;
-  float m_tremorYaw = 0.0f;
-  float m_tremorPitch = 0.0f;
   float m_jitterYaw = 0.0f;
   float m_jitterPitch = 0.0f;
+
+  // Gauss-Markov шум сопровождения (градусы).
+  float m_noiseYaw = 0.0f;
+  float m_noisePitch = 0.0f;
+  // Медленно блуждающая точка покоя относительно центра хитбокса.
+  float m_restYaw = 0.0f;
+  float m_restPitch = 0.0f;
+  int64_t m_nextRestMs = 0;
+  // Одноразовый перелёт при захвате цели (затухает экспоненциально).
+  float m_overYaw = 0.0f;
+  float m_overPitch = 0.0f;
+  // Медленная вариация моторной скорости.
+  float m_motorScale = 1.0f;
+  int64_t m_nextMotorMs = 0;
 
   float m_velYaw = 0.0f;
   float m_velPitch = 0.0f;

@@ -195,6 +195,24 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetAimTr
   aimbot::AimAssist::instance().setAimTremor(degrees);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetAntiCheatMode(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setAntiCheatMode(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetAssistCone(
+    JNIEnv *, jclass, jfloat degrees) {
+  aimbot::AimAssist::instance().setAssistCone(degrees);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetAttackMissChance(
+    JNIEnv *, jclass, jfloat chance) {
+  aimbot::AimAssist::instance().setAttackMissChance(chance);
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeIsOnTarget(
     JNIEnv *, jclass) {
