@@ -177,7 +177,14 @@ public final class AimAssistMod {
         return initialized;
     }
 
+    /** Включает запись диагностики в файл (в дополнение к logcat). */
+    public static void setDiagLogPath(String path) {
+        if (!loadLibrary()) return;
+        nativeSetDiagLogPath(path);
+    }
+
     private static native boolean nativeInit();
+    private static native void nativeSetDiagLogPath(String path);
     private static native void nativeSetEnabled(boolean enabled);
     private static native boolean nativeIsEnabled();
     private static native void nativeSetRange(float range);

@@ -2,6 +2,8 @@
 
 #include <android/log.h>
 
+#include "DiagLog.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -186,7 +188,7 @@ bool ClientBridge::initialize() {
   if (!validGameFn(normalTick) || !validGameFn(clientUpdate) ||
       !validGameFn(getLocalPlayer) || !validGameFn(applyTurnDelta) ||
       !validGameFn(fetchNearbyActors) || !validGameFn(actorIsPlayer)) {
-    __android_log_print(ANDROID_LOG_WARN, kTag,
+    aimbot::diagLog(kTag,
                         "signature resolve failed: tick=%p update=%p "
                         "local=%p delta=%p nearby=%p isPlayer=%p",
                         reinterpret_cast<void *>(normalTick),
@@ -209,7 +211,7 @@ bool ClientBridge::initialize() {
                          reinterpret_cast<pl::memory::FuncPtr>(&normalTickDetour),
                          reinterpret_cast<pl::memory::FuncPtr *>(
                              &g_normalTickOriginal)) != 0) {
-      __android_log_print(ANDROID_LOG_WARN, kTag,
+      aimbot::diagLog(kTag,
                           "normalTick hook failed");
       return false;
     }
@@ -218,7 +220,7 @@ bool ClientBridge::initialize() {
                              &clientUpdateDetour),
                          reinterpret_cast<pl::memory::FuncPtr *>(
                              &g_clientUpdateOriginal)) != 0) {
-      __android_log_print(ANDROID_LOG_WARN, kTag,
+      aimbot::diagLog(kTag,
                           "ClientInstance::update hook failed");
       return false;
     }
@@ -226,7 +228,7 @@ bool ClientBridge::initialize() {
   }
 
   g_initialized.store(true, std::memory_order_release);
-  __android_log_print(ANDROID_LOG_INFO, kTag,
+  aimbot::diagLog(kTag,
                       "bridge initialized: tick=%p update=%p delta=%p",
                       reinterpret_cast<void *>(normalTick),
                       reinterpret_cast<void *>(clientUpdate),
@@ -490,7 +492,7 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
   void *gameMode = getGameMode();
   if (!gameMode) {
     if (logThis) {
-      __android_log_print(ANDROID_LOG_WARN, kTag,
+      aimbot::diagLog(kTag,
                           "attack: gameMode=null client=%p", getClientInstance());
     }
     return false;
@@ -509,7 +511,7 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
   }
   if (!mem::isGameAddress(reinterpret_cast<const void *>(attackFn))) {
     if (logThis) {
-      __android_log_print(ANDROID_LOG_WARN, kTag,
+      aimbot::diagLog(kTag,
                           "attack: fn=%p not in game (gm=%p vt=%p)",
                           reinterpret_cast<void *>(attackFn), gameMode,
                           reinterpret_cast<void *>(vtable));

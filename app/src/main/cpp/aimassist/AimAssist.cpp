@@ -2,6 +2,8 @@
 
 #include <android/log.h>
 
+#include "DiagLog.hpp"
+
 #include <algorithm>
 #include <cfloat>
 #include <chrono>
@@ -121,7 +123,7 @@ void AimAssist::onEnable() {
   // Release-публикация после сброса состояния: render-поток увидит
   // согласованные поля, а не полу-инициализированные.
   m_enabled.store(true, std::memory_order_release);
-  __android_log_print(ANDROID_LOG_INFO, kTag, "module enabled");
+  aimbot::diagLog(kTag, "module enabled");
 }
 
 void AimAssist::onDisable() {
@@ -130,7 +132,7 @@ void AimAssist::onDisable() {
   m_velYaw = 0.0f;
   m_velPitch = 0.0f;
   m_onTarget.store(false, std::memory_order_release);
-  __android_log_print(ANDROID_LOG_INFO, kTag, "module disabled");
+  aimbot::diagLog(kTag, "module disabled");
 }
 
 void AimAssist::onTick() { updateNetwork(); }
@@ -289,7 +291,7 @@ void AimAssist::setTriggerBot(bool enabled) {
   if (!enabled) {
     m_onTarget.store(false, std::memory_order_release);
   }
-  __android_log_print(ANDROID_LOG_INFO, kTag, "setTriggerBot(%d)",
+  aimbot::diagLog(kTag, "setTriggerBot(%d)",
                       enabled ? 1 : 0);
 }
 
@@ -401,7 +403,7 @@ void AimAssist::updateVisual(float dt) {
     m_triggerActor.store(nullptr, std::memory_order_release);
     static uint64_t s_noPlayer = 0;
     if ((++s_noPlayer % 240) == 1) {
-      __android_log_print(ANDROID_LOG_WARN, kTag,
+      aimbot::diagLog(kTag,
                           "updateVisual: no local player (client=%p)",
                           m_bridge.getClientInstance());
     }

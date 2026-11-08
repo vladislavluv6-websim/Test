@@ -2,6 +2,8 @@
 
 #include <android/log.h>
 
+#include "DiagLog.hpp"
+
 #include "AimAssist.hpp"
 #include "ClientBridge.hpp"
 #include "Esp.hpp"
@@ -12,6 +14,20 @@ constexpr const char *kTag = "AimAssistJni";
 
 } // namespace
 
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetDiagLogPath(
+    JNIEnv *env, jclass, jstring path) {
+  if (!path) {
+    aimbot::setDiagLogPath(nullptr);
+    return;
+  }
+  const char *chars = env->GetStringUTFChars(path, nullptr);
+  if (chars) {
+    aimbot::setDiagLogPath(chars);
+    env->ReleaseStringUTFChars(path, chars);
+  }
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeInit(
     JNIEnv *, jclass) {
@@ -19,7 +35,7 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeInit(
   if (ok) {
     aimbot::AimAssist::instance().onConfigLoad();
   }
-  __android_log_print(ANDROID_LOG_INFO, kTag, "nativeInit=%d", ok ? 1 : 0);
+  aimbot::diagLog(kTag, "nativeInit=%d", ok ? 1 : 0);
   return ok ? JNI_TRUE : JNI_FALSE;
 }
 
