@@ -168,6 +168,14 @@ inline constexpr uintptr_t kSurvivalModeAttackFileOffset = 0x100a11c8;
 // 0xce2c894: 0x1009cba4(GameMode, actor, actionType=0, Vec3 const&). Повторяем
 // этот вызов — без флаговой проверки обёртки.
 inline constexpr uintptr_t kGameModeAttackImplFileOffset = 0x1009cba4;
+// Обработчик списка атак (0xce2c78c). Каждый тик получает WeakPtr на
+// настоящий ClientInstance и зовёт getGameMode(lock(a2)). Хук ловит этот
+// ClientInstance и кэширует реальный GameMode.
+inline constexpr uintptr_t kAttackListProcessorFileOffset = 0xce2c78c;
+// lock(WeakPtr, 0): разыменовывает WeakPtr и проверяет [+0x269] == 0.
+inline constexpr uintptr_t kLockWeakPtrFileOffset = 0xfdb3b20;
+// ClientInstance vtable (vaddr). [client] == base + 0x1388FE70.
+inline constexpr uintptr_t kClientInstanceVtableFileOffset = 0x1388FE70;
 
 // ============================================================
 // ESP RENDER OFFSETS

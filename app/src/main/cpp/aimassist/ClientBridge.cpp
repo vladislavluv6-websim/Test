@@ -270,6 +270,13 @@ std::atomic<uintptr_t> g_gameModeDirect{0};
 std::atomic<bool> g_scanRunning{false};
 std::atomic<uintptr_t> g_scanClient{0};
 
+// Хук на обработчик списка атак (0xce2c78c): каждый тик получает WeakPtr на
+// настоящий ClientInstance (arg2), лочит его и читает [ClientInstance+0xA08].
+// Это ровно тот GameMode, что использует игра, — надёжнее любого скана.
+std::atomic<uintptr_t> g_lockWeakPtr{0};   // 0xfdb3b20
+std::atomic<uintptr_t> g_clientVtable{0};  // 0x1388FE70
+void *g_attackListOriginal = nullptr;
+
 // Проверяет, что объект похож на GameMode по структуре, а не по слоту vtable
 // (attack не виртуальный и в vtable его нет). Опираемся на поля, которые
 // реально читает GameMode::attack: +0x8 (Level/ClientInstance), +0xC0 (объект
@@ -311,9 +318,11 @@ bool isGameModeObject(uintptr_t candidate) {
   return true;
 }
 
-// Мягкая проверка для указателя, полученного напрямую из игры через
-// ClientInstance::getGameMode: достаточно vtable в libminecraftpe, ненулевого
-// Level и bool-флага. Не требует, чтобы +0x8/+0xC0 были именно кучей.
+// Проверка для указателя, полученного напрямую из игры (getGameMode или хук
+// обработчика атак): vtable в libminecraftpe, а +0x8 (Level) и +0xC0 (aux) —
+// валидные объекты, чьи vtable тоже в libminecraftpe, и bool-флаг 0/1.
+// Не требует, чтобы +0x8/+0xC0 были именно кучей (Level может быть где угодно),
+// но отсекает мусорные указатели, на которых 0x1009cba4 уронил бы игру.
 bool isGameModeLike(uintptr_t candidate) {
   if (candidate == 0) return false;
   uintptr_t vtable = 0;
@@ -322,7 +331,23 @@ bool isGameModeLike(uintptr_t candidate) {
     return false;
   }
   uintptr_t level = 0;
-  if (!safeRead(candidate + offsets::kGameModeOwner, level) || level == 0) {
+  if (!safeRead(candidate + offsets::kGameModeOwner, level) ||
+      !isPlausiblePointer(level) || level == candidate) {
+    return false;
+  }
+  uintptr_t levelVtable = 0;
+  if (!safeRead(level, levelVtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(levelVtable))) {
+    return false;
+  }
+  uintptr_t aux = 0;
+  if (!safeRead(candidate + offsets::kGameModeAux, aux) ||
+      !isPlausiblePointer(aux) || aux == candidate) {
+    return false;
+  }
+  uintptr_t auxVtable = 0;
+  if (!safeRead(aux, auxVtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(auxVtable))) {
     return false;
   }
   uint8_t flag = 0;
@@ -1024,6 +1049,44 @@ void *clientUpdateDetour(void *client, bool value, bool second) {
   return result;
 }
 
+// 0xce2c78c(void *a0, void *a1, void *a2, void *a3): игровой обработчик атак.
+// a2 — WeakPtr на настоящий ClientInstance (его лок делает игра перед
+// getGameMode). Ловим его и кэшируем реальный GameMode из [+0xA08].
+void *attackListDetour(void *a0, void *a1, void *a2, void *a3) {
+  static uint64_t s_calls = 0;
+  const uint64_t call = ++s_calls;
+  if (a2 && (call <= 4 || (call % 240) == 0)) {
+    const uintptr_t lockFn = g_lockWeakPtr.load(std::memory_order_relaxed);
+    const uintptr_t clientVt = g_clientVtable.load(std::memory_order_relaxed);
+    if (lockFn && clientVt) {
+      using LockFn = void *(*)(void *, int);
+      void *client = reinterpret_cast<LockFn>(lockFn)(a2, 0);
+      if (client) {
+        uintptr_t vt = 0;
+        if (safeRead(reinterpret_cast<uintptr_t>(client), vt) &&
+            vt == clientVt) {
+          uintptr_t gm = 0;
+          if (safeRead(reinterpret_cast<uintptr_t>(client) +
+                           offsets::kClientInstanceGameMode,
+                       gm) &&
+              gm != 0) {
+            const uintptr_t prev =
+                g_gameModeDirect.exchange(gm, std::memory_order_acq_rel);
+            if (prev != gm) {
+              aimbot::diagLog(kTag, "gm hook: client=%p gm=%p prev=%p",
+                              client, reinterpret_cast<void *>(gm),
+                              reinterpret_cast<void *>(prev));
+            }
+          }
+        }
+      }
+    }
+  }
+  using OrigFn = void *(*)(void *, void *, void *, void *);
+  auto orig = reinterpret_cast<OrigFn>(g_attackListOriginal);
+  return orig ? orig(a0, a1, a2, a3) : nullptr;
+}
+
 void normalTickDetour(void *actor) {
   if (g_normalTickOriginal) {
     g_normalTickOriginal(actor);
@@ -1116,6 +1179,28 @@ bool ClientBridge::initialize() {
       aimbot::diagLog(kTag,
                           "ClientInstance::update hook failed");
       return false;
+    }
+    // Хук обработчика атак: надёжно достаёт настоящий GameMode (attackListDetour).
+    const MapsInfo maps = readMaps();
+    if (maps.libStart != 0) {
+      const uintptr_t attackList =
+          maps.libStart + offsets::kAttackListProcessorFileOffset;
+      g_lockWeakPtr.store(maps.libStart + offsets::kLockWeakPtrFileOffset,
+                          std::memory_order_release);
+      g_clientVtable.store(
+          maps.libStart + offsets::kClientInstanceVtableFileOffset,
+          std::memory_order_release);
+      if (pl::memory::hook(
+              reinterpret_cast<pl::memory::FuncPtr>(attackList),
+              reinterpret_cast<pl::memory::FuncPtr>(&attackListDetour),
+              reinterpret_cast<pl::memory::FuncPtr *>(
+                  &g_attackListOriginal)) != 0) {
+        aimbot::diagLog(kTag, "attack list hook failed @0x%zx", attackList);
+      } else {
+        aimbot::diagLog(kTag, "attack list hooked @0x%zx", attackList);
+      }
+    } else {
+      aimbot::diagLog(kTag, "attack list hook: maps libStart=0");
     }
     // Необязательный хук: поиск кнопки атаки в touch-HUD. Если сигнатура
     // не найдена, aim assist/ESP продолжают работать как раньше.
@@ -1486,6 +1571,39 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     if (logThis) {
       aimbot::diagLog(kTag, "attack: gameBase=null gm=%p vt=%p", gameMode,
                       reinterpret_cast<void *>(vtable));
+    }
+    return false;
+  }
+
+  // 0x1009cba4 сразу разыменовывает [this+0x8] (Level) и [this+0xC0] (aux).
+  // Если это чужой объект, игра падает. Проверяем оба поля до вызова: у
+  // настоящего GameMode оба указывают на объекты с vtable в libminecraftpe,
+  // а [this+0xC8] — bool 0/1.
+  uintptr_t level = 0;
+  uintptr_t aux = 0;
+  uint8_t flag = 0xFF;
+  uintptr_t levelVt = 0;
+  uintptr_t auxVt = 0;
+  const bool guardOk =
+      safeRead(gm + offsets::kGameModeOwner, level) &&
+      safeRead(gm + offsets::kGameModeAux, aux) &&
+      safeRead(gm + offsets::kGameModeBool, flag) &&
+      isPlausiblePointer(level) && isPlausiblePointer(aux) &&
+      level != gm && aux != gm && flag <= 1 &&
+      safeRead(level, levelVt) &&
+      mem::isGameAddress(reinterpret_cast<const void *>(levelVt)) &&
+      safeRead(aux, auxVt) &&
+      mem::isGameAddress(reinterpret_cast<const void *>(auxVt));
+  if (!guardOk) {
+    if (logThis) {
+      aimbot::diagLog(kTag,
+                      "attack: reject gm=%p level=%p lvt=%p aux=%p avt=%p "
+                      "flag=%u",
+                      gameMode, reinterpret_cast<void *>(level),
+                      reinterpret_cast<void *>(levelVt),
+                      reinterpret_cast<void *>(aux),
+                      reinterpret_cast<void *>(auxVt),
+                      static_cast<unsigned>(flag));
     }
     return false;
   }
