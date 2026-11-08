@@ -1126,42 +1126,50 @@ void *attackListDetour(void *a0, void *a1, void *a2, void *a3) {
 // Заодно ищем, по какому оффсету gm лежит в ClientInstance/LocalPlayer —
 // чтобы в будущем брать его без удара игрока.
 void attackImplDetour(void *gm, void *actor, int actionType, const void *pos) {
+  // Игра сама передаёт в 0x1009cba4 валидный GameMode (x0) при каждом ударе.
+  // Доверяем ему напрямую: любые структурные проверки лишь отсекали настоящий
+  // объект (поля Level/aux у разных режимов лежат иначе). Запоминаем x0 как
+  // есть — это ровно тот указатель, с которым игра успешно бьёт.
   if (gm) {
     const uintptr_t g = reinterpret_cast<uintptr_t>(gm);
-    if (isGameModeLike(g)) {
-      const uintptr_t prev = g_gameModeDirect.load(std::memory_order_acquire);
-      if (prev != g) {
-        aimbot::diagLog(kTag,
-                        "gm attack-impl: gm=%p actor=%p type=%d prev=%p",
-                        gm, actor, actionType, reinterpret_cast<void *>(prev));
-        // Ищем, где gm лежит относительно нашего client/LocalPlayer.
-        const uintptr_t clientAddr =
-            reinterpret_cast<uintptr_t>(g_clientInstance.load());
-        const uintptr_t playerAddr =
-            reinterpret_cast<uintptr_t>(g_localPlayer.load());
-        for (uintptr_t off = 0; off <= 0x1400; off += 8) {
-          uintptr_t v = 0;
-          if (clientAddr && safeRead(clientAddr + off, v) && v == g) {
-            aimbot::diagLog(kTag, "gm locate: [client+0x%zx] == gm", off);
-            break;
-          }
+    uintptr_t vtable = 0;
+    uintptr_t level = 0;
+    uintptr_t aux = 0;
+    uint8_t flag = 0xFF;
+    safeRead(g, vtable);
+    safeRead(g + offsets::kGameModeOwner, level);
+    safeRead(g + offsets::kGameModeAux, aux);
+    safeRead(g + offsets::kGameModeBool, flag);
+    const uintptr_t prev = g_gameModeDirect.load(std::memory_order_acquire);
+    if (prev != g) {
+      aimbot::diagLog(kTag,
+                      "gm attack-impl: gm=%p vt=%p lvl=%p aux=%p flag=%u "
+                      "actor=%p type=%d prev=%p",
+                      gm, reinterpret_cast<void *>(vtable),
+                      reinterpret_cast<void *>(level),
+                      reinterpret_cast<void *>(aux), static_cast<unsigned>(flag),
+                      actor, actionType, reinterpret_cast<void *>(prev));
+      // Ищем, где gm лежит относительно нашего client/LocalPlayer.
+      const uintptr_t clientAddr =
+          reinterpret_cast<uintptr_t>(g_clientInstance.load());
+      const uintptr_t playerAddr =
+          reinterpret_cast<uintptr_t>(g_localPlayer.load());
+      for (uintptr_t off = 0; off <= 0x1400; off += 8) {
+        uintptr_t v = 0;
+        if (clientAddr && safeRead(clientAddr + off, v) && v == g) {
+          aimbot::diagLog(kTag, "gm locate: [client+0x%zx] == gm", off);
+          break;
         }
-        for (uintptr_t off = 0; off <= 0x1400; off += 8) {
-          uintptr_t v = 0;
-          if (playerAddr && safeRead(playerAddr + off, v) && v == g) {
-            aimbot::diagLog(kTag, "gm locate: [player+0x%zx] == gm", off);
-            break;
-          }
-        }
-        g_gameModeDirect.store(g, std::memory_order_release);
       }
-    } else {
-      static std::atomic<int> s_reject{0};
-      if (s_reject.fetch_add(1, std::memory_order_relaxed) < 8) {
-        aimbot::diagLog(kTag, "gm attack-impl: reject gm=%p actor=%p type=%d",
-                        gm, actor, actionType);
+      for (uintptr_t off = 0; off <= 0x1400; off += 8) {
+        uintptr_t v = 0;
+        if (playerAddr && safeRead(playerAddr + off, v) && v == g) {
+          aimbot::diagLog(kTag, "gm locate: [player+0x%zx] == gm", off);
+          break;
+        }
       }
     }
+    g_gameModeDirect.store(g, std::memory_order_release);
   }
   using ImplFn = void (*)(void *, void *, int, const void *);
   auto orig = reinterpret_cast<ImplFn>(g_gameModeAttackImplOriginal);
@@ -1571,10 +1579,13 @@ void *ClientBridge::getGameMode() const {
   const uintptr_t cachedDirect =
       g_gameModeDirect.load(std::memory_order_acquire);
   if (cachedDirect != 0) {
-    // Сюда попадает только GameMode из хука обработчика атак (игра сама берёт
-    // его из [owner+0xA08]), поэтому достаточно мягкой проверки. Строгая
-    // проверка ниже (guardOk в attackActor) защищает от вызова на мусоре.
-    if (isGameModeLike(cachedDirect)) {
+    // Сюда попадает только GameMode, который игра сама передала в свой же
+    // обработчик удара 0x1009cba4. Значит это гарантированно валидный `this`
+    // для удара — принимаем без структурных проверок (они отсекали настоящий
+    // объект). Достаточно убедиться, что vtable лежит в libminecraftpe.
+    uintptr_t cachedVtable = 0;
+    if (safeRead(cachedDirect, cachedVtable) &&
+        mem::isGameAddress(reinterpret_cast<const void *>(cachedVtable))) {
       return reinterpret_cast<void *>(cachedDirect);
     }
     g_gameModeDirect.store(0, std::memory_order_release);
@@ -1675,37 +1686,30 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     return false;
   }
 
-  // 0x1009cba4 сразу разыменовывает [this+0x8] (Level) и [this+0xC0] (aux).
-  // Если это чужой объект, игра падает. Проверяем оба поля до вызова: у
-  // настоящего GameMode оба указывают на объекты с vtable в libminecraftpe,
-  // а [this+0xC8] — bool 0/1.
+  // gm получен из собственного вызова игры (0x1009cba4), поэтому это валидный
+  // `this`: строгую проверку полей убрали — она лишь отсекала настоящий
+  // GameMode. Только логируем поля для диагностики (vtable уже проверен выше
+  // через gameBase != 0).
   uintptr_t level = 0;
   uintptr_t aux = 0;
   uint8_t flag = 0xFF;
   uintptr_t levelVt = 0;
   uintptr_t auxVt = 0;
-  const bool guardOk =
-      safeRead(gm + offsets::kGameModeOwner, level) &&
-      safeRead(gm + offsets::kGameModeAux, aux) &&
-      safeRead(gm + offsets::kGameModeBool, flag) &&
-      isPlausiblePointer(level) && isPlausiblePointer(aux) &&
-      level != gm && aux != gm && flag <= 1 &&
-      safeRead(level, levelVt) &&
-      mem::isGameAddress(reinterpret_cast<const void *>(levelVt)) &&
-      safeRead(aux, auxVt) &&
-      mem::isGameAddress(reinterpret_cast<const void *>(auxVt));
-  if (!guardOk) {
-    if (logThis) {
-      aimbot::diagLog(kTag,
-                      "attack: reject gm=%p level=%p lvt=%p aux=%p avt=%p "
-                      "flag=%u",
-                      gameMode, reinterpret_cast<void *>(level),
-                      reinterpret_cast<void *>(levelVt),
-                      reinterpret_cast<void *>(aux),
-                      reinterpret_cast<void *>(auxVt),
-                      static_cast<unsigned>(flag));
-    }
-    return false;
+  safeRead(gm + offsets::kGameModeOwner, level);
+  safeRead(gm + offsets::kGameModeAux, aux);
+  safeRead(gm + offsets::kGameModeBool, flag);
+  safeRead(level, levelVt);
+  safeRead(aux, auxVt);
+  if (logThis) {
+    aimbot::diagLog(kTag,
+                    "attack guard gm=%p vt=%p lvl=%p lvt=%p aux=%p avt=%p "
+                    "flag=%u",
+                    gameMode, reinterpret_cast<void *>(vtable),
+                    reinterpret_cast<void *>(level),
+                    reinterpret_cast<void *>(levelVt),
+                    reinterpret_cast<void *>(aux),
+                    reinterpret_cast<void *>(auxVt),
+                    static_cast<unsigned>(flag));
   }
 
   // 0x1009cba4(this, actor, actionType=0, Vec3 const&) — ровно тот вызов,

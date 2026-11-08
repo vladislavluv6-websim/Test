@@ -840,6 +840,9 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
 
   void *bestActor = nullptr;
   float bestDistance = reach + tolerance;
+  void *nearestActor = nullptr;
+  float nearestDist = 1e9f;
+  Vec3 nearestCenter{};
 
   int tested = 0;
   int skippedBounds = 0;
@@ -871,6 +874,11 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
       const float dz = center.z - eye.z;
       const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
       if (len > 1e-4f) {
+        if (len < nearestDist) {
+          nearestDist = len;
+          nearestActor = actor;
+          nearestCenter = center;
+        }
         const float dot =
             clampf((dir.x * dx + dir.y * dy + dir.z * dz) / len, -1.0f, 1.0f);
         const float angle = std::acos(dot) * kRadToDeg;
@@ -899,6 +907,15 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
 
     bestDistance = hit;
     bestActor = actor;
+  }
+
+  // Авто-кликер: если прицел не пересекает хитбокс, бьём ближайшего актёра
+  // в радиусе — бот бьёт «всегда», а не только при точном наведении.
+  bool nearestFallback = false;
+  if (!bestActor && nearestActor && nearestDist <= reach) {
+    bestActor = nearestActor;
+    bestDistance = nearestDist;
+    nearestFallback = true;
   }
 
   static uint64_t s_triggerLog = 0;
@@ -942,10 +959,24 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
 
   Vec3 hitPoint{};
-  hitPoint.x = eye.x + dir.x * bestDistance;
-  hitPoint.y = eye.y + dir.y * bestDistance;
-  hitPoint.z = eye.z + dir.z * bestDistance;
+  if (nearestFallback) {
+    hitPoint = nearestCenter;
+  } else {
+    hitPoint.x = eye.x + dir.x * bestDistance;
+    hitPoint.y = eye.y + dir.y * bestDistance;
+    hitPoint.z = eye.z + dir.z * bestDistance;
+  }
 
+  {
+    static uint64_t s_fireLog = 0;
+    const uint64_t n = ++s_fireLog;
+    if (n <= 5 || (n % 20) == 0) {
+      aimbot::diagLog(kTag, "trigger fire #%llu actor=%p dist=%.2f gm=%p",
+                      static_cast<unsigned long long>(n), bestActor,
+                      static_cast<double>(bestDistance),
+                      m_bridge.getGameMode());
+    }
+  }
   if (m_bridge.attackActor(bestActor, hitPoint)) {
     m_nextAttackAtMs = now + settings.triggerIntervalMs;
   } else {
