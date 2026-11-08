@@ -55,6 +55,9 @@ using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
 // Touch-HUD builder: принимает указатель на объект-layout с вектором контролов.
 using ControlBuilderFn = void (*)(void *);
+// ClientInstance::getGameMode(this) — `ldr x0,[x0,#0xa08]; ret`. Возвращает
+// реальный GameMode, который использует игра; хук ловит точный указатель.
+using GetGameModeFn = void *(*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientUpdateOriginal = nullptr;
@@ -63,6 +66,7 @@ ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 ControlBuilderFn g_controlBuilderOriginal = nullptr;
+GetGameModeFn g_getGameModeOriginal = nullptr;
 
 std::atomic<void *> g_clientInstance{nullptr};
 std::atomic<void *> g_localPlayer{nullptr};
@@ -267,6 +271,7 @@ bool dumpAttackControl() {
 
 std::atomic<uintptr_t> g_gameModeOffset{0};
 std::atomic<uintptr_t> g_gameModeDirect{0};
+std::atomic<uintptr_t> g_gameModeOwner{0};
 std::atomic<bool> g_scanRunning{false};
 std::atomic<uintptr_t> g_scanClient{0};
 
@@ -282,7 +287,9 @@ bool isGameModeObject(uintptr_t candidate) {
   }
   uintptr_t level = 0;
   if (!safeRead(candidate + offsets::kGameModeOwner, level) ||
-      !isPlausiblePointer(level)) {
+      !isPlausiblePointer(level) ||
+      mem::isGameAddress(reinterpret_cast<const void *>(level)) ||
+      level == candidate) {
     return false;
   }
   uintptr_t levelVtable = 0;
@@ -292,12 +299,35 @@ bool isGameModeObject(uintptr_t candidate) {
   }
   uintptr_t aux = 0;
   if (!safeRead(candidate + offsets::kGameModeAux, aux) ||
-      !isPlausiblePointer(aux)) {
+      !isPlausiblePointer(aux) ||
+      mem::isGameAddress(reinterpret_cast<const void *>(aux)) ||
+      aux == candidate) {
     return false;
   }
   uintptr_t auxVtable = 0;
   if (!safeRead(aux, auxVtable) ||
       !mem::isGameAddress(reinterpret_cast<const void *>(auxVtable))) {
+    return false;
+  }
+  uint8_t flag = 0;
+  if (!safeRead(candidate + offsets::kGameModeBool, flag) || flag > 1) {
+    return false;
+  }
+  return true;
+}
+
+// Мягкая проверка для указателя, полученного напрямую из игры через
+// ClientInstance::getGameMode: достаточно vtable в libminecraftpe, ненулевого
+// Level и bool-флага. Не требует, чтобы +0x8/+0xC0 были именно кучей.
+bool isGameModeLike(uintptr_t candidate) {
+  if (candidate == 0) return false;
+  uintptr_t vtable = 0;
+  if (!safeRead(candidate, vtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
+    return false;
+  }
+  uintptr_t level = 0;
+  if (!safeRead(candidate + offsets::kGameModeOwner, level) || level == 0) {
     return false;
   }
   uint8_t flag = 0;
@@ -661,10 +691,12 @@ void *ctlScanThread(void *) {
   return nullptr;
 }
 
-// Ищет живой объект GameMode в куче по структуре (см. isGameModeObject):
-// [0] — vtable в libminecraftpe, +0x8 — Level/ClientInstance с vtable в игре,
-// +0xC0 — объект с vtable в игре, +0xC8 — bool 0/1. Слот vtable больше не
-// используется: attack не виртуальный.
+// Резервный поиск GameMode по куче (если хук getGameMode не сработал).
+// Структура: [0] — vtable в libminecraftpe, +0x8 — Level (heap) с vtable в
+// игре, +0xC0 — объект (heap) с vtable в игре, +0xC8 — bool 0/1. Указатели
+// внутрь libminecraftpe в +0x8/+0xC0 отбрасываются — это главный источник
+// прежних ложных срабатываний. Поля читаются прямо из буфера, syscall'ы
+// остаются только для проверки двух vtable у прошедших дешёвый фильтр.
 void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
   storageAddr = 0;
   const MapsInfo maps = readMaps();
@@ -673,11 +705,56 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
     return nullptr;
   }
 
+  struct Region {
+    uintptr_t start;
+    uintptr_t end;
+    int prio;
+  };
+  std::vector<Region> regions;
+  {
+    FILE *file = std::fopen("/proc/self/maps", "r");
+    if (file) {
+      char line[512];
+      while (std::fgets(line, sizeof(line), file)) {
+        unsigned long long start = 0;
+        unsigned long long end = 0;
+        char perms[8] = {0};
+        char path[256] = {0};
+        const int fields =
+            std::sscanf(line, "%llx-%llx %7s %*s %*s %*s %255s", &start, &end,
+                        perms, path);
+        if (fields < 3) continue;
+        if (!(perms[0] == 'r' && perms[1] == 'w')) continue;
+        int prio = 2;
+        if (std::strstr(path, "libc_malloc") || std::strstr(path, "scudo") ||
+            std::strstr(path, "[heap]")) {
+          prio = 0;
+        } else if (std::strstr(path, "libminecraftpe.so")) {
+          prio = 1;
+        }
+        regions.push_back({static_cast<uintptr_t>(start),
+                           static_cast<uintptr_t>(end), prio});
+      }
+      std::fclose(file);
+    }
+  }
+  // Регион самого ClientInstance сканируем первым: GameMode обычно рядом.
+  for (auto &r : regions) {
+    if (clientAddr >= r.start && clientAddr < r.end) {
+      r.prio = -1;
+      break;
+    }
+  }
+  std::stable_sort(regions.begin(), regions.end(),
+                   [](const Region &a, const Region &b) {
+                     return a.prio < b.prio;
+                   });
+
   uintptr_t clientVtable = 0;
   mem::read(clientAddr, &clientVtable, sizeof(clientVtable));
 
   constexpr size_t kChunk = 1u << 20;
-  constexpr size_t kLimit = 1024u << 20;
+  constexpr size_t kLimit = 2048u << 20;
   std::vector<unsigned char> buffer(kChunk);
   size_t scanned = 0;
 
@@ -687,34 +764,60 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
   int bestFlag = 0xFF;
   int bestScore = -1;
   size_t libHits = 0;
+  size_t heapCheap = 0;
   size_t structHits = 0;
   int loggedCandidates = 0;
+  bool done = false;
 
-  const auto scanRange = [&](uintptr_t start, uintptr_t end) -> bool {
-    for (uintptr_t pos = start; pos < end && scanned < kLimit; pos += kChunk) {
+  const auto inLib = [&](uintptr_t p) {
+    return p >= maps.libStart && p < maps.libEnd;
+  };
+
+  for (const auto &r : regions) {
+    if (done || scanned >= kLimit) break;
+    for (uintptr_t pos = r.start; pos < r.end && scanned < kLimit;
+         pos += kChunk) {
       const size_t size =
-          static_cast<size_t>(std::min<uintptr_t>(kChunk, end - pos));
+          static_cast<size_t>(std::min<uintptr_t>(kChunk, r.end - pos));
       if (!mem::read(pos, buffer.data(), size)) continue;
       scanned += size;
-      for (size_t i = 0; i + 16 <= size; i += 8) {
+      if (size < 0xD0) continue; // нужны поля до +0xC8 включительно
+      for (size_t i = 0; i + 0xD0 <= size; i += 8) {
         uintptr_t value = 0;
         std::memcpy(&value, buffer.data() + i, sizeof(value));
         if (value < maps.libStart || value >= maps.libEnd) continue;
         ++libHits;
 
         const uintptr_t object = pos + i;
-        if (!isGameModeObject(object)) continue;
-        ++structHits;
-
         uintptr_t level = 0;
         uintptr_t aux = 0;
-        uint8_t flag = 0xFF;
-        mem::read(object + offsets::kGameModeOwner, &level, sizeof(level));
-        mem::read(object + offsets::kGameModeAux, &aux, sizeof(aux));
-        mem::read(object + offsets::kGameModeBool, &flag, sizeof(flag));
+        std::memcpy(&level, buffer.data() + i + offsets::kGameModeOwner,
+                    sizeof(level));
+        std::memcpy(&aux, buffer.data() + i + offsets::kGameModeAux,
+                    sizeof(aux));
+        const uint8_t flag = buffer[i + offsets::kGameModeBool];
 
-        // Чем сильнее совпадение, тем выше счёт: +0x8 == наш ClientInstance и
-        // клиентский флаг 0 — самые надёжные признаки нужного GameMode.
+        // Дешёвые проверки из буфера: bool-флаг, ненулевые не
+        // самоуказывающие heap-поля. Указатели внутрь libminecraftpe
+        // отбрасываются.
+        if (flag > 1) continue;
+        if (level == 0 || aux == 0) continue;
+        if (level == object || aux == object) continue;
+        if (inLib(level) || inLib(aux)) continue;
+        ++heapCheap;
+
+        uintptr_t levelVtable = 0;
+        uintptr_t auxVtable = 0;
+        if (!mem::read(level, &levelVtable, sizeof(levelVtable)) ||
+            !inLib(levelVtable)) {
+          continue;
+        }
+        if (!mem::read(aux, &auxVtable, sizeof(auxVtable)) ||
+            !inLib(auxVtable)) {
+          continue;
+        }
+        ++structHits;
+
         int score = 0;
         if (level == clientAddr) score += 2;
         if (flag == 0) score += 2;
@@ -736,39 +839,20 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
                           static_cast<unsigned>(flag), score);
           ++loggedCandidates;
         }
-        if (score >= 4) return true;
+        if (score >= 4) {
+          done = true;
+          break;
+        }
       }
-    }
-    return false;
-  };
-
-  uintptr_t clientRegionStart = 0;
-  uintptr_t clientRegionEnd = 0;
-  for (const auto &range : maps.rw) {
-    if (clientAddr >= range.first && clientAddr < range.second) {
-      clientRegionStart = range.first;
-      clientRegionEnd = range.second;
-      break;
-    }
-  }
-  bool done = false;
-  if (clientRegionStart != 0) {
-    done = scanRange(clientRegionStart, clientRegionEnd);
-  }
-  if (!done) {
-    for (const auto &range : maps.rw) {
-      if (range.first == clientRegionStart) continue;
-      if (scanRange(range.first, range.second)) break;
-      if (scanned >= kLimit) break;
     }
   }
 
   aimbot::diagLog(kTag,
                   "gm scan: base=%p client_vt_off=0x%zx libHits=%zu "
-                  "structHits=%zu scanned=%zu MB",
+                  "heapCheap=%zu structHits=%zu scanned=%zu MB",
                   reinterpret_cast<void *>(maps.libStart),
                   static_cast<size_t>(clientVtable - maps.libStart), libHits,
-                  structHits, scanned >> 20);
+                  heapCheap, structHits, scanned >> 20);
 
   if (bestAddr != 0) {
     storageAddr = bestAddr;
@@ -846,6 +930,34 @@ float frameDelta() {
       std::chrono::duration<float>(now - g_lastFrame).count();
   g_lastFrame = now;
   return std::clamp(dt, 0.0f, 0.05f);
+}
+
+// Ловит точный GameMode, который игра получает через ClientInstance+0xA08.
+// getGameMode вызывается сотни раз за кадр, поэтому структурную проверку
+// результата делаем с ограничением частоты (не чаще 10 раз в секунду).
+void *getGameModeDetour(void *owner) {
+  void *result = g_getGameModeOriginal ? g_getGameModeOriginal(owner) : nullptr;
+  if (result) {
+    static std::chrono::steady_clock::time_point s_lastCheck{};
+    static uint64_t s_checks = 0;
+    const auto now = std::chrono::steady_clock::now();
+    // Не чаще 10 раз в секунду: getGameMode зовётся сотни раз за кадр.
+    if (std::chrono::duration<float>(now - s_lastCheck).count() >= 0.1f) {
+      s_lastCheck = now;
+      const uintptr_t gm = reinterpret_cast<uintptr_t>(result);
+      if (isGameModeLike(gm)) {
+        g_gameModeDirect.store(gm, std::memory_order_relaxed);
+        g_gameModeOwner.store(reinterpret_cast<uintptr_t>(owner),
+                              std::memory_order_relaxed);
+        if (s_checks < 8) {
+          aimbot::diagLog(kTag, "getGameMode hook: owner=%p gm=%p", owner,
+                          result);
+        }
+      }
+      ++s_checks;
+    }
+  }
+  return result;
 }
 
 void *clientUpdateDetour(void *client, bool value, bool second) {
@@ -1004,6 +1116,25 @@ bool ClientBridge::initialize() {
       }
     } else {
       aimbot::diagLog(kTag, "touch builder signature not found");
+    }
+    // Хук ClientInstance::getGameMode (`ldr x0,[x0,#0xa08]; ret`) — даёт
+    // точный GameMode, который использует игра, без перебора кучи.
+    const uintptr_t gameLibBase =
+        mem::gameBase(reinterpret_cast<const void *>(normalTick));
+    const uintptr_t getGameMode =
+        gameLibBase ? gameLibBase + 0x102095c4 : 0;
+    if (validGameFn(getGameMode)) {
+      if (pl::memory::hook(
+              reinterpret_cast<pl::memory::FuncPtr>(getGameMode),
+              reinterpret_cast<pl::memory::FuncPtr>(&getGameModeDetour),
+              reinterpret_cast<pl::memory::FuncPtr *>(
+                  &g_getGameModeOriginal)) != 0) {
+        aimbot::diagLog(kTag, "getGameMode hook failed @0x%zx", getGameMode);
+      } else {
+        aimbot::diagLog(kTag, "getGameMode hooked @0x%zx", getGameMode);
+      }
+    } else {
+      aimbot::diagLog(kTag, "getGameMode address invalid");
     }
     g_hooksInstalled.store(true, std::memory_order_release);
   }
@@ -1257,7 +1388,7 @@ void *ClientBridge::getGameMode() const {
   const uintptr_t cachedDirect =
       g_gameModeDirect.load(std::memory_order_acquire);
   if (cachedDirect != 0) {
-    if (isPlausiblePointer(cachedDirect) && isGameModeObject(cachedDirect)) {
+    if (isGameModeLike(cachedDirect)) {
       return reinterpret_cast<void *>(cachedDirect);
     }
     g_gameModeDirect.store(0, std::memory_order_release);
