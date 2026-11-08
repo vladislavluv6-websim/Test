@@ -75,6 +75,14 @@ inline bool write(uintptr_t address, const T &value) {
   return write(address, &value, sizeof(T));
 }
 
+inline uintptr_t gameBase(const void *address) {
+  if (!address) return 0;
+  Dl_info info{};
+  if (dladdr(address, &info) == 0 || !info.dli_fname) return 0;
+  if (!std::strstr(info.dli_fname, "libminecraftpe.so")) return 0;
+  return reinterpret_cast<uintptr_t>(info.dli_fbase);
+}
+
 inline bool isGameAddress(const void *address) {
   if (!address) return false;
   Dl_info info{};

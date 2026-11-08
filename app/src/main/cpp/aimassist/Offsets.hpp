@@ -130,6 +130,9 @@ inline constexpr uintptr_t kGameModeOwner = 0x8;
 // Слот 16 vtable GameMode: attack(Actor&, Vec3 const&) -> внутри
 // actionType=1 и вызов 4-арг GameMode::attack(Actor&, int, Vec3 const&).
 inline constexpr size_t kGameModeAttackSlot = 16;
+// Файловый оффсет SurvivalMode::attack в 1.26.60.4 (0x100a11c8). Служит
+// страховкой: атакуем только если слот 16 ведёт именно туда.
+inline constexpr uintptr_t kSurvivalModeAttackFileOffset = 0x100a11c8;
 
 // ============================================================
 // ESP RENDER OFFSETS

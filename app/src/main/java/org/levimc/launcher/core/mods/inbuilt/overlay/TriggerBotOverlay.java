@@ -196,6 +196,9 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     @Override
     public void show(int startX, int startY) {
         if (!isActive && isSupportedVersion()) {
+            // Лог прошлой сессии мог остаться после краша — выгружаем его
+            // до того, как новый setDiagLogPath очистит файл.
+            exportDiagLog(false);
             requestActivate(false);
         }
         super.show(startX, startY);
@@ -216,7 +219,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setTriggerBot(false);
         isActive = false;
         updateButtonState(false);
-        exportDiagLog();
+        exportDiagLog(true);
     }
 
     /**
@@ -224,7 +227,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
      * доступа к /sdcard/Android/data (logcat на Android 13 показывает только
      * логи своего uid).
      */
-    private void exportDiagLog() {
+    private void exportDiagLog(boolean notify) {
         if (android.os.Build.VERSION.SDK_INT < 29) return;
         File external = activity.getExternalFilesDir(null);
         if (external == null) return;
@@ -253,8 +256,10 @@ public class TriggerBotOverlay extends BaseOverlayButton {
                     out.write(buffer, 0, read);
                 }
             }
-            Toast.makeText(activity, "aimassist_diag.txt → Download",
-                    Toast.LENGTH_SHORT).show();
+            if (notify) {
+                Toast.makeText(activity, "aimassist_diag.txt → Download",
+                        Toast.LENGTH_SHORT).show();
+            }
         } catch (Exception ignored) {
         }
     }

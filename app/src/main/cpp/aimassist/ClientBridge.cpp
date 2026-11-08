@@ -169,12 +169,12 @@ void *probeGameMode(uintptr_t clientAddr, uintptr_t &foundOffset) {
     return reinterpret_cast<void *>(ownerMatch);
   }
   if (anyMatch != 0) {
-    foundOffset = anyMatchOffset;
-    aimbot::diagLog(kTag, "gm probe: found off=0x%zx gm=%p (vtable match)",
-                    foundOffset, reinterpret_cast<void *>(anyMatch));
-    return reinterpret_cast<void *>(anyMatch);
+    aimbot::diagLog(kTag,
+                    "gm probe: vtable-only candidate off=0x%zx gm=%p, ignored",
+                    anyMatchOffset, reinterpret_cast<void *>(anyMatch));
+  } else {
+    aimbot::diagLog(kTag, "gm probe: no candidate in 0x2000 bytes");
   }
-  aimbot::diagLog(kTag, "gm probe: no candidate in 0x2000 bytes");
   return nullptr;
 }
 
@@ -578,8 +578,11 @@ void *ClientBridge::getGameMode() const {
 
   const auto slot = [clientAddr](uintptr_t offset) -> uintptr_t {
     uintptr_t gameMode = 0;
+    uintptr_t owner = 0;
     if (!safeRead(clientAddr + offset, gameMode) ||
-        !isPlausiblePointer(gameMode) || !isGameModeObject(gameMode)) {
+        !isPlausiblePointer(gameMode) || !isGameModeObject(gameMode) ||
+        !safeRead(gameMode + offsets::kGameModeOwner, owner) ||
+        owner != clientAddr) {
       return 0;
     }
     return gameMode;
@@ -669,13 +672,26 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     return false;
   }
 
+  const uintptr_t gameBase = mem::gameBase(
+      reinterpret_cast<const void *>(attackFn));
+  const uintptr_t fnOffset = gameBase ? (attackFn - gameBase) : 0;
   if (logThis) {
     aimbot::diagLog(
         kTag,
-        "attack #%d gm=%p fn=%p actor=%p hit=(%.2f,%.2f,%.2f)", logIndex,
-        gameMode, reinterpret_cast<void *>(attackFn), actor,
+        "attack #%d gm=%p fn=%p fn_off=0x%zx actor=%p "
+        "hit=(%.2f,%.2f,%.2f)",
+        logIndex, gameMode, reinterpret_cast<void *>(attackFn), fnOffset, actor,
         static_cast<double>(hitPoint.x), static_cast<double>(hitPoint.y),
         static_cast<double>(hitPoint.z));
+  }
+  if (fnOffset != offsets::kSurvivalModeAttackFileOffset) {
+    static std::atomic<int> s_skipLog{0};
+    if (s_skipLog.fetch_add(1, std::memory_order_relaxed) < 4) {
+      aimbot::diagLog(kTag,
+                      "attack: slot16 fn_off=0x%zx != expected 0x%zx, skipped",
+                      fnOffset, offsets::kSurvivalModeAttackFileOffset);
+    }
+    return false;
   }
 
   // GameMode::attack(Actor&, Vec3 const&): слот сам выставляет actionType=1
