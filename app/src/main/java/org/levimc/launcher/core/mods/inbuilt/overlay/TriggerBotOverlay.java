@@ -6,14 +6,12 @@ import android.net.Uri;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
 import org.levimc.launcher.R;
-import org.levimc.launcher.core.minecraft.MinecraftActivity;
 import org.levimc.launcher.core.mods.ModManager;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
@@ -38,6 +36,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     private boolean isActive = false;
     private boolean wantActive = false;
     private boolean initPending = false;
+    private boolean nativeTriggerEnabled = false;
     private long targetSince = 0L;
     private long nextAttackAt = 0L;
     private long lastGateLogAt = 0L;
@@ -68,64 +67,21 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             boolean pauseOpen = PreloaderInput.isPauseMenuOpen();
             boolean menuOpen = PreloaderInput.isShowingMenu();
             boolean modMenu = overlayManager != null && overlayManager.isModMenuShowing();
-            if (!hudOpen || pauseOpen || menuOpen || modMenu) {
-                // Меню клиента тоже перекрывает игру — не бьём сквозь него.
-                long gateNow = SystemClock.uptimeMillis();
-                if (gateNow - lastGateLogAt > 2000L) {
-                    lastGateLogAt = gateNow;
-                    appendDiag("java gate hud=" + hudOpen + " pause=" + pauseOpen
-                            + " menu=" + menuOpen + " modmenu=" + modMenu);
-                }
-                targetSince = 0L;
-                triggerHandler.postDelayed(this, 100L);
-                return;
-            }
-            if (!(activity instanceof MinecraftActivity)) {
-                triggerHandler.postDelayed(this, 100L);
-                return;
-            }
+            boolean gateOpen = hudOpen && !pauseOpen && !menuOpen && !modMenu;
 
-            long now = SystemClock.uptimeMillis();
-
-            // isOnTarget теперь считается нативно по пересечению луча
-            // прицела с хитбоксом (игроки + мобы), а не по цели aim assist.
-            if (!AimAssistMod.isOnTarget()) {
-                targetSince = 0L;
-                triggerHandler.postDelayed(this, 20L);
-                return;
+            // Удар выполняет нативный GameMode::attack на игровом потоке
+            // (AimAssist::updateTrigger) — без тапов, инъекции касаний и без
+            // чего-либо видимого на экране. Java-цикл лишь разрешает/запрещает
+            // нативный триггер по состоянию экрана, чтобы не бить сквозь меню,
+            // паузу и меню клиента.
+            if (gateOpen != nativeTriggerEnabled) {
+                nativeTriggerEnabled = gateOpen;
+                AimAssistMod.setTriggerBot(gateOpen);
+                appendDiag("java gate hud=" + hudOpen + " pause=" + pauseOpen
+                        + " menu=" + menuOpen + " modmenu=" + modMenu
+                        + " native=" + gateOpen);
             }
-            if (targetSince == 0L) {
-                targetSince = now;
-            }
-
-            int reaction = 0;
-            if (humanizationEnabled) {
-                reaction = reactionDelayMs + (reactionJitterMs > 0
-                        ? random.nextInt(reactionJitterMs + 1) : 0);
-            }
-            if (now - targetSince < reaction || now < nextAttackAt) {
-                triggerHandler.postDelayed(this, 15L);
-                return;
-            }
-
-            // Нажимаем именно экранную кнопку атаки (Pojav Controls), а не
-            // тап по центру экрана: камера и остальные контролы не задеты.
-            boolean attacked = ((MinecraftActivity) activity).performTriggerBotAttack();
-            appendDiag("java attack result=" + attacked);
-            if (attacked) {
-                if (skipChancePercent > 0 && random.nextInt(100) < skipChancePercent) {
-                    // Пропущенный удар: живой игрок тоже иногда не кликает.
-                    nextAttackAt = now + 90L + random.nextInt(120);
-                } else {
-                    int jitter = attackIntervalJitterMs > 0
-                            ? random.nextInt(attackIntervalJitterMs + 1) : 0;
-                    nextAttackAt = now + attackIntervalMs + jitter;
-                }
-            } else {
-                // Событие не дошло до игры — не забиваем очередь, пробуем позже.
-                nextAttackAt = now + 120L;
-            }
-            triggerHandler.postDelayed(this, 15L);
+            triggerHandler.postDelayed(this, gateOpen ? 100L : 300L);
         }
     };
 
@@ -174,6 +130,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setTargetPlayers(manager.isTriggerBotTargetPlayers());
         AimAssistMod.setTargetMobs(manager.isTriggerBotTargetMobs());
         AimAssistMod.setTriggerBot(true);
+        nativeTriggerEnabled = true;
     }
 
     // Native init идёт в фоне (скан сигнатур занимает секунды).
@@ -186,11 +143,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             AimAssistMod.setDiagLogPath(
                     new File(external, "aimassist_diag.log").getAbsolutePath());
         }
-        // Ищем экранную кнопку атаки в options.txt игры, чтобы тап шёл
-        // ровно по ней, а не в центр экрана.
-        if (activity instanceof MinecraftActivity) {
-            ((MinecraftActivity) activity).refreshAttackButtonPosition();
-        }
+        // Удар идёт через нативный GameMode::attack, экранная кнопка больше
+        // не нужна — позицию из options.txt не читаем.
         AimAssistMod.initializeAsync(ok -> {
             initPending = false;
             if (!wantActive || activity.isFinishing() || activity.isDestroyed()) return;
@@ -233,6 +187,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         wantActive = false;
         stopLoop();
         AimAssistMod.setTriggerBot(false);
+        nativeTriggerEnabled = false;
         isActive = false;
         updateButtonState(false);
         exportDiagLog(true);
@@ -294,9 +249,9 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     }
 
     private void startLoop() {
-        // Удар выполняет UI-цикл: нативный GameMode::attack на этой сборке
-        // игры недоступен (GameMode не находится в памяти), поэтому бьём
-        // тапом по настоящей экранной кнопке атаки из options.txt.
+        // Удар делает нативный GameMode::attack на игровом потоке (без тапов
+        // и без видимых нажатий). Java-цикл только разрешает/запрещает его по
+        // состоянию экрана (геймплей vs меню/пауза).
         triggerHandler.removeCallbacks(triggerRunnable);
         targetSince = 0L;
         nextAttackAt = 0L;
@@ -333,6 +288,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         stopLoop();
         if (isActive) {
             AimAssistMod.setTriggerBot(false);
+            nativeTriggerEnabled = false;
             isActive = false;
             updateButtonState(false);
         }

@@ -270,23 +270,38 @@ std::atomic<uintptr_t> g_gameModeDirect{0};
 std::atomic<bool> g_scanRunning{false};
 std::atomic<uintptr_t> g_scanClient{0};
 
-// Проверяет, что объект похож на GameMode: [0] — vtable в libminecraftpe,
-// слоты 15 (interact) и 16 (attack) — тоже код в libminecraftpe.
+// Проверяет, что объект похож на GameMode по структуре, а не по слоту vtable
+// (attack не виртуальный и в vtable его нет). Опираемся на поля, которые
+// реально читает GameMode::attack: +0x8 (Level/ClientInstance), +0xC0 (объект
+// с vtable в игре), +0xC8 (bool-флаг). Это отсекает прежние ложные срабатывания.
 bool isGameModeObject(uintptr_t candidate) {
   uintptr_t vtable = 0;
   if (!safeRead(candidate, vtable) ||
       !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
     return false;
   }
-  uintptr_t interactFn = 0;
-  uintptr_t attackFn = 0;
-  if (!safeRead(vtable + 15 * sizeof(uintptr_t), interactFn) ||
-      !mem::isGameAddress(reinterpret_cast<const void *>(interactFn))) {
+  uintptr_t level = 0;
+  if (!safeRead(candidate + offsets::kGameModeOwner, level) ||
+      !isPlausiblePointer(level)) {
     return false;
   }
-  if (!safeRead(vtable + offsets::kGameModeAttackSlot * sizeof(uintptr_t),
-                attackFn) ||
-      !mem::isGameAddress(reinterpret_cast<const void *>(attackFn))) {
+  uintptr_t levelVtable = 0;
+  if (!safeRead(level, levelVtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(levelVtable))) {
+    return false;
+  }
+  uintptr_t aux = 0;
+  if (!safeRead(candidate + offsets::kGameModeAux, aux) ||
+      !isPlausiblePointer(aux)) {
+    return false;
+  }
+  uintptr_t auxVtable = 0;
+  if (!safeRead(aux, auxVtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(auxVtable))) {
+    return false;
+  }
+  uint8_t flag = 0;
+  if (!safeRead(candidate + offsets::kGameModeBool, flag) || flag > 1) {
     return false;
   }
   return true;
@@ -320,20 +335,28 @@ void *probeGameMode(uintptr_t clientAddr, uintptr_t &foundOffset) {
         continue;
       }
 
-      uintptr_t owner8 = 0;
+      uintptr_t level = 0;
+      uintptr_t aux = 0;
       uintptr_t owner10 = 0;
-      safeRead(candidate + 8, owner8);
+      uint8_t flag = 0xFF;
+      safeRead(candidate + offsets::kGameModeOwner, level);
+      safeRead(candidate + offsets::kGameModeAux, aux);
       safeRead(candidate + 0x10, owner10);
-      const bool match = owner8 == clientAddr || owner10 == clientAddr;
-      if (logged < 6) {
+      safeRead(candidate + offsets::kGameModeBool, flag);
+      const bool strong = level == clientAddr || owner10 == clientAddr;
+      if (logged < 8) {
         aimbot::diagLog(kTag,
-                        "gm cand off=0x%zx gm=%p o8=%p o10=%p match=%d",
+                        "gm cand off=0x%zx gm=%p level=%p aux=%p flag=%u "
+                        "strong=%d",
                         off, reinterpret_cast<void *>(candidate),
-                        reinterpret_cast<void *>(owner8),
-                        reinterpret_cast<void *>(owner10), match ? 1 : 0);
+                        reinterpret_cast<void *>(level),
+                        reinterpret_cast<void *>(aux),
+                        static_cast<unsigned>(flag), strong ? 1 : 0);
         ++logged;
       }
-      if (match && ownerMatch == 0) {
+      // Возвращаем только сильное совпадение (+0x8/+0x10 == ClientInstance),
+      // иначе это может быть чужой объект и вызов attack уронит игру.
+      if (strong && ownerMatch == 0) {
         ownerMatch = candidate;
         ownerMatchOffset = off;
       }
@@ -355,7 +378,8 @@ void *probeGameMode(uintptr_t clientAddr, uintptr_t &foundOffset) {
   }
   if (anyMatch != 0) {
     aimbot::diagLog(kTag,
-                    "gm probe: vtable-only candidate off=0x%zx gm=%p, ignored",
+                    "gm probe: structural candidate off=0x%zx gm=%p, "
+                    "deferring to heap scan",
                     anyMatchOffset, reinterpret_cast<void *>(anyMatch));
   } else {
     aimbot::diagLog(kTag, "gm probe: no candidate in 0x2000 bytes");
@@ -637,8 +661,10 @@ void *ctlScanThread(void *) {
   return nullptr;
 }
 
-// Ищет живой объект GameMode в куче: у него [0] — vtable в libminecraftpe,
-// [8] — ровно наш ClientInstance, слот 16 vtable — тоже код игры.
+// Ищет живой объект GameMode в куче по структуре (см. isGameModeObject):
+// [0] — vtable в libminecraftpe, +0x8 — Level/ClientInstance с vtable в игре,
+// +0xC0 — объект с vtable в игре, +0xC8 — bool 0/1. Слот vtable больше не
+// используется: attack не виртуальный.
 void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
   storageAddr = 0;
   const MapsInfo maps = readMaps();
@@ -646,22 +672,22 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
     aimbot::diagLog(kTag, "gm scan: game lib not found in maps");
     return nullptr;
   }
-  const uintptr_t expectedAttack =
-      maps.libStart + offsets::kSurvivalModeAttackFileOffset;
 
   uintptr_t clientVtable = 0;
   mem::read(clientAddr, &clientVtable, sizeof(clientVtable));
 
   constexpr size_t kChunk = 1u << 20;
-  constexpr size_t kLimit = 768u << 20;
+  constexpr size_t kLimit = 1024u << 20;
   std::vector<unsigned char> buffer(kChunk);
   size_t scanned = 0;
 
   uintptr_t bestAddr = 0;
-  uintptr_t bestOwner = 0;
-  int bestScore = 0;
+  uintptr_t bestLevel = 0;
+  uintptr_t bestAux = 0;
+  int bestFlag = 0xFF;
+  int bestScore = -1;
   size_t libHits = 0;
-  size_t slotHits = 0;
+  size_t structHits = 0;
   int loggedCandidates = 0;
 
   const auto scanRange = [&](uintptr_t start, uintptr_t end) -> bool {
@@ -676,52 +702,39 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
         if (value < maps.libStart || value >= maps.libEnd) continue;
         ++libHits;
 
-        uintptr_t attackFn = 0;
-        if (!mem::read(
-                value + offsets::kGameModeAttackSlot * sizeof(uintptr_t),
-                &attackFn, sizeof(attackFn)) ||
-            attackFn < maps.libStart || attackFn >= maps.libEnd) {
-          continue;
-        }
-        ++slotHits;
-
         const uintptr_t object = pos + i;
-        uintptr_t owner = 0;
-        mem::read(object + offsets::kGameModeOwner, &owner, sizeof(owner));
-        if (loggedCandidates < 6) {
-          uintptr_t ownerVtable = 0;
-          mem::read(owner, &ownerVtable, sizeof(ownerVtable));
-          aimbot::diagLog(
-              kTag,
-              "gm cand obj=%p vt_off=0x%zx slot16_off=0x%zx owner=%p "
-              "owner_vt_off=0x%zx",
-              reinterpret_cast<void *>(object),
-              static_cast<size_t>(value - maps.libStart),
-              static_cast<size_t>(attackFn - maps.libStart),
-              reinterpret_cast<void *>(owner),
-              static_cast<size_t>(ownerVtable >= maps.libStart &&
-                                          ownerVtable < maps.libEnd
-                                      ? ownerVtable - maps.libStart
-                                      : 0));
-          ++loggedCandidates;
-        }
+        if (!isGameModeObject(object)) continue;
+        ++structHits;
 
+        uintptr_t level = 0;
+        uintptr_t aux = 0;
+        uint8_t flag = 0xFF;
+        mem::read(object + offsets::kGameModeOwner, &level, sizeof(level));
+        mem::read(object + offsets::kGameModeAux, &aux, sizeof(aux));
+        mem::read(object + offsets::kGameModeBool, &flag, sizeof(flag));
+
+        // Чем сильнее совпадение, тем выше счёт: +0x8 == наш ClientInstance и
+        // клиентский флаг 0 — самые надёжные признаки нужного GameMode.
         int score = 0;
-        if (attackFn == expectedAttack) score += 2;
-        if (owner == clientAddr) {
-          score += 2;
-        } else if (owner >= 0x1000) {
-          uintptr_t ownerVtable = 0;
-          if (mem::read(owner, &ownerVtable, sizeof(ownerVtable)) &&
-              ownerVtable == clientVtable) {
-            score += 1;
-          }
-        }
-        if (score == 0) continue;
+        if (level == clientAddr) score += 2;
+        if (flag == 0) score += 2;
         if (score > bestScore) {
           bestScore = score;
           bestAddr = object;
-          bestOwner = owner;
+          bestLevel = level;
+          bestAux = aux;
+          bestFlag = flag;
+        }
+        if (loggedCandidates < 8) {
+          aimbot::diagLog(kTag,
+                          "gm cand obj=%p vt_off=0x%zx level=%p aux=%p "
+                          "flag=%u score=%d",
+                          reinterpret_cast<void *>(object),
+                          static_cast<size_t>(value - maps.libStart),
+                          reinterpret_cast<void *>(level),
+                          reinterpret_cast<void *>(aux),
+                          static_cast<unsigned>(flag), score);
+          ++loggedCandidates;
         }
         if (score >= 4) return true;
       }
@@ -742,7 +755,7 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
   if (clientRegionStart != 0) {
     done = scanRange(clientRegionStart, clientRegionEnd);
   }
-  if (!done && bestScore < 4) {
+  if (!done) {
     for (const auto &range : maps.rw) {
       if (range.first == clientRegionStart) continue;
       if (scanRange(range.first, range.second)) break;
@@ -751,24 +764,19 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
   }
 
   aimbot::diagLog(kTag,
-                  "gm scan: base=%p client_vt_off=0x%zx expect16_off=0x%zx "
-                  "libHits=%zu slotHits=%zu bestScore=%d",
+                  "gm scan: base=%p client_vt_off=0x%zx libHits=%zu "
+                  "structHits=%zu scanned=%zu MB",
                   reinterpret_cast<void *>(maps.libStart),
-                  static_cast<size_t>(clientVtable - maps.libStart),
-                  static_cast<size_t>(expectedAttack - maps.libStart), libHits,
-                  slotHits, bestScore);
+                  static_cast<size_t>(clientVtable - maps.libStart), libHits,
+                  structHits, scanned >> 20);
 
   if (bestAddr != 0) {
     storageAddr = bestAddr;
     aimbot::diagLog(kTag,
-                    "gm scan: gm=%p owner=%p score=%d vtable=%p scanned=%zu MB",
+                    "gm scan: gm=%p level=%p aux=%p flag=%d scanned=%zu MB",
                     reinterpret_cast<void *>(bestAddr),
-                    reinterpret_cast<void *>(bestOwner), bestScore,
-                    reinterpret_cast<void *>([&] {
-                      uintptr_t vtable = 0;
-                      mem::read(bestAddr, &vtable, sizeof(vtable));
-                      return vtable;
-                    }()),
+                    reinterpret_cast<void *>(bestLevel),
+                    reinterpret_cast<void *>(bestAux), bestFlag,
                     scanned >> 20);
     return reinterpret_cast<void *>(bestAddr);
   }
@@ -1239,11 +1247,9 @@ void *ClientBridge::getGameMode() const {
   if (!client) return nullptr;
   const uintptr_t clientAddr = reinterpret_cast<uintptr_t>(client);
 
-  const auto valid = [clientAddr](uintptr_t gameMode) -> bool {
-    uintptr_t owner = 0;
+  const auto valid = [](uintptr_t gameMode) -> bool {
     return gameMode != 0 && isPlausiblePointer(gameMode) &&
-           safeRead(gameMode + offsets::kGameModeOwner, owner) &&
-           owner == clientAddr && isGameModeObject(gameMode);
+           isGameModeObject(gameMode);
   };
 
   // Уже найденный объект (кэш). Владелец мог быть не наш ClientInstance,
@@ -1335,53 +1341,38 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     return false;
   }
 
+  const uintptr_t gm = reinterpret_cast<uintptr_t>(gameMode);
+  // vtable GameMode лежит в libminecraftpe — по ней получаем базу библиотеки.
   uintptr_t vtable = 0;
-  if (!safeRead(reinterpret_cast<uintptr_t>(gameMode), vtable) ||
-      !isPlausiblePointer(vtable)) {
+  if (!safeRead(gm, vtable) || !isPlausiblePointer(vtable)) {
     return false;
   }
-
-  uintptr_t attackFn = 0;
-  if (!safeRead(vtable + offsets::kGameModeAttackSlot * sizeof(uintptr_t),
-                attackFn)) {
-    return false;
-  }
-  if (!mem::isGameAddress(reinterpret_cast<const void *>(attackFn))) {
+  const uintptr_t gameBase = mem::gameBase(
+      reinterpret_cast<const void *>(vtable));
+  if (gameBase == 0) {
     if (logThis) {
-      aimbot::diagLog(kTag,
-                          "attack: fn=%p not in game (gm=%p vt=%p)",
-                          reinterpret_cast<void *>(attackFn), gameMode,
-                          reinterpret_cast<void *>(vtable));
+      aimbot::diagLog(kTag, "attack: gameBase=null gm=%p vt=%p", gameMode,
+                      reinterpret_cast<void *>(vtable));
     }
     return false;
   }
 
-  const uintptr_t gameBase = mem::gameBase(
-      reinterpret_cast<const void *>(attackFn));
-  const uintptr_t fnOffset = gameBase ? (attackFn - gameBase) : 0;
+  // GameMode::attack(Actor&, Vec3 const&) — вызываем НАПРЯМУЮ, минуя ввод.
+  // Обёртка читает [this+0xC8], затем w2=1 и tail-call в 4-арг реализацию
+  // 0x1009cba4(this, actor, actionType=1, Vec3 const&), которая собирает и
+  // отправляет ItemUseOnActorInventoryTransaction. hitPoint обязателен.
+  const uintptr_t attackFn = gameBase + offsets::kSurvivalModeAttackFileOffset;
   if (logThis) {
     aimbot::diagLog(
         kTag,
-        "attack #%d gm=%p fn=%p fn_off=0x%zx actor=%p "
+        "attack #%d gm=%p fn_off=0x%zx actor=%p "
         "hit=(%.2f,%.2f,%.2f)",
-        logIndex, gameMode, reinterpret_cast<void *>(attackFn), fnOffset, actor,
+        logIndex, gameMode,
+        static_cast<size_t>(offsets::kSurvivalModeAttackFileOffset), actor,
         static_cast<double>(hitPoint.x), static_cast<double>(hitPoint.y),
         static_cast<double>(hitPoint.z));
   }
-  if (fnOffset != offsets::kSurvivalModeAttackFileOffset) {
-    static std::atomic<int> s_skipLog{0};
-    if (s_skipLog.fetch_add(1, std::memory_order_relaxed) < 4) {
-      aimbot::diagLog(kTag,
-                      "attack: slot16 fn_off=0x%zx != expected 0x%zx, skipped",
-                      fnOffset, offsets::kSurvivalModeAttackFileOffset);
-    }
-    return false;
-  }
 
-  // GameMode::attack(Actor&, Vec3 const&): слот сам выставляет actionType=1
-  // и уходит в 4-арг реализацию, которая собирает и отправляет
-  // ItemUseOnActorInventoryTransaction. hitPoint обязателен — по нему
-  // считается точка удара, nullptr роняет колбэк транзакции.
   using AttackFn = void (*)(void *, void *, const Vec3 *);
   reinterpret_cast<AttackFn>(attackFn)(gameMode, actor, &hitPoint);
   return true;

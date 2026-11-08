@@ -148,15 +148,21 @@ inline constexpr float kLegsFraction = 0.25f;
 // GAMEMODE (атака)
 // ============================================================
 // ClientInstance -> GameMode* (SurvivalMode). Проверено по 1.26.60.04_RC3:
-// ClientInstance::ctor делает str x23,[x19,#0xA08]; GameMode::ctor кладёт
-// владельца (ClientInstance&) в +0x8: stp x8,x1,[x0].
+// ClientInstance::ctor делает str x23,[x19,#0xA08].
 inline constexpr uintptr_t kClientInstanceGameMode = 0xA08;
+// GameMode+0x8 — указатель на Level/ClientInstance (объект с vtable в игре).
+// Раньше считалось, что это ровно ClientInstance; на практике +0x8 ведёт на
+// Level, поэтому проверку "owner == clientAddr" использовать нельзя.
 inline constexpr uintptr_t kGameModeOwner = 0x8;
-// Слот 16 vtable GameMode: attack(Actor&, Vec3 const&) -> внутри
-// actionType=1 и вызов 4-арг GameMode::attack(Actor&, int, Vec3 const&).
+// GameMode+0xC0 — объект с vtable в игре (используется внутри attack-реализации).
+inline constexpr uintptr_t kGameModeAux = 0xC0;
+// GameMode+0xC8 — bool-флаг (0 — клиент/разрешить, 1 — сервер/проверить global).
+inline constexpr uintptr_t kGameModeBool = 0xC8;
+// Слот 16 vtable GameMode (историческая догадка; на деле attack не в vtable).
 inline constexpr size_t kGameModeAttackSlot = 16;
-// Файловый оффсет SurvivalMode::attack в 1.26.60.4 (0x100a11c8). Служит
-// страховкой: атакуем только если слот 16 ведёт именно туда.
+// Файловый оффсет GameMode::attack в 1.26.60.4. Вызывается НАПРЯМУЮ (не через
+// vtable): читает [this+0xC8], затем w2=1 и tail-call в 4-арг реализацию
+// 0x1009cba4(this, actor, actionType=1, Vec3 const&).
 inline constexpr uintptr_t kSurvivalModeAttackFileOffset = 0x100a11c8;
 
 // ============================================================
