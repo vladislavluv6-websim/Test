@@ -10,8 +10,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <mutex>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "AimAssist.hpp"
 #include "Memory.hpp"
@@ -84,6 +87,7 @@ bool safeWrite(uintptr_t address, const T &value) {
 }
 
 std::atomic<uintptr_t> g_gameModeOffset{0};
+std::atomic<uintptr_t> g_gameModeDirect{0};
 
 // Проверяет, что объект похож на GameMode: [0] — vtable в libminecraftpe,
 // слоты 15 (interact) и 16 (attack) — тоже код в libminecraftpe.
@@ -175,6 +179,148 @@ void *probeGameMode(uintptr_t clientAddr, uintptr_t &foundOffset) {
   } else {
     aimbot::diagLog(kTag, "gm probe: no candidate in 0x2000 bytes");
   }
+  return nullptr;
+}
+
+// Разбор /proc/self/maps: диапазон самой библиотеки игры и список rw-регионов.
+struct MapsInfo {
+  uintptr_t libStart = 0;
+  uintptr_t libEnd = 0;
+  std::vector<std::pair<uintptr_t, uintptr_t>> rw;
+};
+
+MapsInfo readMaps() {
+  MapsInfo info;
+  FILE *file = std::fopen("/proc/self/maps", "r");
+  if (!file) return info;
+  char line[512];
+  while (std::fgets(line, sizeof(line), file)) {
+    unsigned long long start = 0;
+    unsigned long long end = 0;
+    char perms[8] = {0};
+    char path[256] = {0};
+    const int fields =
+        std::sscanf(line, "%llx-%llx %7s %*s %*s %*s %255s", &start, &end,
+                    perms, path);
+    if (fields < 3) continue;
+    if (fields >= 4 && std::strstr(path, "libminecraftpe.so")) {
+      if (info.libStart == 0 || start < info.libStart) info.libStart = start;
+      if (end > info.libEnd) info.libEnd = end;
+    }
+    if (perms[0] == 'r' && perms[1] == 'w') {
+      info.rw.emplace_back(start, end);
+    }
+  }
+  std::fclose(file);
+  return info;
+}
+
+// Ищет живой объект GameMode в куче: у него [0] — vtable в libminecraftpe,
+// [8] — ровно наш ClientInstance, слот 16 vtable — тоже код игры.
+void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
+  storageAddr = 0;
+  const MapsInfo maps = readMaps();
+  if (maps.libStart == 0) {
+    aimbot::diagLog(kTag, "gm scan: game lib not found in maps");
+    return nullptr;
+  }
+  const uintptr_t expectedAttack =
+      maps.libStart + offsets::kSurvivalModeAttackFileOffset;
+
+  uintptr_t clientVtable = 0;
+  mem::read(clientAddr, &clientVtable, sizeof(clientVtable));
+
+  constexpr size_t kChunk = 1u << 20;
+  constexpr size_t kLimit = 512u << 20;
+  std::vector<unsigned char> buffer(kChunk);
+  size_t scanned = 0;
+
+  uintptr_t bestAddr = 0;
+  uintptr_t bestOwner = 0;
+  int bestScore = 0;
+
+  const auto scanRange = [&](uintptr_t start, uintptr_t end) -> bool {
+    for (uintptr_t pos = start; pos < end && scanned < kLimit; pos += kChunk) {
+      const size_t size =
+          static_cast<size_t>(std::min<uintptr_t>(kChunk, end - pos));
+      if (!mem::read(pos, buffer.data(), size)) continue;
+      scanned += size;
+      for (size_t i = 0; i + 16 <= size; i += 8) {
+        uintptr_t value = 0;
+        std::memcpy(&value, buffer.data() + i, sizeof(value));
+        if (value < maps.libStart || value >= maps.libEnd) continue;
+
+        uintptr_t attackFn = 0;
+        if (!mem::read(
+                value + offsets::kGameModeAttackSlot * sizeof(uintptr_t),
+                &attackFn, sizeof(attackFn)) ||
+            attackFn < maps.libStart || attackFn >= maps.libEnd) {
+          continue;
+        }
+
+        const uintptr_t object = pos + i;
+        uintptr_t owner = 0;
+        mem::read(object + offsets::kGameModeOwner, &owner, sizeof(owner));
+
+        int score = 0;
+        if (attackFn == expectedAttack) score += 2;
+        if (owner == clientAddr) {
+          score += 2;
+        } else if (owner >= 0x1000) {
+          uintptr_t ownerVtable = 0;
+          if (mem::read(owner, &ownerVtable, sizeof(ownerVtable)) &&
+              ownerVtable == clientVtable) {
+            score += 1;
+          }
+        }
+        if (score == 0) continue;
+        if (score > bestScore) {
+          bestScore = score;
+          bestAddr = object;
+          bestOwner = owner;
+        }
+        if (score >= 4) return true;
+      }
+    }
+    return false;
+  };
+
+  uintptr_t clientRegionStart = 0;
+  uintptr_t clientRegionEnd = 0;
+  for (const auto &range : maps.rw) {
+    if (clientAddr >= range.first && clientAddr < range.second) {
+      clientRegionStart = range.first;
+      clientRegionEnd = range.second;
+      break;
+    }
+  }
+  bool done = false;
+  if (clientRegionStart != 0) {
+    done = scanRange(clientRegionStart, clientRegionEnd);
+  }
+  if (!done && bestScore < 4) {
+    for (const auto &range : maps.rw) {
+      if (range.first == clientRegionStart) continue;
+      if (scanRange(range.first, range.second)) break;
+      if (scanned >= kLimit) break;
+    }
+  }
+
+  if (bestAddr != 0) {
+    storageAddr = bestAddr;
+    aimbot::diagLog(kTag,
+                    "gm scan: gm=%p owner=%p score=%d vtable=%p scanned=%zu MB",
+                    reinterpret_cast<void *>(bestAddr),
+                    reinterpret_cast<void *>(bestOwner), bestScore,
+                    reinterpret_cast<void *>([&] {
+                      uintptr_t vtable = 0;
+                      mem::read(bestAddr, &vtable, sizeof(vtable));
+                      return vtable;
+                    }()),
+                    scanned >> 20);
+    return reinterpret_cast<void *>(bestAddr);
+  }
+  aimbot::diagLog(kTag, "gm scan: not found, scanned %zu MB", scanned >> 20);
   return nullptr;
 }
 
@@ -576,63 +722,89 @@ void *ClientBridge::getGameMode() const {
   if (!client) return nullptr;
   const uintptr_t clientAddr = reinterpret_cast<uintptr_t>(client);
 
-  const auto slot = [clientAddr](uintptr_t offset) -> uintptr_t {
-    uintptr_t gameMode = 0;
+  const auto valid = [clientAddr](uintptr_t gameMode) -> bool {
     uintptr_t owner = 0;
-    if (!safeRead(clientAddr + offset, gameMode) ||
-        !isPlausiblePointer(gameMode) || !isGameModeObject(gameMode) ||
-        !safeRead(gameMode + offsets::kGameModeOwner, owner) ||
-        owner != clientAddr) {
-      return 0;
-    }
-    return gameMode;
+    return gameMode != 0 && isPlausiblePointer(gameMode) &&
+           safeRead(gameMode + offsets::kGameModeOwner, owner) &&
+           owner == clientAddr && isGameModeObject(gameMode);
   };
 
-  const uintptr_t cached = g_gameModeOffset.load(std::memory_order_acquire);
-  if (cached != 0) {
-    const uintptr_t gameMode = slot(cached);
-    if (gameMode != 0) {
+  // Уже найденный объект (кэш). Владелец мог быть не наш ClientInstance,
+  // поэтому здесь достаточно проверки по vtable.
+  const uintptr_t cachedDirect =
+      g_gameModeDirect.load(std::memory_order_acquire);
+  if (cachedDirect != 0) {
+    if (isPlausiblePointer(cachedDirect) && isGameModeObject(cachedDirect)) {
+      return reinterpret_cast<void *>(cachedDirect);
+    }
+    g_gameModeDirect.store(0, std::memory_order_release);
+  }
+
+  // Поле ClientInstance+0xA08.
+  const uintptr_t cachedOffset =
+      g_gameModeOffset.load(std::memory_order_acquire);
+  if (cachedOffset != 0) {
+    uintptr_t gameMode = 0;
+    if (safeRead(clientAddr + cachedOffset, gameMode) && valid(gameMode)) {
       return reinterpret_cast<void *>(gameMode);
     }
     g_gameModeOffset.store(0, std::memory_order_release);
   }
 
-  const uintptr_t known = slot(offsets::kClientInstanceGameMode);
-  if (known != 0) {
+  uintptr_t known = 0;
+  if (safeRead(clientAddr + offsets::kClientInstanceGameMode, known) &&
+      valid(known)) {
     g_gameModeOffset.store(offsets::kClientInstanceGameMode,
                            std::memory_order_release);
     return reinterpret_cast<void *>(known);
   }
 
-  // Автопоиск: не чаще раза в секунду, чтобы не жечь CPU.
+  // Поиск дорогой: не чаще раза в 10 секунд и не больше пяти раз за сессию.
   static uint64_t s_probeCounter = 0;
   static int64_t s_lastProbeMs = 0;
   const int64_t now =
       std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::steady_clock::now().time_since_epoch())
           .count();
-  if (now - s_lastProbeMs < 1000) {
+  if (s_probeCounter >= 5 || now - s_lastProbeMs < 10000) {
     return nullptr;
   }
   s_lastProbeMs = now;
+  ++s_probeCounter;
 
   uintptr_t slotValue = 0;
   uintptr_t slotOwner = 0;
   safeRead(clientAddr + offsets::kClientInstanceGameMode, slotValue);
   safeRead(slotValue + offsets::kGameModeOwner, slotOwner);
   aimbot::diagLog(kTag,
-                  "gm probe: slot[A08]=%p owner=%p client=%p tries=%llu",
+                  "gm probe #%llu: slot[A08]=%p owner=%p client=%p vt=%p",
+                  static_cast<unsigned long long>(s_probeCounter),
                   reinterpret_cast<void *>(slotValue),
                   reinterpret_cast<void *>(slotOwner),
                   reinterpret_cast<void *>(clientAddr),
-                  static_cast<unsigned long long>(++s_probeCounter));
+                  reinterpret_cast<void *>([clientAddr] {
+                    uintptr_t vtable = 0;
+                    safeRead(clientAddr, vtable);
+                    return vtable;
+                  }()));
 
+  // Шаг 1: перебор полей в начале ClientInstance.
   uintptr_t foundOffset = 0;
   void *found = probeGameMode(clientAddr, foundOffset);
   if (found) {
     g_gameModeOffset.store(foundOffset, std::memory_order_release);
+    return found;
   }
-  return found;
+
+  // Шаг 2: поиск объекта GameMode по куче.
+  uintptr_t storageAddr = 0;
+  found = scanHeapForGameMode(clientAddr, storageAddr);
+  if (found) {
+    g_gameModeDirect.store(reinterpret_cast<uintptr_t>(found),
+                           std::memory_order_release);
+    return found;
+  }
+  return nullptr;
 }
 
 bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
