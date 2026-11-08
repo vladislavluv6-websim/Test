@@ -83,6 +83,101 @@ bool safeWrite(uintptr_t address, const T &value) {
   return mem::write(address, value);
 }
 
+std::atomic<uintptr_t> g_gameModeOffset{0};
+
+// Проверяет, что объект похож на GameMode: [0] — vtable в libminecraftpe,
+// слоты 15 (interact) и 16 (attack) — тоже код в libminecraftpe.
+bool isGameModeObject(uintptr_t candidate) {
+  uintptr_t vtable = 0;
+  if (!safeRead(candidate, vtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
+    return false;
+  }
+  uintptr_t interactFn = 0;
+  uintptr_t attackFn = 0;
+  if (!safeRead(vtable + 15 * sizeof(uintptr_t), interactFn) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(interactFn))) {
+    return false;
+  }
+  if (!safeRead(vtable + offsets::kGameModeAttackSlot * sizeof(uintptr_t),
+                attackFn) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(attackFn))) {
+    return false;
+  }
+  return true;
+}
+
+// GameMode лежит внутри ClientInstance, но оффсет зависит от версии игры.
+// Перебираем указатели в начале ClientInstance и ищем объект GameMode.
+// Приоритет — кандидат, у которого [8] или [0x10] указывает на ClientInstance.
+void *probeGameMode(uintptr_t clientAddr, uintptr_t &foundOffset) {
+  foundOffset = 0;
+  constexpr size_t kScanSize = 0x2000;
+  constexpr size_t kChunkSize = 0x100;
+  alignas(8) unsigned char chunk[kChunkSize];
+
+  uintptr_t ownerMatch = 0;
+  uintptr_t ownerMatchOffset = 0;
+  uintptr_t anyMatch = 0;
+  uintptr_t anyMatchOffset = 0;
+  int logged = 0;
+  int failedChunks = 0;
+  for (size_t chunkBase = 0; chunkBase < kScanSize; chunkBase += kChunkSize) {
+    if (!mem::read(clientAddr + chunkBase, chunk, kChunkSize)) {
+      ++failedChunks;
+      continue;
+    }
+    for (size_t inner = 0; inner + 16 <= kChunkSize; inner += 8) {
+      const size_t off = chunkBase + inner;
+      uintptr_t candidate = 0;
+      std::memcpy(&candidate, chunk + inner, sizeof(candidate));
+      if (!isPlausiblePointer(candidate) || !isGameModeObject(candidate)) {
+        continue;
+      }
+
+      uintptr_t owner8 = 0;
+      uintptr_t owner10 = 0;
+      safeRead(candidate + 8, owner8);
+      safeRead(candidate + 0x10, owner10);
+      const bool match = owner8 == clientAddr || owner10 == clientAddr;
+      if (logged < 6) {
+        aimbot::diagLog(kTag,
+                        "gm cand off=0x%zx gm=%p o8=%p o10=%p match=%d",
+                        off, reinterpret_cast<void *>(candidate),
+                        reinterpret_cast<void *>(owner8),
+                        reinterpret_cast<void *>(owner10), match ? 1 : 0);
+        ++logged;
+      }
+      if (match && ownerMatch == 0) {
+        ownerMatch = candidate;
+        ownerMatchOffset = off;
+      }
+      if (anyMatch == 0) {
+        anyMatch = candidate;
+        anyMatchOffset = off;
+      }
+    }
+  }
+  if (failedChunks != 0) {
+    aimbot::diagLog(kTag, "gm probe: %d unreadable chunks", failedChunks);
+  }
+
+  if (ownerMatch != 0) {
+    foundOffset = ownerMatchOffset;
+    aimbot::diagLog(kTag, "gm probe: found off=0x%zx gm=%p (owner match)",
+                    foundOffset, reinterpret_cast<void *>(ownerMatch));
+    return reinterpret_cast<void *>(ownerMatch);
+  }
+  if (anyMatch != 0) {
+    foundOffset = anyMatchOffset;
+    aimbot::diagLog(kTag, "gm probe: found off=0x%zx gm=%p (vtable match)",
+                    foundOffset, reinterpret_cast<void *>(anyMatch));
+    return reinterpret_cast<void *>(anyMatch);
+  }
+  aimbot::diagLog(kTag, "gm probe: no candidate in 0x2000 bytes");
+  return nullptr;
+}
+
 bool readRotationComponent(void *actor, Rotation &out) {
   if (!actor) return false;
   const auto base = reinterpret_cast<uintptr_t>(actor);
@@ -479,22 +574,62 @@ bool ClientBridge::getEyePosition(void *player, Vec3 &out) const {
 void *ClientBridge::getGameMode() const {
   void *client = getClientInstance();
   if (!client) return nullptr;
+  const uintptr_t clientAddr = reinterpret_cast<uintptr_t>(client);
 
-  uintptr_t gameMode = 0;
-  if (!safeRead(reinterpret_cast<uintptr_t>(client) +
-                    offsets::kClientInstanceGameMode,
-                gameMode) ||
-      !isPlausiblePointer(gameMode)) {
-    return nullptr;
+  const auto slot = [clientAddr](uintptr_t offset) -> uintptr_t {
+    uintptr_t gameMode = 0;
+    if (!safeRead(clientAddr + offset, gameMode) ||
+        !isPlausiblePointer(gameMode) || !isGameModeObject(gameMode)) {
+      return 0;
+    }
+    return gameMode;
+  };
+
+  const uintptr_t cached = g_gameModeOffset.load(std::memory_order_acquire);
+  if (cached != 0) {
+    const uintptr_t gameMode = slot(cached);
+    if (gameMode != 0) {
+      return reinterpret_cast<void *>(gameMode);
+    }
+    g_gameModeOffset.store(0, std::memory_order_release);
   }
 
-  uintptr_t owner = 0;
-  if (!safeRead(gameMode + offsets::kGameModeOwner, owner) ||
-      owner != reinterpret_cast<uintptr_t>(client)) {
-    return nullptr;
+  const uintptr_t known = slot(offsets::kClientInstanceGameMode);
+  if (known != 0) {
+    g_gameModeOffset.store(offsets::kClientInstanceGameMode,
+                           std::memory_order_release);
+    return reinterpret_cast<void *>(known);
   }
 
-  return reinterpret_cast<void *>(gameMode);
+  // Автопоиск: не чаще раза в секунду, чтобы не жечь CPU.
+  static uint64_t s_probeCounter = 0;
+  static int64_t s_lastProbeMs = 0;
+  const int64_t now =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count();
+  if (now - s_lastProbeMs < 1000) {
+    return nullptr;
+  }
+  s_lastProbeMs = now;
+
+  uintptr_t slotValue = 0;
+  uintptr_t slotOwner = 0;
+  safeRead(clientAddr + offsets::kClientInstanceGameMode, slotValue);
+  safeRead(slotValue + offsets::kGameModeOwner, slotOwner);
+  aimbot::diagLog(kTag,
+                  "gm probe: slot[A08]=%p owner=%p client=%p tries=%llu",
+                  reinterpret_cast<void *>(slotValue),
+                  reinterpret_cast<void *>(slotOwner),
+                  reinterpret_cast<void *>(clientAddr),
+                  static_cast<unsigned long long>(++s_probeCounter));
+
+  uintptr_t foundOffset = 0;
+  void *found = probeGameMode(clientAddr, foundOffset);
+  if (found) {
+    g_gameModeOffset.store(foundOffset, std::memory_order_release);
+  }
+  return found;
 }
 
 bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
