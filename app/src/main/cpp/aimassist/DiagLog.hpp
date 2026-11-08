@@ -22,6 +22,11 @@ inline char *diagPathBuf() {
   return path;
 }
 
+inline bool diagLogActive() {
+  std::lock_guard<std::mutex> lock(diagMutex());
+  return diagPathBuf()[0] != '\0';
+}
+
 inline void setDiagLogPath(const char *path) {
   std::lock_guard<std::mutex> lock(diagMutex());
   char *buf = diagPathBuf();

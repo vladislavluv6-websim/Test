@@ -53,6 +53,8 @@ using GetLocalPlayerFn = void *(*)(void *);
 using ApplyTurnDeltaFn = void (*)(void *, const Rotation &);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
+// Touch-HUD builder: принимает указатель на объект-layout с вектором контролов.
+using ControlBuilderFn = void (*)(void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientUpdateOriginal = nullptr;
@@ -60,9 +62,13 @@ GetLocalPlayerFn g_getLocalPlayer = nullptr;
 ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
+ControlBuilderFn g_controlBuilderOriginal = nullptr;
 
 std::atomic<void *> g_clientInstance{nullptr};
 std::atomic<void *> g_localPlayer{nullptr};
+std::atomic<uintptr_t> g_attackControl{0};
+std::atomic<uintptr_t> g_controlLayout{0};
+std::atomic<bool> g_ctlScanStarted{false};
 std::atomic<bool> g_initialized{false};
 std::atomic<bool> g_hooksInstalled{false};
 std::mutex g_initMutex;
@@ -85,6 +91,121 @@ bool safeRead(uintptr_t address, T &out) {
 template <typename T>
 bool safeWrite(uintptr_t address, const T &value) {
   return mem::write(address, value);
+}
+
+// std::string в libc++ держит короткие строки inline (SSO), а длинные — в куче.
+// Имя action ("button.destroy_or_attack", 24 символа) всегда в куче, но
+// проверяем оба варианта, чтобы не зависеть от ABI-деталей строки.
+bool controlActionEquals(uintptr_t control, const char *expected) {
+  const size_t len = std::strlen(expected);
+  char buf[64];
+  if (len >= sizeof(buf)) return false;
+  const uintptr_t stringAddr = control + offsets::kControlActionString;
+  if (mem::read(stringAddr, buf, len) &&
+      std::memcmp(buf, expected, len) == 0) {
+    return true;
+  }
+  uintptr_t data = 0;
+  if (mem::read(stringAddr, data) && mem::isPlausiblePointer(data) &&
+      mem::read(data, buf, len) && std::memcmp(buf, expected, len) == 0) {
+    return true;
+  }
+  return false;
+}
+
+// Хук общего touch-HUD builder'а: запоминаем объект-layout. Кнопку атаки
+// ищем заново при каждом обращении, потому что вектор контролов может быть
+// перемещён (реаллокация/merge) — указатель на элемент тогда протухает,
+// а сам layout-объект остаётся стабильным.
+void controlBuilderDetour(void *layout) {
+  if (g_controlBuilderOriginal) {
+    g_controlBuilderOriginal(layout);
+  }
+  if (!layout) return;
+  g_controlLayout.store(reinterpret_cast<uintptr_t>(layout),
+                        std::memory_order_relaxed);
+}
+
+// Ищет контрол кнопки атаки в текущем векторе layout-объекта.
+uintptr_t findAttackControl(uintptr_t layout) {
+  if (!layout) return 0;
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!safeRead(layout + offsets::kControlVectorBegin, begin) ||
+      !safeRead(layout + offsets::kControlVectorEnd, end)) {
+    return 0;
+  }
+  if (!mem::isPlausiblePointer(begin) || !mem::isPlausiblePointer(end) ||
+      end <= begin || (end - begin) > 0x8000) {
+    return 0;
+  }
+  for (uintptr_t p = begin; p + offsets::kControlStride <= end;
+       p += offsets::kControlStride) {
+    if (controlActionEquals(p, offsets::kAttackActionName)) {
+      return p;
+    }
+  }
+  return 0;
+}
+
+// Резервный путь, если хук builder'а установился уже после постройки HUD:
+// ищем контрол атаки по куче (action-строка + иконка). Определяется ниже,
+// после readMaps(). Скан идёт в фоновом потоке, чтобы не морозить кадр.
+uintptr_t scanHeapForAttackControl();
+void *ctlScanThread(void *);
+
+// Дамп структуры найденной кнопки атаки. Нужен, чтобы по рантайм-значениям
+// вычислить, в каком поле лежит экранная позиция (в файле она нулевая и
+// выставляется layout-проходом уже после конструктора).
+void dumpAttackControl() {
+  const uintptr_t layout = g_controlLayout.load(std::memory_order_relaxed);
+  uintptr_t ctl = findAttackControl(layout);
+  if (!ctl) {
+    ctl = g_attackControl.load(std::memory_order_relaxed);
+  }
+  if (!ctl && !g_ctlScanStarted.exchange(true)) {
+    pthread_t thread;
+    if (pthread_create(&thread, nullptr, &ctlScanThread, nullptr) == 0) {
+      pthread_detach(thread);
+      aimbot::diagLog(kTag, "touch ctl: layout=0x%zx, background scan started",
+                      layout);
+    }
+  }
+  if (!ctl) {
+    aimbot::diagLog(kTag, "touch ctl: not captured yet (layout=0x%zx)", layout);
+    return;
+  }
+  g_attackControl.store(ctl, std::memory_order_relaxed);
+  unsigned char raw[offsets::kControlStride];
+  if (!mem::read(ctl, raw, sizeof(raw))) {
+    aimbot::diagLog(kTag, "touch ctl: read failed @0x%zx", ctl);
+    return;
+  }
+  aimbot::diagLog(kTag, "touch ctl @0x%zx raw:", ctl);
+  for (size_t off = 0; off < sizeof(raw); off += 16) {
+    aimbot::diagLog(kTag,
+                    "  %02zx: %02x %02x %02x %02x %02x %02x %02x %02x "
+                    "%02x %02x %02x %02x %02x %02x %02x %02x",
+                    off, raw[off + 0], raw[off + 1], raw[off + 2],
+                    raw[off + 3], raw[off + 4], raw[off + 5], raw[off + 6],
+                    raw[off + 7], raw[off + 8], raw[off + 9], raw[off + 10],
+                    raw[off + 11], raw[off + 12], raw[off + 13], raw[off + 14],
+                    raw[off + 15]);
+  }
+  float rect[8];
+  std::memcpy(rect, raw + offsets::kControlRect, sizeof(rect));
+  aimbot::diagLog(kTag,
+                  "  rect24: %.5f %.5f %.5f %.5f | %.5f %.5f %.5f %.5f",
+                  rect[0], rect[1], rect[2], rect[3], rect[4], rect[5],
+                  rect[6], rect[7]);
+  float posX = 0.0f;
+  float posY = 0.0f;
+  float scale = 0.0f;
+  std::memcpy(&posX, raw + offsets::kControlPosX, sizeof(posX));
+  std::memcpy(&posY, raw + offsets::kControlPosY, sizeof(posY));
+  std::memcpy(&scale, raw + offsets::kControlScale, sizeof(scale));
+  aimbot::diagLog(kTag, "  pos54=%.5f pos58=%.5f scale64=%.5f", posX, posY,
+                  scale);
 }
 
 std::atomic<uintptr_t> g_gameModeOffset{0};
@@ -216,6 +337,106 @@ MapsInfo readMaps() {
   }
   std::fclose(file);
   return info;
+}
+
+// Резервный поиск кнопки атаки по куче (см. scanHeapForAttackControl).
+uintptr_t scanHeapForAttackControl() {
+  const char *literal = offsets::kAttackActionName;
+  const size_t litLen = std::strlen(literal);
+  const MapsInfo maps = readMaps();
+  if (maps.rw.empty()) {
+    aimbot::diagLog(kTag, "ctl scan: no rw regions");
+    return 0;
+  }
+  constexpr size_t kChunk = 1u << 20;
+  constexpr size_t kLimit = 1024u << 20;
+  std::vector<unsigned char> buffer(kChunk);
+
+  std::vector<uintptr_t> literalAddrs;
+  size_t scanned = 0;
+  for (const auto &region : maps.rw) {
+    for (uintptr_t pos = region.first;
+         pos < region.second && scanned < kLimit; pos += kChunk) {
+      const size_t size = static_cast<size_t>(
+          std::min<uintptr_t>(kChunk, region.second - pos));
+      if (!mem::read(pos, buffer.data(), size)) continue;
+      scanned += size;
+      const unsigned char *base = buffer.data();
+      const unsigned char *p = base;
+      const unsigned char *end = base + size;
+      while (p + litLen <= end) {
+        const void *hit = std::memchr(p, static_cast<int>(literal[0]),
+                                      static_cast<size_t>(end - p - litLen + 1));
+        if (!hit) break;
+        const auto *h = static_cast<const unsigned char *>(hit);
+        if (std::memcmp(h, literal, litLen) == 0 &&
+            literalAddrs.size() < 32) {
+          literalAddrs.push_back(pos + static_cast<uintptr_t>(h - base));
+        }
+        p = h + 1;
+      }
+    }
+  }
+  aimbot::diagLog(kTag, "ctl scan: literal hits=%zu scanned=%zu MB",
+                  literalAddrs.size(), scanned >> 20);
+  if (literalAddrs.empty()) return 0;
+
+  scanned = 0;
+  for (const auto &region : maps.rw) {
+    for (uintptr_t pos = region.first;
+         pos < region.second && scanned < kLimit; pos += kChunk) {
+      const size_t size = static_cast<size_t>(
+          std::min<uintptr_t>(kChunk, region.second - pos));
+      if (!mem::read(pos, buffer.data(), size)) continue;
+      scanned += size;
+      for (size_t i = 0; i + 8 <= size; i += 8) {
+        uintptr_t value = 0;
+        std::memcpy(&value, buffer.data() + i, sizeof(value));
+        bool matchesLiteral = false;
+        for (uintptr_t addr : literalAddrs) {
+          if (value == addr) {
+            matchesLiteral = true;
+            break;
+          }
+        }
+        if (!matchesLiteral) continue;
+        const uintptr_t control = pos + i;
+        if ((control & 7) != 0) continue;
+        uint64_t stringSize = 0;
+        if (!mem::read(control + 0x08, stringSize) ||
+            stringSize != litLen) {
+          continue;
+        }
+        uintptr_t iconPtr = 0;
+        char icon[24];
+        bool iconOk = mem::read(control + 0x70, icon, 18) &&
+                      std::memcmp(icon, "textures/ui/attack", 18) == 0;
+        if (!iconOk && mem::read(control + 0x70, iconPtr) &&
+            mem::isPlausiblePointer(iconPtr) &&
+            mem::read(iconPtr, icon, 18) &&
+            std::memcmp(icon, "textures/ui/attack", 18) == 0) {
+          iconOk = true;
+        }
+        if (!iconOk) {
+          continue;
+        }
+        return control;
+      }
+    }
+  }
+  aimbot::diagLog(kTag, "ctl scan: no control matched");
+  return 0;
+}
+
+void *ctlScanThread(void *) {
+  const uintptr_t control = scanHeapForAttackControl();
+  if (control) {
+    g_attackControl.store(control, std::memory_order_relaxed);
+    aimbot::diagLog(kTag, "touch ctl: found by scan @0x%zx", control);
+  } else {
+    aimbot::diagLog(kTag, "touch ctl: scan found nothing");
+  }
+  return nullptr;
 }
 
 // Ищет живой объект GameMode в куче: у него [0] — vtable в libminecraftpe,
@@ -442,6 +663,22 @@ void *clientUpdateDetour(void *client, bool value, bool second) {
         g_localPlayer.store(localPlayer, std::memory_order_relaxed);
       }
     }
+    // Диагностика: пока кнопка атаки найдена и логирование включено,
+    // снимаем несколько сэмплов её структуры (позиция выставляется layout'ом
+    // уже после конструктора, поэтому нужен рантайм-дамп).
+    static std::chrono::steady_clock::time_point s_lastCtlDump{};
+    static int s_ctlDumps = 0;
+    if (aimbot::diagLogActive() &&
+        g_localPlayer.load(std::memory_order_relaxed) != nullptr &&
+        s_ctlDumps < 10) {
+      const auto now = std::chrono::steady_clock::now();
+      if (s_lastCtlDump.time_since_epoch().count() == 0 ||
+          std::chrono::duration<float>(now - s_lastCtlDump).count() >= 1.0f) {
+        s_lastCtlDump = now;
+        ++s_ctlDumps;
+        dumpAttackControl();
+      }
+    }
     // ClientInstance::update вызывается в кадровом цикле.
     AimAssist::instance().onRender(frameDelta());
   }
@@ -540,6 +777,24 @@ bool ClientBridge::initialize() {
       aimbot::diagLog(kTag,
                           "ClientInstance::update hook failed");
       return false;
+    }
+    // Необязательный хук: поиск кнопки атаки в touch-HUD. Если сигнатура
+    // не найдена, aim assist/ESP продолжают работать как раньше.
+    const uintptr_t controlBuilder = pl::memory::resolveSignature(
+        offsets::kTouchControlBuilderSignature, offsets::kMinecraftLibrary);
+    if (validGameFn(controlBuilder)) {
+      if (pl::memory::hook(
+              reinterpret_cast<pl::memory::FuncPtr>(controlBuilder),
+              reinterpret_cast<pl::memory::FuncPtr>(&controlBuilderDetour),
+              reinterpret_cast<pl::memory::FuncPtr *>(
+                  &g_controlBuilderOriginal)) != 0) {
+        aimbot::diagLog(kTag, "touch builder hook failed @0x%zx",
+                        controlBuilder);
+      } else {
+        aimbot::diagLog(kTag, "touch builder hooked @0x%zx", controlBuilder);
+      }
+    } else {
+      aimbot::diagLog(kTag, "touch builder signature not found");
     }
     g_hooksInstalled.store(true, std::memory_order_release);
   }

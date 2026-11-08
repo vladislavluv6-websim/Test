@@ -33,6 +33,29 @@ inline constexpr const char *kFetchNearbyActorsSignature =
     "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? A9 ? ? ? 91 "
     "5B D0 3B D5 F3 03 08 AA F5 03 02 2A";
 
+// Touch-HUD: общий builder, который добавляет в вектор контролов пару
+// attack (button.destroy_or_attack) + interact (button.build_or_interact).
+// Через него проходят все схемы управления, поэтому хук ловит кнопку атаки
+// в любой раскладке. Адрес 0x894a878 в 1.26.60.04_RC3.
+inline constexpr const char *kTouchControlBuilderSignature =
+    "FF 83 02 D1 FD 7B 05 A9 FA 67 06 A9 F8 5F 07 A9 F6 57 08 A9 F4 4F 09 A9 "
+    "FD 43 01 91 56 D0 3B D5 69 00 80 52 F7 03 00 AA C8 16 40 F9 F3 03 00 AA "
+    "A8 83 1F F8 08 F0 A7 52 E8 A7 02 29 E8 8E 42 F8 F5 82 5F F8 29 00 80 52 "
+    "F4 42 00 D1 E9 73 00 39 BF 02 08 EB FF 43 00 39 E9 33 00 39 62 01 00 54";
+
+// Смещения внутри структуры контрола (0xA0 байт), собранной в 0x895c488.
+inline constexpr uintptr_t kControlActionString = 0x00;  // std::string
+inline constexpr uintptr_t kControlRect = 0x24;          // 32-байтовый блок
+inline constexpr uintptr_t kControlPosX = 0x54;          // float
+inline constexpr uintptr_t kControlPosY = 0x58;          // float
+inline constexpr uintptr_t kControlScale = 0x64;         // float
+inline constexpr size_t kControlStride = 0xA0;
+// Вектор контролов внутри объекта-layout'а: begin/end/cap.
+inline constexpr uintptr_t kControlVectorBegin = 0x18;
+inline constexpr uintptr_t kControlVectorEnd = 0x20;
+inline constexpr uintptr_t kControlVectorCap = 0x28;
+inline constexpr const char *kAttackActionName = "button.destroy_or_attack";
+
 inline constexpr const char *kActorIsPlayerSignature =
     "? ? ? F9 ? ? ? 52 ? ? ? 72 ? ? ? A9 08 01 0B CB ? ? ? D3 ? ? ? 51 0C 01 0A 8A "
     "? ? ? B9 6B 0D 0C 8B ? ? ? F9 ? ? ? F9 ? ? ? B1 ? ? ? 54 8B 15 0B 8B ? ? ? B9 "
