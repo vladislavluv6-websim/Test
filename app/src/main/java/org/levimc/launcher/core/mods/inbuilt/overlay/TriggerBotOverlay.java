@@ -175,6 +175,11 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             AimAssistMod.setDiagLogPath(
                     new File(external, "aimassist_diag.log").getAbsolutePath());
         }
+        // Ищем экранную кнопку атаки в options.txt игры, чтобы тап шёл
+        // ровно по ней, а не в центр экрана.
+        if (activity instanceof MinecraftActivity) {
+            ((MinecraftActivity) activity).refreshAttackButtonPosition();
+        }
         AimAssistMod.initializeAsync(ok -> {
             initPending = false;
             if (!wantActive || activity.isFinishing() || activity.isDestroyed()) return;

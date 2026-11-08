@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.text.InputType
+import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -41,6 +42,15 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
 
         // Максимальный pointerId в Android (InputDispatcher::MAX_POINTER_ID).
         private const val MAX_POINTER_ID = 31
+
+        private const val TAG_ATTACK = "TriggerBotAttack"
+
+        // Дефолт Bedrock для кнопки attack/destroy (options.txt gfx_touchButton2).
+        private const val DEFAULT_ATTACK_BUTTON_X = 0.825f
+        private const val DEFAULT_ATTACK_BUTTON_Y = 0.5f
+
+        // D-pad & tap to interact: отдельной кнопки атаки нет, бьём тапом по экрану.
+        private const val INTERACTION_MODEL_CLASSIC = 2
     }
 
     private lateinit var gameManager: GamePackageManager
@@ -66,6 +76,21 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
     /** true, пока синтетический тап между DOWN и UP — тапы не наслаиваются. */
     @Volatile
     private var syntheticTapInFlight = false
+
+    /**
+     * Нормализованная (0..1) позиция центра экранной кнопки attack/destroy
+     * из options.txt игры (gfx_touchButton2X/Y). Геймпад/клавиатура её не
+     * используют, поэтому по умолчанию — дефолт Bedrock (0.825, 0.5).
+     */
+    @Volatile
+    private var attackButtonNormX = DEFAULT_ATTACK_BUTTON_X
+
+    @Volatile
+    private var attackButtonNormY = DEFAULT_ATTACK_BUTTON_Y
+
+    /** Модель управления: 0/1 — джойстик (кнопки), 2 — D-pad (тап по экрану). */
+    @Volatile
+    private var touchInteractionModel = -1
 
     /** id реального тачскрина: с deviceId 0 игра может отбросить событие. */
     private val touchDeviceId: Int by lazy {
@@ -528,9 +553,77 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
     }
 
     /**
-     * Тап по центру экрана, отправленный в штатный onTouchEvent Minecraft.
-     * Урон, анимация руки и пакет атаки формируются самим клиентом — для
-     * сервера это обычное нажатие, а не синтезированный пакет.
+     * Ищет кнопку атаки в options.txt игры и запоминает её позицию.
+     * Bedrock пишет туда нормализованные (0..1) координаты центров кнопок:
+     * gfx_touchButton2 — это ровно кнопка attack/destroy (та самая, с мечом).
+     * Позиции меняются, когда игрок двигает кнопки в «Настроить управление»,
+     * поэтому перечитываем файл при каждом включении модуля.
+     */
+    fun refreshAttackButtonPosition(): Boolean {
+        val relative = "games/com.mojang/minecraftpe/options.txt"
+        val candidates = ArrayList<File>(3)
+        candidates.add(File(filesDir, relative))
+        getExternalFilesDir(null)?.let { candidates.add(File(it, relative)) }
+        try {
+            candidates.add(File(getDir("games/com.mojang/minecraftpe", MODE_PRIVATE), "options.txt"))
+        } catch (ignored: Throwable) {
+        }
+
+        for (file in candidates) {
+            if (!file.isFile) continue
+            try {
+                var x: Float? = null
+                var y: Float? = null
+                var model = -1
+                file.bufferedReader().useLines { lines ->
+                    lines.forEach { raw ->
+                        val line = raw.trim()
+                        val sep = line.indexOf(':')
+                        if (sep <= 0) return@forEach
+                        val key = line.substring(0, sep)
+                        val value = line.substring(sep + 1).trim()
+                        when (key) {
+                            "gfx_touchButton2X" -> value.toFloatOrNull()?.let { x = it }
+                            "gfx_touchButton2Y" -> value.toFloatOrNull()?.let { y = it }
+                            "ctrl_interactionModel" -> value.toIntOrNull()?.let { model = it }
+                        }
+                    }
+                }
+                if (x != null && y != null) {
+                    attackButtonNormX = x!!.coerceIn(0f, 1f)
+                    attackButtonNormY = y!!.coerceIn(0f, 1f)
+                    touchInteractionModel = model
+                    Log.i(TAG_ATTACK, "attack button x=$attackButtonNormX y=$attackButtonNormY model=$model from ${file.absolutePath}")
+                    appendAttackDiag("attack button x=$attackButtonNormX y=$attackButtonNormY model=$model src=${file.name}")
+                    return true
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG_ATTACK, "read ${file.absolutePath} failed: ${t.message}")
+                appendAttackDiag("attack button read failed: ${t.message}")
+            }
+        }
+        Log.w(TAG_ATTACK, "options.txt not found, default attack button x=$attackButtonNormX y=$attackButtonNormY")
+        appendAttackDiag("attack button not found, default x=$attackButtonNormX y=$attackButtonNormY")
+        return false
+    }
+
+    /** Дописывает строку в тот же файл диагностики, что пишет нативный мод. */
+    private fun appendAttackDiag(line: String) {
+        try {
+            val dir = getExternalFilesDir(null) ?: return
+            FileOutputStream(File(dir, "aimassist_diag.log"), true)
+                .use { it.write((line + "\n").toByteArray()) }
+        } catch (ignored: Throwable) {
+        }
+    }
+
+    /**
+     * Тап по экранной кнопке attack/destroy, отправленный в штатный
+     * onTouchEvent Minecraft. Урон, анимация руки и пакет атаки формируются
+     * самим клиентом — для сервера это обычное нажатие, а не синтезированный
+     * пакет. Позиция кнопки берётся из options.txt (см.
+     * [refreshAttackButtonPosition]), поэтому тап попадает ровно в кнопку,
+     * а не в центр экрана (центр в режиме прицела ничего не атакует).
      *
      * Если игрок держит палец на экране, тап идёт как ДОПОЛНИТЕЛЬНЫЙ
      * pointer (ACTION_POINTER_DOWN/UP) со свободным pointerId. Раньше тап
@@ -553,8 +646,18 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         val width = if (decor.width > 0) decor.width else resources.displayMetrics.widthPixels
         val height = if (decor.height > 0) decor.height else resources.displayMetrics.heightPixels
         if (width <= 0 || height <= 0) return false
-        val x = width / 2f
-        val y = height / 2f
+
+        // D-pad & tap to interact: отдельной кнопки атаки нет, атакует тап
+        // по миру — бьём по центру. В режимах с джойстиком жмём кнопку.
+        val x: Float
+        val y: Float
+        if (touchInteractionModel == INTERACTION_MODEL_CLASSIC) {
+            x = width / 2f
+            y = height / 2f
+        } else {
+            x = (attackButtonNormX * width).coerceIn(1f, width - 1f)
+            y = (attackButtonNormY * height).coerceIn(1f, height - 1f)
+        }
 
         // Не наслаиваем синтетические тапы: предыдущий ещё между DOWN и UP.
         if (syntheticTapInFlight) return false
@@ -613,23 +716,29 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         // Длительность нажатия в человеческом диапазоне: 45-90 мс.
         val holdMs = 45L + kotlin.random.Random.nextInt(46).toLong()
         decor.postDelayed({
-            syntheticTapInFlight = false
-            if (isFinishing || isDestroyed) return@postDelayed
-            // Список пересобираем заново: за время удержания настоящие
-            // пальцы могли подняться — тогда синтетический остаётся один
-            // и жест корректно завершается обычным ACTION_UP.
-            val upPointers = pointersWithSynthetic(syntheticId, x, y)
-            val stillMulti = upPointers.size > 1
-            val upAction = if (stillMulti) MotionEvent.ACTION_POINTER_UP else MotionEvent.ACTION_UP
-            val upIndex = if (stillMulti) upPointers.size - 1 else 0
-            val up = createGameTouchEvent(
-                downTime, SystemClock.uptimeMillis(), upAction, upPointers, upIndex
-            )
+            // Флаг снимаем только после отправки UP: иначе следующий тап
+            // мог начаться раньше, чем игра получила отпускание кнопки,
+            // и кнопка «залипала».
             try {
-                dispatchTouchEventToGame(up)
+                if (isFinishing || isDestroyed) return@postDelayed
+                // Список пересобираем заново: за время удержания настоящие
+                // пальцы могли подняться — тогда синтетический остаётся один
+                // и жест корректно завершается обычным ACTION_UP.
+                val upPointers = pointersWithSynthetic(syntheticId, x, y)
+                val stillMulti = upPointers.size > 1
+                val upAction = if (stillMulti) MotionEvent.ACTION_POINTER_UP else MotionEvent.ACTION_UP
+                val upIndex = if (stillMulti) upPointers.size - 1 else 0
+                val up = createGameTouchEvent(
+                    downTime, SystemClock.uptimeMillis(), upAction, upPointers, upIndex
+                )
+                try {
+                    dispatchTouchEventToGame(up)
+                } finally {
+                    up.recycle()
+                }
             } catch (ignored: Throwable) {
             } finally {
-                up.recycle()
+                syntheticTapInFlight = false
             }
         }, holdMs)
         return true
