@@ -283,9 +283,14 @@ void AimAssist::setLegitMode(bool legit) {
 void AimAssist::setTriggerBot(bool enabled) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.triggerBot = enabled;
+  m_triggerSinceActor = nullptr;
+  m_triggerSinceMs = 0;
+  m_nextAttackAtMs = 0;
   if (!enabled) {
     m_onTarget.store(false, std::memory_order_release);
   }
+  __android_log_print(ANDROID_LOG_INFO, kTag, "setTriggerBot(%d)",
+                      enabled ? 1 : 0);
 }
 
 void AimAssist::setTriggerDelay(int delayMs) {
@@ -394,6 +399,12 @@ void AimAssist::updateVisual(float dt) {
   if (!player) {
     m_onTarget.store(false, std::memory_order_release);
     m_triggerActor.store(nullptr, std::memory_order_release);
+    static uint64_t s_noPlayer = 0;
+    if ((++s_noPlayer % 240) == 1) {
+      __android_log_print(ANDROID_LOG_WARN, kTag,
+                          "updateVisual: no local player (client=%p)",
+                          m_bridge.getClientInstance());
+    }
     return;
   }
 
@@ -434,6 +445,24 @@ void AimAssist::updateVisual(float dt) {
     m_onTarget.store(false, std::memory_order_release);
     m_triggerActor.store(nullptr, std::memory_order_release);
     m_triggerDistance.store(0.0f, std::memory_order_relaxed);
+  }
+
+  // Диагностика: раз в ~2 секунды (120 кадров) пишем состояние триггера.
+  // Помогает понять, где именно обрывается цепочка на устройстве.
+  static uint64_t s_diagFrame = 0;
+  if ((++s_diagFrame % 120) == 0) {
+    __android_log_print(
+        ANDROID_LOG_INFO, kTag,
+        "diag player=%p view=(%.1f,%.1f) eye=(%.2f,%.2f,%.2f) actors=%zu "
+        "trigger=%d range=%.2f target=%p onTarget=%d gm=%p",
+        player, static_cast<double>(current.pitch),
+        static_cast<double>(current.yaw), static_cast<double>(eyeNow.x),
+        static_cast<double>(eyeNow.y), static_cast<double>(eyeNow.z),
+        m_actors.size(), settings.triggerBot ? 1 : 0,
+        static_cast<double>(settings.triggerRange),
+        m_triggerActor.load(std::memory_order_acquire),
+        m_onTarget.load(std::memory_order_acquire) ? 1 : 0,
+        m_bridge.getGameMode());
   }
 
   if (!m_enabled.load(std::memory_order_acquire)) {

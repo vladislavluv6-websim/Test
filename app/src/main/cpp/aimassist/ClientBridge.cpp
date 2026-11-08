@@ -40,7 +40,9 @@ struct Rotation {
 };
 
 using NormalTickFn = void (*)(void *);
-using ClientInstanceUpdateFn = void *(*)(void *, bool);
+// ClientInstance::update(this, bool, bool) — оба флага передаются в
+// оригинал как есть, иначе третий аргумент уходит мусором.
+using ClientInstanceUpdateFn = void *(*)(void *, bool, bool);
 using GetLocalPlayerFn = void *(*)(void *);
 using ApplyTurnDeltaFn = void (*)(void *, const Rotation &);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
@@ -115,9 +117,10 @@ float frameDelta() {
   return std::clamp(dt, 0.0f, 0.05f);
 }
 
-void *clientUpdateDetour(void *client, bool value) {
-  void *result =
-      g_clientUpdateOriginal ? g_clientUpdateOriginal(client, value) : nullptr;
+void *clientUpdateDetour(void *client, bool value, bool second) {
+  void *result = g_clientUpdateOriginal
+                     ? g_clientUpdateOriginal(client, value, second)
+                     : nullptr;
 
   if (client) {
     g_clientInstance.store(client, std::memory_order_relaxed);
@@ -480,8 +483,18 @@ void *ClientBridge::getGameMode() const {
 bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
   if (!actor) return false;
 
+  static std::atomic<int> s_attackLog{0};
+  const int logIndex = s_attackLog.fetch_add(1, std::memory_order_relaxed);
+  const bool logThis = logIndex < 8;
+
   void *gameMode = getGameMode();
-  if (!gameMode) return false;
+  if (!gameMode) {
+    if (logThis) {
+      __android_log_print(ANDROID_LOG_WARN, kTag,
+                          "attack: gameMode=null client=%p", getClientInstance());
+    }
+    return false;
+  }
 
   uintptr_t vtable = 0;
   if (!safeRead(reinterpret_cast<uintptr_t>(gameMode), vtable) ||
@@ -495,7 +508,22 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     return false;
   }
   if (!mem::isGameAddress(reinterpret_cast<const void *>(attackFn))) {
+    if (logThis) {
+      __android_log_print(ANDROID_LOG_WARN, kTag,
+                          "attack: fn=%p not in game (gm=%p vt=%p)",
+                          reinterpret_cast<void *>(attackFn), gameMode,
+                          reinterpret_cast<void *>(vtable));
+    }
     return false;
+  }
+
+  if (logThis) {
+    __android_log_print(
+        ANDROID_LOG_INFO, kTag,
+        "attack #%d gm=%p fn=%p actor=%p hit=(%.2f,%.2f,%.2f)", logIndex,
+        gameMode, reinterpret_cast<void *>(attackFn), actor,
+        static_cast<double>(hitPoint.x), static_cast<double>(hitPoint.y),
+        static_cast<double>(hitPoint.z));
   }
 
   // GameMode::attack(Actor&, Vec3 const&): слот сам выставляет actionType=1
