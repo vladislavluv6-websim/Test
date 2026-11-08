@@ -1125,7 +1125,7 @@ void *attackListDetour(void *a0, void *a1, void *a2, void *a3) {
 // поэтому ловит настоящий GameMode (x0) даже без обработчика списка атак.
 // Заодно ищем, по какому оффсету gm лежит в ClientInstance/LocalPlayer —
 // чтобы в будущем брать его без удара игрока.
-void attackImplDetour(void *gm, void *actor, int actionType, const void *pos) {
+int attackImplDetour(void *gm, void *actor, int actionType, const void *pos) {
   // Игра сама передаёт в 0x1009cba4 валидный GameMode (x0) при каждом ударе.
   // Доверяем ему напрямую: любые структурные проверки лишь отсекали настоящий
   // объект (поля Level/aux у разных режимов лежат иначе). Запоминаем x0 как
@@ -1169,11 +1169,18 @@ void attackImplDetour(void *gm, void *actor, int actionType, const void *pos) {
         }
       }
     }
-    g_gameModeDirect.store(g, std::memory_order_release);
+    // Кэшируем только «наш» GameMode: тот, чей owner (Level, +0x8) совпадает
+    // с g_localPlayer. У чужого уровня (сервер/другое измерение) owner другой,
+    // и такой указатель не бьёт по нашим целям.
+    const uintptr_t localLvl =
+        reinterpret_cast<uintptr_t>(g_localPlayer.load());
+    if (localLvl == 0 || level == localLvl) {
+      g_gameModeDirect.store(g, std::memory_order_release);
+    }
   }
-  using ImplFn = void (*)(void *, void *, int, const void *);
+  using ImplFn = int (*)(void *, void *, int, const void *);
   auto orig = reinterpret_cast<ImplFn>(g_gameModeAttackImplOriginal);
-  if (orig) orig(gm, actor, actionType, pos);
+  return orig ? orig(gm, actor, actionType, pos) : 0;
 }
 
 void normalTickDetour(void *actor) {
@@ -1565,6 +1572,45 @@ bool ClientBridge::getEyePosition(void *player, Vec3 &out) const {
 }
 
 void *ClientBridge::getGameMode() const {
+  // ПРЯМОЙ источник (подтверждён хуком удара в логе 16):
+  //   gm+0x8 (Level/owner) == g_localPlayer
+  //   [g_localPlayer + 0xA08] == gm
+  // То есть GameMode лежит в [level+0xA08] — ровно то, что делает геттер
+  // 0x102095c4 (ldr x0,[x0,#0xa08]). Читаем напрямую: без удара, без хука,
+  // без фонового скана. Отбрасываем только если vtable не в libminecraftpe.
+  {
+    const uintptr_t lvl = reinterpret_cast<uintptr_t>(
+        g_localPlayer.load(std::memory_order_acquire));
+    if (lvl) {
+      uintptr_t gm = 0;
+      uintptr_t vt = 0;
+      if (safeRead(lvl + offsets::kClientInstanceGameMode, gm) && gm &&
+          safeRead(gm, vt) &&
+          mem::isGameAddress(reinterpret_cast<const void *>(vt))) {
+        static bool s_logged = false;
+        if (!s_logged) {
+          s_logged = true;
+          uintptr_t l2 = 0, aux = 0;
+          uint8_t fl = 0xFF;
+          safeRead(gm + offsets::kGameModeOwner, l2);
+          safeRead(gm + offsets::kGameModeAux, aux);
+          safeRead(gm + offsets::kGameModeBool, fl);
+          aimbot::diagLog(kTag,
+                          "gm direct: level=%p [level+0x%zx]=%p vt=%p "
+                          "lvl=%p aux=%p flag=%u",
+                          reinterpret_cast<void *>(lvl),
+                          static_cast<size_t>(offsets::kClientInstanceGameMode),
+                          reinterpret_cast<void *>(gm),
+                          reinterpret_cast<void *>(vt),
+                          reinterpret_cast<void *>(l2),
+                          reinterpret_cast<void *>(aux),
+                          static_cast<unsigned>(fl));
+        }
+        return reinterpret_cast<void *>(gm);
+      }
+    }
+  }
+
   void *client = getClientInstance();
   if (!client) return nullptr;
   const uintptr_t clientAddr = reinterpret_cast<uintptr_t>(client);
@@ -1712,10 +1758,12 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
                     static_cast<unsigned>(flag));
   }
 
-  // 0x1009cba4(this, actor, actionType=0, Vec3 const&) — ровно тот вызов,
-  // который делает игровой обработчик атаки 0xce2c894. Собирает и отправляет
-  // ItemUseOnActorInventoryTransaction. actionType=0 как у игры; обёртку
-  // 0x100a11c8 (actionType=1 + флаговая проверка) не используем.
+  // 0x1009cba4(this, actor, actionType, Vec3 const&) — реализация удара:
+  // собирает и отправляет ItemUseOnActorInventoryTransaction. actionType=0 —
+  // путь обработчика списка атак 0xce2c78c -> 0xce2c894 (GameMode::attack),
+  // который бьёт по актёру и наносит урон. Обёртку 0x100a11c8 (=1) не берём:
+  // у неё флаговый гейт (глобал 0x141d7040) и, судя по логу, это путь
+  // взаимодействия, а не урона.
   const uintptr_t attackFn = gameBase + offsets::kGameModeAttackImplFileOffset;
   if (logThis) {
     aimbot::diagLog(
