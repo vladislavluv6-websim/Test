@@ -773,6 +773,55 @@ void *scanHeapForGameMode(uintptr_t clientAddr, uintptr_t &storageAddr) {
     return p >= maps.libStart && p < maps.libEnd;
   };
 
+  // Точный проход: ищем ClientInstance по известному vtable (0x1388FE70) и
+  // берём его [+0xA08] — это и есть GameMode, который использует игра. Наш
+  // ClientInstance из update-хука может быть другим (его [+0xA08] == 0),
+  // поэтому перебираем все экземпляры ClientInstance в куче и выбираем тот,
+  // у которого поле не пустое и похоже на GameMode.
+  const uintptr_t clientVtableAddr = maps.libStart + 0x1388FE70;
+  uintptr_t exactGm = 0;
+  uintptr_t exactClient = 0;
+  int exactFound = 0;
+  for (const auto &r : regions) {
+    if (exactGm != 0) break;
+    for (uintptr_t pos = r.start; pos < r.end; pos += kChunk) {
+      const size_t size =
+          static_cast<size_t>(std::min<uintptr_t>(kChunk, r.end - pos));
+      if (!mem::read(pos, buffer.data(), size)) continue;
+      if (size < 0xA10) continue;
+      for (size_t i = 0; i + 0xA10 <= size; i += 8) {
+        uintptr_t value = 0;
+        std::memcpy(&value, buffer.data() + i, sizeof(value));
+        if (value != clientVtableAddr) continue;
+        const uintptr_t candidateClient = pos + i;
+        uintptr_t gm = 0;
+        std::memcpy(&gm, buffer.data() + i + offsets::kClientInstanceGameMode,
+                    sizeof(gm));
+        if (gm == 0) continue;
+        ++exactFound;
+        const bool strictOk = isGameModeObject(gm);
+        if (exactFound <= 8) {
+          aimbot::diagLog(kTag, "gm ci: client=%p gm=%p strict=%d",
+                          reinterpret_cast<void *>(candidateClient),
+                          reinterpret_cast<void *>(gm), strictOk ? 1 : 0);
+        }
+        if (strictOk || isGameModeLike(gm)) {
+          exactGm = gm;
+          exactClient = candidateClient;
+          break;
+        }
+      }
+      if (exactGm != 0) break;
+    }
+  }
+  if (exactGm != 0) {
+    storageAddr = exactGm;
+    aimbot::diagLog(kTag, "gm scan: exact client=%p gm=%p",
+                    reinterpret_cast<void *>(exactClient),
+                    reinterpret_cast<void *>(exactGm));
+    return reinterpret_cast<void *>(exactGm);
+  }
+
   for (const auto &r : regions) {
     if (done || scanned >= kLimit) break;
     for (uintptr_t pos = r.start; pos < r.end && scanned < kLimit;
