@@ -1043,25 +1043,9 @@ void *clientUpdateDetour(void *client, bool value, bool second) {
         g_localPlayer.store(localPlayer, std::memory_order_relaxed);
       }
     }
-    // Диагностика: пока кнопка атаки найдена и логирование включено,
-    // снимаем несколько сэмплов её структуры (позиция выставляется layout'ом
-    // уже после конструктора, поэтому нужен рантайм-дамп).
-    static std::chrono::steady_clock::time_point s_lastCtlDump{};
-    static int s_ctlDumps = 0;
-    static int s_ctlTries = 0;
-    if (aimbot::diagLogActive() &&
-        g_localPlayer.load(std::memory_order_relaxed) != nullptr &&
-        s_ctlDumps < 10 && s_ctlTries < 150) {
-      const auto now = std::chrono::steady_clock::now();
-      if (s_lastCtlDump.time_since_epoch().count() == 0 ||
-          std::chrono::duration<float>(now - s_lastCtlDump).count() >= 1.0f) {
-        s_lastCtlDump = now;
-        ++s_ctlTries;
-        if (dumpAttackControl()) {
-          ++s_ctlDumps;
-        }
-      }
-    }
+    // Скан touch-HUD (кнопка атаки) удалён: он читал гигабайты памяти в
+    // фоне, из-за чего Android вешал ANR при старте, и относился к способу
+    // «нажимать кнопку», который не используется.
     // ClientInstance::update вызывается в кадровом цикле.
     AimAssist::instance().onRender(frameDelta());
   }
@@ -1208,16 +1192,20 @@ void verifySwingTick(void *base) {
 
   const uintptr_t p = reinterpret_cast<uintptr_t>(base);
   float time = 0.0f;
+  float timePrev = 0.0f;
   int32_t counter = 0;
-  uint8_t swinging = 0;
+  uint16_t state = 0;
   safeRead(p + offsets::kPlayerSwingTime, time);
+  safeRead(p + offsets::kPlayerSwingTimePrev, timePrev);
   safeRead(p + offsets::kPlayerSwingTicks, counter);
-  safeRead(p + offsets::kPlayerSwinging, swinging);
+  safeRead(p + offsets::kPlayerSwingState, state);
   aimbot::diagLog(kTag,
-                  "swing verify age=%llu counter=%d time=%.4f swinging=%u",
+                  "swing verify age=%llu counter=%d time=%.4f prev=%.4f "
+                  "state=0x%x swinging=%u",
                   static_cast<unsigned long long>(tick - last),
                   static_cast<int>(counter), static_cast<double>(time),
-                  static_cast<unsigned>(swinging));
+                  static_cast<double>(timePrev), static_cast<unsigned>(state),
+                  static_cast<unsigned>(state >> 8));
 }
 
 void normalTickDetour(void *actor) {
@@ -1354,24 +1342,9 @@ bool ClientBridge::initialize() {
         aimbot::diagLog(kTag, "attack impl hooked @0x%zx", attackImpl);
       }
     }
-    // Необязательный хук: поиск кнопки атаки в touch-HUD. Если сигнатура
-    // не найдена, aim assist/ESP продолжают работать как раньше.
-    const uintptr_t controlBuilder = pl::memory::resolveSignature(
-        offsets::kTouchControlBuilderSignature, offsets::kMinecraftLibrary);
-    if (validGameFn(controlBuilder)) {
-      if (pl::memory::hook(
-              reinterpret_cast<pl::memory::FuncPtr>(controlBuilder),
-              reinterpret_cast<pl::memory::FuncPtr>(&controlBuilderDetour),
-              reinterpret_cast<pl::memory::FuncPtr *>(
-                  &g_controlBuilderOriginal)) != 0) {
-        aimbot::diagLog(kTag, "touch builder hook failed @0x%zx",
-                        controlBuilder);
-      } else {
-        aimbot::diagLog(kTag, "touch builder hooked @0x%zx", controlBuilder);
-      }
-    } else {
-      aimbot::diagLog(kTag, "touch builder signature not found");
-    }
+    // Хук touch-HUD builder'а и поиск кнопки атаки удалены: сканирование
+    // памяти ради кнопки вешало ANR при старте, а способ «нажимать кнопку»
+    // не используется (бьём напрямую через GameMode).
     // ClientInstance::getGameMode (`ldr x0,[x0,#0xa08]; ret`) НЕ хукаем:
     // функция длиной 8 байт, inline-хук портит соседний код и роняет игру.
     // GameMode ищем только чтением памяти (безопасно) — см. scanHeapForGameMode.
@@ -1820,37 +1793,43 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
   using AttackFn = void (*)(void *, void *, int, const Vec3 *);
   reinterpret_cast<AttackFn>(attackFn)(gameMode, actor, 0, &hitPoint);
 
-  // Анимация взмаха руки. Прямой вызов 0x1009cba4 не трогает поля взмаха,
-  // поэтому выставляем их на локальном игроке так, как это делает игра:
-  // счётчик и прогресс в 0, mSwinging = 1. Дальше движок сам наращивает
-  // прогресс и снимает флаг через 6 тиков.
+  // Анимация взмаха руки. Прямой вызов 0x1009cba4 не запускает взмах, поэтому
+  // зовём штатную функцию старта взмаха 0xfa887f0(player, 0, source) — её же
+  // вызывает LocalPlayer::normalTick (0xaf60da8). Она пишет counter=-1 и
+  // +0x434=0x100|source, дальше движок сам анимирует 6 тиков.
   void *swingPlayer = g_localPlayer.load(std::memory_order_relaxed);
-  if (swingPlayer) {
+  uintptr_t swingVtable = 0;
+  if (swingPlayer &&
+      safeRead(reinterpret_cast<uintptr_t>(swingPlayer), swingVtable) &&
+      mem::isGameAddress(reinterpret_cast<const void *>(swingVtable))) {
     const uintptr_t p = reinterpret_cast<uintptr_t>(swingPlayer);
-    int32_t oldCounter = 0;
-    float oldTime = 0.0f;
-    uint8_t oldSwinging = 0;
-    safeRead(p + offsets::kPlayerSwingTicks, oldCounter);
-    safeRead(p + offsets::kPlayerSwingTime, oldTime);
-    safeRead(p + offsets::kPlayerSwinging, oldSwinging);
+    int32_t counterBefore = 0;
+    uint16_t stateBefore = 0;
+    safeRead(p + offsets::kPlayerSwingTicks, counterBefore);
+    safeRead(p + offsets::kPlayerSwingState, stateBefore);
 
-    const int32_t swingCounter = 0;
-    const float swingTime = 0.0f;
-    const uint8_t swinging = 1;
-    mem::write(p + offsets::kPlayerSwingTicks, swingCounter);
-    mem::write(p + offsets::kPlayerSwingTime, swingTime);
-    mem::write(p + offsets::kPlayerSwinging, swinging);
+    using SwingFn = int (*)(void *, int, int);
+    const uintptr_t swingFn =
+        gameBase + offsets::kPlayerSwingFnFileOffset;
+    const int started =
+        reinterpret_cast<SwingFn>(swingFn)(swingPlayer, 0, 0);
+
+    int32_t counterAfter = 0;
+    uint16_t stateAfter = 0;
+    safeRead(p + offsets::kPlayerSwingTicks, counterAfter);
+    safeRead(p + offsets::kPlayerSwingState, stateAfter);
 
     g_lastSwingTick.store(g_tickCount.load(std::memory_order_relaxed),
                           std::memory_order_relaxed);
     const int n = g_swingTriggers.fetch_add(1, std::memory_order_relaxed) + 1;
     if (n <= 8) {
       aimbot::diagLog(kTag,
-                      "swing trigger #%d player=%p before counter=%d time=%.4f "
-                      "swinging=%u",
-                      n, swingPlayer, static_cast<int>(oldCounter),
-                      static_cast<double>(oldTime),
-                      static_cast<unsigned>(oldSwinging));
+                      "swing trigger #%d player=%p started=%d counter %d->%d "
+                      "state 0x%x->0x%x",
+                      n, swingPlayer, started, static_cast<int>(counterBefore),
+                      static_cast<int>(counterAfter),
+                      static_cast<unsigned>(stateBefore),
+                      static_cast<unsigned>(stateAfter));
     }
   }
   return true;

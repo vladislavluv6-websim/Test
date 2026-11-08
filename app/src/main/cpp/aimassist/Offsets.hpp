@@ -122,15 +122,20 @@ inline constexpr uintptr_t kActorCategories = 0x220;
 // applyTurnDelta двигает именно этот компонент; читаем его каждый кадр.
 inline constexpr uintptr_t kActorRotationComponent = 0x238;
 
-// Состояние взмаха руки у LocalPlayer (найдено дифф-пробой, лог 18):
-//   +0x404 float  — прогресс взмаха 0..1 (шаг 1/6 за тик, всего 6 тиков);
-//   +0x408 int32  — счётчик тиков взмаха 0..5;
-//   +0x435 uint8  — mSwinging (1 во время взмаха, иначе 0).
-// Прямой вызов 0x1009cba4 их не выставляет — пишем сами, дальше движок
-// продвигает анимацию в тике.
+// Состояние взмаха руки у LocalPlayer (подтверждено кодом 0xfa85d20/0xfa887f0):
+//   +0x404 float  — прогресс взмаха 0..1 (движок считает из счётчика);
+//   +0x408 int32  — счётчик тиков взмаха (-1 сразу после старта, затем 0..);
+//   +0x434 uint16 — исходник взмаха (младший байт) + флаг mSwinging (старший
+//                   байт: 0x100 => взмах идёт);
+//   +0x450 float  — предыдущий прогресс для интерполяции.
+// Старт взмаха делает функция 0xfa887f0(this, w1, source): пишет
+// counter=-1 и половину 0x434 = 0x100 | source. Её и вызываем вместо
+// ручной записи полей (0x1009cba4 сам взмах не запускает).
 inline constexpr uintptr_t kPlayerSwingTime = 0x404;
 inline constexpr uintptr_t kPlayerSwingTicks = 0x408;
-inline constexpr uintptr_t kPlayerSwinging = 0x435;
+inline constexpr uintptr_t kPlayerSwingState = 0x434;
+inline constexpr uintptr_t kPlayerSwingTimePrev = 0x450;
+inline constexpr uintptr_t kPlayerSwingFnFileOffset = 0xfa887f0;
 
 // Если известны flags / team — заполни. 0 = фича отключена.
 inline constexpr uintptr_t kActorFlags = 0;
