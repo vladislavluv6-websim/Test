@@ -1490,24 +1490,24 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     return false;
   }
 
-  // GameMode::attack(Actor&, Vec3 const&) — вызываем НАПРЯМУЮ, минуя ввод.
-  // Обёртка читает [this+0xC8], затем w2=1 и tail-call в 4-арг реализацию
-  // 0x1009cba4(this, actor, actionType=1, Vec3 const&), которая собирает и
-  // отправляет ItemUseOnActorInventoryTransaction. hitPoint обязателен.
-  const uintptr_t attackFn = gameBase + offsets::kSurvivalModeAttackFileOffset;
+  // 0x1009cba4(this, actor, actionType=0, Vec3 const&) — ровно тот вызов,
+  // который делает игровой обработчик атаки 0xce2c894. Собирает и отправляет
+  // ItemUseOnActorInventoryTransaction. actionType=0 как у игры; обёртку
+  // 0x100a11c8 (actionType=1 + флаговая проверка) не используем.
+  const uintptr_t attackFn = gameBase + offsets::kGameModeAttackImplFileOffset;
   if (logThis) {
     aimbot::diagLog(
         kTag,
         "attack #%d gm=%p fn_off=0x%zx actor=%p "
         "hit=(%.2f,%.2f,%.2f)",
         logIndex, gameMode,
-        static_cast<size_t>(offsets::kSurvivalModeAttackFileOffset), actor,
+        static_cast<size_t>(offsets::kGameModeAttackImplFileOffset), actor,
         static_cast<double>(hitPoint.x), static_cast<double>(hitPoint.y),
         static_cast<double>(hitPoint.z));
   }
 
-  using AttackFn = void (*)(void *, void *, const Vec3 *);
-  reinterpret_cast<AttackFn>(attackFn)(gameMode, actor, &hitPoint);
+  using AttackFn = void (*)(void *, void *, int, const Vec3 *);
+  reinterpret_cast<AttackFn>(attackFn)(gameMode, actor, 0, &hitPoint);
   return true;
 }
 

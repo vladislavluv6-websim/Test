@@ -160,10 +160,14 @@ inline constexpr uintptr_t kGameModeAux = 0xC0;
 inline constexpr uintptr_t kGameModeBool = 0xC8;
 // Слот 16 vtable GameMode (историческая догадка; на деле attack не в vtable).
 inline constexpr size_t kGameModeAttackSlot = 16;
-// Файловый оффсет GameMode::attack в 1.26.60.4. Вызывается НАПРЯМУЮ (не через
-// vtable): читает [this+0xC8], затем w2=1 и tail-call в 4-арг реализацию
-// 0x1009cba4(this, actor, actionType=1, Vec3 const&).
+// Файловый оффсет публичной обёртки GameMode::attack в 1.26.60.4: читает
+// [this+0xC8], проверяет global 0x141d7040, затем w2=1 и tail-call в 4-арг
+// реализацию 0x1009cba4(this, actor, actionType=1, Vec3 const&).
 inline constexpr uintptr_t kSurvivalModeAttackFileOffset = 0x100a11c8;
+// 4-арг реализация атаки. Именно её напрямую зовёт игровой обработчик
+// 0xce2c894: 0x1009cba4(GameMode, actor, actionType=0, Vec3 const&). Повторяем
+// этот вызов — без флаговой проверки обёртки.
+inline constexpr uintptr_t kGameModeAttackImplFileOffset = 0x1009cba4;
 
 // ============================================================
 // ESP RENDER OFFSETS
