@@ -276,6 +276,10 @@ std::atomic<uintptr_t> g_scanClient{0};
 std::atomic<uintptr_t> g_lockWeakPtr{0};   // 0xfdb3b20
 std::atomic<uintptr_t> g_clientVtable{0};  // 0x1388FE70
 void *g_attackListOriginal = nullptr;
+// Хук на саму реализацию атаки 0x1009cba4. Срабатывает на ЛЮБОЙ удар
+// (в т.ч. обычный удар игрока по кнопке), поэтому надёжно отдаёт настоящий
+// GameMode из x0 — даже если обработчик списка атак 0xce2c78c не зовётся.
+void *g_gameModeAttackImplOriginal = nullptr;
 
 // Проверяет, что объект похож на GameMode по структуре, а не по слоту vtable
 // (attack не виртуальный и в vtable его нет). Опираемся на поля, которые
@@ -1116,6 +1120,54 @@ void *attackListDetour(void *a0, void *a1, void *a2, void *a3) {
   return orig ? orig(a0, a1, a2, a3) : nullptr;
 }
 
+// 0x1009cba4(GameMode *gm, Actor *actor, int actionType, Vec3 const *pos) —
+// реализация удара. Срабатывает на любой удар, включая обычный удар игрока,
+// поэтому ловит настоящий GameMode (x0) даже без обработчика списка атак.
+// Заодно ищем, по какому оффсету gm лежит в ClientInstance/LocalPlayer —
+// чтобы в будущем брать его без удара игрока.
+void attackImplDetour(void *gm, void *actor, int actionType, const void *pos) {
+  if (gm) {
+    const uintptr_t g = reinterpret_cast<uintptr_t>(gm);
+    if (isGameModeLike(g)) {
+      const uintptr_t prev = g_gameModeDirect.load(std::memory_order_acquire);
+      if (prev != g) {
+        aimbot::diagLog(kTag,
+                        "gm attack-impl: gm=%p actor=%p type=%d prev=%p",
+                        gm, actor, actionType, reinterpret_cast<void *>(prev));
+        // Ищем, где gm лежит относительно нашего client/LocalPlayer.
+        const uintptr_t clientAddr =
+            reinterpret_cast<uintptr_t>(g_clientInstance.load());
+        const uintptr_t playerAddr =
+            reinterpret_cast<uintptr_t>(g_localPlayer.load());
+        for (uintptr_t off = 0; off <= 0x1400; off += 8) {
+          uintptr_t v = 0;
+          if (clientAddr && safeRead(clientAddr + off, v) && v == g) {
+            aimbot::diagLog(kTag, "gm locate: [client+0x%zx] == gm", off);
+            break;
+          }
+        }
+        for (uintptr_t off = 0; off <= 0x1400; off += 8) {
+          uintptr_t v = 0;
+          if (playerAddr && safeRead(playerAddr + off, v) && v == g) {
+            aimbot::diagLog(kTag, "gm locate: [player+0x%zx] == gm", off);
+            break;
+          }
+        }
+        g_gameModeDirect.store(g, std::memory_order_release);
+      }
+    } else {
+      static std::atomic<int> s_reject{0};
+      if (s_reject.fetch_add(1, std::memory_order_relaxed) < 8) {
+        aimbot::diagLog(kTag, "gm attack-impl: reject gm=%p actor=%p type=%d",
+                        gm, actor, actionType);
+      }
+    }
+  }
+  using ImplFn = void (*)(void *, void *, int, const void *);
+  auto orig = reinterpret_cast<ImplFn>(g_gameModeAttackImplOriginal);
+  if (orig) orig(gm, actor, actionType, pos);
+}
+
 void normalTickDetour(void *actor) {
   if (g_normalTickOriginal) {
     g_normalTickOriginal(actor);
@@ -1230,6 +1282,21 @@ bool ClientBridge::initialize() {
       }
     } else {
       aimbot::diagLog(kTag, "attack list hook: maps libStart=0");
+    }
+    // Хук реализации удара 0x1009cba4: ловит настоящий GameMode на любом
+    // ударе (в т.ч. обычном ударе игрока), не полагаясь на 0xce2c78c.
+    if (maps.libStart != 0) {
+      const uintptr_t attackImpl =
+          maps.libStart + offsets::kGameModeAttackImplFileOffset;
+      if (pl::memory::hook(
+              reinterpret_cast<pl::memory::FuncPtr>(attackImpl),
+              reinterpret_cast<pl::memory::FuncPtr>(&attackImplDetour),
+              reinterpret_cast<pl::memory::FuncPtr *>(
+                  &g_gameModeAttackImplOriginal)) != 0) {
+        aimbot::diagLog(kTag, "attack impl hook failed @0x%zx", attackImpl);
+      } else {
+        aimbot::diagLog(kTag, "attack impl hooked @0x%zx", attackImpl);
+      }
     }
     // Необязательный хук: поиск кнопки атаки в touch-HUD. Если сигнатура
     // не найдена, aim assist/ESP продолжают работать как раньше.
@@ -1570,8 +1637,9 @@ void *ClientBridge::getGameMode() const {
     return found;
   }
 
-  // Шаг 2: поиск объекта GameMode по куче — в фоне.
-  startGameModeScan(clientAddr);
+  // Шаг 2: скан кучи больше не запускаем — структурные кандидаты оказались
+  // актёрами (ложные срабатывания). GameMode берём из хука удара
+  // (attackImplDetour) / обработчика списка атак (attackListDetour).
   return nullptr;
 }
 
