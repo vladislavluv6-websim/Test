@@ -945,8 +945,10 @@ void *gameModeScanThread(void *) {
   void *found = clientAddr ? scanHeapForGameMode(clientAddr, storageAddr)
                            : nullptr;
   if (found) {
-    g_gameModeDirect.store(reinterpret_cast<uintptr_t>(found),
-                           std::memory_order_release);
+    // Диагностика: структурный скан может дать ложное срабатывание, а вызов
+    // 0x1009cba4 на чужом объекте роняет игру. Для атаки используем только
+    // GameMode из хука обработчика атак (attackListDetour).
+    aimbot::diagLog(kTag, "gm scan: candidate=%p (ignored for attack)", found);
   }
   g_scanRunning.store(false, std::memory_order_release);
   return nullptr;
@@ -1053,34 +1055,61 @@ void *clientUpdateDetour(void *client, bool value, bool second) {
 // a2 — WeakPtr на настоящий ClientInstance (его лок делает игра перед
 // getGameMode). Ловим его и кэшируем реальный GameMode из [+0xA08].
 void *attackListDetour(void *a0, void *a1, void *a2, void *a3) {
-  static uint64_t s_calls = 0;
-  const uint64_t call = ++s_calls;
-  if (a2 && (call <= 4 || (call % 240) == 0)) {
-    const uintptr_t lockFn = g_lockWeakPtr.load(std::memory_order_relaxed);
-    const uintptr_t clientVt = g_clientVtable.load(std::memory_order_relaxed);
-    if (lockFn && clientVt) {
-      using LockFn = void *(*)(void *, int);
-      void *client = reinterpret_cast<LockFn>(lockFn)(a2, 0);
-      if (client) {
-        uintptr_t vt = 0;
-        if (safeRead(reinterpret_cast<uintptr_t>(client), vt) &&
-            vt == clientVt) {
-          uintptr_t gm = 0;
-          if (safeRead(reinterpret_cast<uintptr_t>(client) +
-                           offsets::kClientInstanceGameMode,
-                       gm) &&
-              gm != 0) {
-            const uintptr_t prev =
-                g_gameModeDirect.exchange(gm, std::memory_order_acq_rel);
-            if (prev != gm) {
-              aimbot::diagLog(kTag, "gm hook: client=%p gm=%p prev=%p",
-                              client, reinterpret_cast<void *>(gm),
-                              reinterpret_cast<void *>(prev));
-            }
-          }
-        }
+  static std::atomic<uint64_t> s_calls{0};
+  const uint64_t call = s_calls.fetch_add(1, std::memory_order_relaxed) + 1;
+  const uintptr_t lockFn = g_lockWeakPtr.load(std::memory_order_relaxed);
+  const uintptr_t clientVt = g_clientVtable.load(std::memory_order_relaxed);
+  // lock() не на каждом вызове: функция может зваться часто. Ранних вызовов
+  // достаточно, чтобы поймать GameMode, плюс периодическая перепроверка.
+  const bool wantProbe = (call <= 8) || ((call % 120) == 0);
+  if (a2 && lockFn && clientVt && wantProbe) {
+    using LockFn = void *(*)(void *, int);
+    void *owner = reinterpret_cast<LockFn>(lockFn)(a2, 0);
+    if (owner) {
+      const uintptr_t ownerAddr = reinterpret_cast<uintptr_t>(owner);
+      uintptr_t vt = 0;
+      uintptr_t gm = 0;
+      safeRead(ownerAddr, vt);
+      safeRead(ownerAddr + offsets::kClientInstanceGameMode, gm);
+      const bool isClient = (vt == clientVt);
+      // Настоящий GameMode — ровно [owner+0xA08] из этого же хука: игра сама
+      // передаёт его в 0x1009cba4, поэтому объект корректный по построению.
+      // Мягкая проверка отсекает мусор, если a2 окажется не WeakPtr.
+      const bool gmOk = gm != 0 && isGameModeLike(gm);
+      uintptr_t gmOwner = 0;
+      uintptr_t gmAux = 0;
+      uint8_t gmFlag = 0xFF;
+      safeRead(gm + offsets::kGameModeOwner, gmOwner);
+      safeRead(gm + offsets::kGameModeAux, gmAux);
+      safeRead(gm + offsets::kGameModeBool, gmFlag);
+      const uintptr_t prev = g_gameModeDirect.load(std::memory_order_acquire);
+      if (call <= 6 || (call % 300) == 0 || (gmOk && prev != gm)) {
+        aimbot::diagLog(kTag,
+                        "gm hook #%llu: a2=%p owner=%p vt=%p mine=%p gm=%p "
+                        "isClient=%d gmOk=%d lvl=%p aux=%p flag=%u prev=%p",
+                        static_cast<unsigned long long>(call), a2, owner,
+                        reinterpret_cast<void *>(vt),
+                        reinterpret_cast<void *>(clientVt),
+                        reinterpret_cast<void *>(gm),
+                        static_cast<int>(isClient), static_cast<int>(gmOk),
+                        reinterpret_cast<void *>(gmOwner),
+                        reinterpret_cast<void *>(gmAux),
+                        static_cast<unsigned>(gmFlag),
+                        reinterpret_cast<void *>(prev));
       }
+      if (gmOk) {
+        g_gameModeDirect.store(gm, std::memory_order_release);
+      }
+    } else if (call <= 6) {
+      aimbot::diagLog(kTag, "gm hook #%llu: a2=%p lock=null",
+                      static_cast<unsigned long long>(call), a2);
     }
+  } else if (call <= 6) {
+    aimbot::diagLog(kTag,
+                    "gm hook #%llu: a2=%p lockFn=%p clientVt=%p (skip)",
+                    static_cast<unsigned long long>(call), a2,
+                    reinterpret_cast<void *>(lockFn),
+                    reinterpret_cast<void *>(clientVt));
   }
   using OrigFn = void *(*)(void *, void *, void *, void *);
   auto orig = reinterpret_cast<OrigFn>(g_attackListOriginal);
@@ -1475,6 +1504,9 @@ void *ClientBridge::getGameMode() const {
   const uintptr_t cachedDirect =
       g_gameModeDirect.load(std::memory_order_acquire);
   if (cachedDirect != 0) {
+    // Сюда попадает только GameMode из хука обработчика атак (игра сама берёт
+    // его из [owner+0xA08]), поэтому достаточно мягкой проверки. Строгая
+    // проверка ниже (guardOk в attackActor) защищает от вызова на мусоре.
     if (isGameModeLike(cachedDirect)) {
       return reinterpret_cast<void *>(cachedDirect);
     }
