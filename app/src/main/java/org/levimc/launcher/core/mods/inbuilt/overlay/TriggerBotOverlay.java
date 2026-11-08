@@ -23,6 +23,7 @@ import org.levimc.launcher.preloader.PreloaderInput;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Random;
@@ -39,6 +40,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     private boolean initPending = false;
     private long targetSince = 0L;
     private long nextAttackAt = 0L;
+    private long lastGateLogAt = 0L;
 
     // Поведение атаки (берётся из настроек модуля и кешируется).
     private int reactionDelayMs = 280;
@@ -62,10 +64,18 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             InbuiltOverlayManager overlayManager = InbuiltOverlayManager.getInstance();
             // isHudScreenOpen() == идёт обычный геймплей (HUD-экран открыт).
             // Бьём только в геймплее и никогда — в меню/паузе/инвентаре.
-            if (!PreloaderInput.isHudScreenOpen() || PreloaderInput.isPauseMenuOpen()
-                    || PreloaderInput.isShowingMenu()
-                    || (overlayManager != null && overlayManager.isModMenuShowing())) {
+            boolean hudOpen = PreloaderInput.isHudScreenOpen();
+            boolean pauseOpen = PreloaderInput.isPauseMenuOpen();
+            boolean menuOpen = PreloaderInput.isShowingMenu();
+            boolean modMenu = overlayManager != null && overlayManager.isModMenuShowing();
+            if (!hudOpen || pauseOpen || menuOpen || modMenu) {
                 // Меню клиента тоже перекрывает игру — не бьём сквозь него.
+                long gateNow = SystemClock.uptimeMillis();
+                if (gateNow - lastGateLogAt > 2000L) {
+                    lastGateLogAt = gateNow;
+                    appendDiag("java gate hud=" + hudOpen + " pause=" + pauseOpen
+                            + " menu=" + menuOpen + " modmenu=" + modMenu);
+                }
                 targetSince = 0L;
                 triggerHandler.postDelayed(this, 100L);
                 return;
@@ -101,6 +111,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             // Нажимаем именно экранную кнопку атаки (Pojav Controls), а не
             // тап по центру экрана: камера и остальные контролы не задеты.
             boolean attacked = ((MinecraftActivity) activity).performTriggerBotAttack();
+            appendDiag("java attack result=" + attacked);
             if (attacked) {
                 if (skipChancePercent > 0 && random.nextInt(100) < skipChancePercent) {
                     // Пропущенный удар: живой игрок тоже иногда не кликает.
@@ -269,13 +280,27 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         }
     }
 
+    /** Дописывает строку в тот же файл диагностики, что пишет нативный мод. */
+    private void appendDiag(String line) {
+        try {
+            File dir = activity.getExternalFilesDir(null);
+            if (dir == null) return;
+            try (FileOutputStream out = new FileOutputStream(
+                    new File(dir, "aimassist_diag.log"), true)) {
+                out.write((line + "\n").getBytes());
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void startLoop() {
-        // Удар выполняет нативный слой на игровом потоке (GameMode::attack),
-        // поэтому UI-цикл больше не инжектит касания: он нужен только для
-        // сброса состояния кнопки.
+        // Удар выполняет UI-цикл: нативный GameMode::attack на этой сборке
+        // игры недоступен (GameMode не находится в памяти), поэтому бьём
+        // тапом по настоящей экранной кнопке атаки из options.txt.
         triggerHandler.removeCallbacks(triggerRunnable);
         targetSince = 0L;
         nextAttackAt = 0L;
+        triggerHandler.post(triggerRunnable);
     }
 
     private void stopLoop() {
