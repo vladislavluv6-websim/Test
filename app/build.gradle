@@ -73,6 +73,14 @@ android {
             assets.srcDirs += rootProject.file('resources')
         }
     }
+    signingConfigs {
+        debug {
+            storeFile rootProject.file('keystore/levimc-debug.jks')
+            storePassword 'android'
+            keyAlias 'levimc'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
         release {
             minifyEnabled true
@@ -88,6 +96,7 @@ android {
             buildConfigField "boolean", "IS_BETA", "false"
         }
         debug {
+            signingConfig signingConfigs.debug
             debuggable false
             minifyEnabled true
             shrinkResources false

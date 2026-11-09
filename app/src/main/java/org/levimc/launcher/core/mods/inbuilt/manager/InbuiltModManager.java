@@ -58,6 +58,9 @@ public class InbuiltModManager {
     private static final String KEY_ESP_MOB_COLOR = "esp_mob_color";
     private static final String KEY_ESP_ARMOR_COLORS = "esp_armor_colors";
     private static final String KEY_ESP_ARMORED_COLOR = "esp_armored_color";
+    private static final String KEY_TARGET_ESP_STYLE = "target_esp_style";
+    private static final String KEY_TARGET_ESP_COLOR = "target_esp_color";
+    private static final String KEY_TARGET_ESP_HOLD = "target_esp_hold_ms";
     private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
     private static final String KEY_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String KEY_TRIGGER_BOT_REACTION_JITTER = "trigger_bot_reaction_jitter";
@@ -152,6 +155,9 @@ public class InbuiltModManager {
     private static final int DEFAULT_ESP_RANGE = 32;
     private static final int DEFAULT_ESP_PLAYER_COLOR = 0xFFFF5555;
     private static final int DEFAULT_ESP_MOB_COLOR = 0xFFFFAA00;
+    private static final int DEFAULT_TARGET_ESP_STYLE = 0;
+    private static final int DEFAULT_TARGET_ESP_COLOR = 0xFF4E83FF;
+    private static final int DEFAULT_TARGET_ESP_HOLD = 650;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
     private static final int DEFAULT_TRIGGER_BOT_DELAY = 90;
     private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 40;
@@ -580,6 +586,42 @@ public class InbuiltModManager {
 
     public void setNameTagsEnabled(boolean enabled) {
         setInbuiltModEnabled(ModIds.NAME_TAGS, enabled);
+    }
+
+    public boolean isTargetEspEnabled() {
+        return resolveInbuiltModEnabled(ModIds.TARGET_ESP, false);
+    }
+
+    public void setTargetEspEnabled(boolean enabled) {
+        setInbuiltModEnabled(ModIds.TARGET_ESP, enabled);
+    }
+
+    public int getTargetEspStyle() {
+        return Math.max(0, Math.min(3,
+                prefs.getInt(KEY_TARGET_ESP_STYLE, DEFAULT_TARGET_ESP_STYLE)));
+    }
+
+    public void setTargetEspStyle(int style) {
+        prefs.edit().putInt(KEY_TARGET_ESP_STYLE,
+                Math.max(0, Math.min(3, style))).apply();
+    }
+
+    public int getTargetEspColor() {
+        return prefs.getInt(KEY_TARGET_ESP_COLOR, DEFAULT_TARGET_ESP_COLOR);
+    }
+
+    public void setTargetEspColor(int argb) {
+        prefs.edit().putInt(KEY_TARGET_ESP_COLOR, argb).apply();
+    }
+
+    public int getTargetEspHoldMs() {
+        return Math.max(200, Math.min(3000,
+                prefs.getInt(KEY_TARGET_ESP_HOLD, DEFAULT_TARGET_ESP_HOLD)));
+    }
+
+    public void setTargetEspHoldMs(int holdMs) {
+        prefs.edit().putInt(KEY_TARGET_ESP_HOLD,
+                Math.max(200, Math.min(3000, holdMs))).apply();
     }
 
     public boolean isFullbrightEnabled() {

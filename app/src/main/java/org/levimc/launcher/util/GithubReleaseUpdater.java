@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
@@ -14,6 +16,7 @@ import androidx.core.content.FileProvider;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.levimc.launcher.BuildConfig;
 import org.levimc.launcher.R;
 import org.levimc.launcher.ui.dialogs.CustomAlertDialog;
 
@@ -31,19 +34,28 @@ import okhttp3.Response;
 public class GithubReleaseUpdater {
     private static final String TAG = "GithubReleaseUpdater";
     private static final String GITHUB_LATEST_API = "https://api.github.com/repos/%s/%s/releases/latest";
+    private static final String GITHUB_TAG_API = "https://api.github.com/repos/%s/%s/releases/tags/%s";
     private static final String APK_ASSET_KEYWORD = ".apk";
     private static final String PREF_IGNORED_VERSION = "update_ignored_version";
     private final Activity activity;
     private final String owner;
     private final String repo;
+    private final String releaseTag;
     private final OkHttpClient client = new OkHttpClient();
     private ActivityResultLauncher<Intent> permissionResultLauncher;
 
     public GithubReleaseUpdater(Activity activity, String owner, String repo,
                                 ActivityResultLauncher<Intent> permissionResultLauncher) {
+        this(activity, owner, repo, null, permissionResultLauncher);
+    }
+
+    public GithubReleaseUpdater(Activity activity, String owner, String repo,
+                                String releaseTag,
+                                ActivityResultLauncher<Intent> permissionResultLauncher) {
         this.activity = activity;
         this.owner = owner;
         this.repo = repo;
+        this.releaseTag = releaseTag;
         this.permissionResultLauncher = permissionResultLauncher;
     }
 
@@ -63,6 +75,10 @@ public class GithubReleaseUpdater {
     }
 
     public void checkUpdate() {
+        if (releaseTag != null && !releaseTag.isEmpty()) {
+            checkUpdateByTag();
+            return;
+        }
         String url = String.format(GITHUB_LATEST_API, owner, repo);
         Request request = new Request.Builder().url(url).build();
         client.newCall(request).enqueue(new Callback() {
@@ -98,6 +114,54 @@ public class GithubReleaseUpdater {
                         activity.runOnUiThread(() ->
                                 Toast.makeText(activity, activity.getString(R.string.already_latest_version, localVersion), Toast.LENGTH_SHORT).show());
                     }
+                } catch (Exception e) {
+                    Log.e(TAG, "Parse error: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    /**
+     * Prerelease builds are overwritten on every CI run, so the latest
+     * versionCode lives inside the APK itself rather than in the tag name.
+     * The APK is downloaded first and compared with the installed build.
+     */
+    private void checkUpdateByTag() {
+        String url = String.format(GITHUB_TAG_API, owner, repo, releaseTag);
+        Request request = new Request.Builder().url(url).build();
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "Request failed: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) {
+                try {
+                    if (!response.isSuccessful()) {
+                        Log.e(TAG, "Release request failed: " + response.code());
+                        return;
+                    }
+                    String body = response.body().string();
+                    JSONObject json = new JSONObject(body);
+                    JSONArray assets = json.getJSONArray("assets");
+                    String downloadUrl = null;
+                    long updatedAt = json.optLong("updated_at", 0L);
+                    for (int i = 0; i < assets.length(); i++) {
+                        JSONObject asset = assets.getJSONObject(i);
+                        String name = asset.getString("name");
+                        if (name.endsWith(APK_ASSET_KEYWORD)) {
+                            // Bust CDN caches: the asset name never changes.
+                            downloadUrl = asset.getString("browser_download_url")
+                                    + "?t=" + updatedAt;
+                            break;
+                        }
+                    }
+                    if (downloadUrl == null) {
+                        Log.e(TAG, "No APK asset found in release.");
+                        return;
+                    }
+                    downloadApk(downloadUrl, true);
                 } catch (Exception e) {
                     Log.e(TAG, "Parse error: " + e.getMessage());
                 }
@@ -179,6 +243,10 @@ public class GithubReleaseUpdater {
     }
 
     private void downloadApk(String url) {
+        downloadApk(url, false);
+    }
+
+    private void downloadApk(String url, boolean verifyVersionCode) {
         activity.runOnUiThread(() -> Toast.makeText(activity, activity.getString(R.string.downloading_update), Toast.LENGTH_SHORT).show());
         Request request = new Request.Builder().url(url).build();
         client.newCall(request).enqueue(new Callback() {
@@ -215,6 +283,12 @@ public class GithubReleaseUpdater {
                         }
                     }
                     fos.flush();
+                    if (verifyVersionCode && !isNewerBuild(apkFile)) {
+                        activity.runOnUiThread(() -> Toast.makeText(activity,
+                                activity.getString(R.string.already_latest_version,
+                                        getInstalledVersionName()), Toast.LENGTH_SHORT).show());
+                        return;
+                    }
                     installApk(apkFile);
                 } catch (Exception e) {
                     activity.runOnUiThread(() ->
@@ -231,6 +305,32 @@ public class GithubReleaseUpdater {
                 }
             }
         });
+    }
+
+    private String getInstalledVersionName() {
+        try {
+            return activity.getPackageManager().getPackageInfo(
+                    activity.getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return BuildConfig.VERSION_NAME;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private boolean isNewerBuild(File apkFile) {
+        try {
+            PackageManager pm = activity.getPackageManager();
+            PackageInfo archived = pm.getPackageArchiveInfo(apkFile.getAbsolutePath(), 0);
+            PackageInfo installed = pm.getPackageInfo(activity.getPackageName(), 0);
+            if (archived == null) return false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                return archived.getLongVersionCode() > installed.getLongVersionCode();
+            }
+            return archived.versionCode > installed.versionCode;
+        } catch (Exception e) {
+            Log.e(TAG, "Version compare failed: " + e.getMessage());
+            return false;
+        }
     }
 
     private void installApk(File apkFile) {

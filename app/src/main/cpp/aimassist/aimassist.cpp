@@ -368,6 +368,33 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetNameTags(
   return result;
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetTargetEsp(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::Esp::instance().setTargetEsp(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetTargetEspHold(
+    JNIEnv *, jclass, jint holdMs) {
+  aimbot::Esp::instance().setTargetEspHoldMs(static_cast<int>(holdMs));
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetTargetEsp(
+    JNIEnv *env, jclass) {
+  const aimbot::TargetEspState state =
+      aimbot::Esp::instance().copyTargetEsp();
+  if (!state.visible || !env) return nullptr;
+  char buffer[96]{};
+  std::snprintf(buffer, sizeof(buffer), "%.1f	%.1f	%.1f	%.1f	%lld",
+                static_cast<double>(state.x), static_cast<double>(state.y),
+                static_cast<double>(state.width),
+                static_cast<double>(state.height),
+                static_cast<long long>(state.ageMs));
+  return env->NewStringUTF(buffer);
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_FullbrightMod_nativeInit(
     JNIEnv *, jclass) {

@@ -697,6 +697,15 @@
     <string name="esp_mod_unavailable">ESP недоступен для этой версии игры</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Автоматически бьёт игроков и мобов в прицеле</string>
+    <string name="inbuilt_mod_target_esp">Target ESP</string>
+    <string name="inbuilt_mod_target_esp_desc">Подсвечивает цель моделью призрака, квадрата, круга или кристалла, но только когда TriggerBot попал</string>
+    <string name="mod_config_target_esp_style">Модель</string>
+    <string name="mod_config_target_esp_ghost">Призрак</string>
+    <string name="mod_config_target_esp_square">Квадрат</string>
+    <string name="mod_config_target_esp_circle">Круг</string>
+    <string name="mod_config_target_esp_crystal">Кристалл</string>
+    <string name="mod_config_target_esp_color">Цвет</string>
+    <string name="mod_config_target_esp_hold">Видимость после удара (мс)</string>
     <string name="inbuilt_mod_name_tags">Ники игроков</string>
     <string name="inbuilt_mod_name_tags_desc">Показывает чистые ники игроков сквозь стены, включая невидимых</string>
     <string name="inbuilt_mod_fullbright">Полная яркость</string>

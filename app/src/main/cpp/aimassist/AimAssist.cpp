@@ -3,6 +3,7 @@
 #include <android/log.h>
 
 #include "DiagLog.hpp"
+#include "Esp.hpp"
 
 #include <algorithm>
 #include <cfloat>
@@ -1270,6 +1271,8 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   }
 
   if (m_bridge.attackActor(bestActor, hitPoint)) {
+    // Target ESP появляется только на факте удара TriggerBot.
+    Esp::instance().markTargetEspHit(bestActor);
     // Интервал между ударами: база + разброс + редкая «задумчивость».
     int64_t next = now + settings.triggerIntervalMs;
     if (settings.attackIntervalJitterMs > 0) {

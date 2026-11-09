@@ -690,6 +690,15 @@
     <string name="esp_mod_unavailable">ESP is unavailable for this game version</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players and mobs under the crosshair</string>
+    <string name="inbuilt_mod_target_esp">Target ESP</string>
+    <string name="inbuilt_mod_target_esp_desc">Highlights the target with a ghost, square, circle or crystal model, but only when TriggerBot lands a hit</string>
+    <string name="mod_config_target_esp_style">Model</string>
+    <string name="mod_config_target_esp_ghost">Ghost</string>
+    <string name="mod_config_target_esp_square">Square</string>
+    <string name="mod_config_target_esp_circle">Circle</string>
+    <string name="mod_config_target_esp_crystal">Crystal</string>
+    <string name="mod_config_target_esp_color">Color</string>
+    <string name="mod_config_target_esp_hold">Visible after hit (ms)</string>
     <string name="inbuilt_mod_name_tags">Name Tags</string>
     <string name="inbuilt_mod_name_tags_desc">Shows clean player name tags through walls, including invisible players</string>
     <string name="inbuilt_mod_fullbright">Fullbright</string>

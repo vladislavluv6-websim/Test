@@ -613,6 +613,38 @@ std::vector<NameTagLabel> Esp::copyNameTags() const {
   return m_nameSnapshot;
 }
 
+void Esp::setTargetEsp(bool enabled) {
+  m_targetEsp.store(enabled, std::memory_order_release);
+  if (!enabled) {
+    std::lock_guard<std::mutex> lock(m_targetMutex);
+    m_targetEspActor = nullptr;
+    m_targetEspSnapshot = TargetEspState{};
+  }
+}
+
+bool Esp::isTargetEspEnabled() const {
+  return m_targetEsp.load(std::memory_order_acquire);
+}
+
+void Esp::setTargetEspHoldMs(int holdMs) {
+  m_targetEspHoldMs.store(std::clamp(holdMs, 120, 4000),
+                          std::memory_order_release);
+}
+
+void Esp::markTargetEspHit(void *actor) {
+  if (!actor) return;
+  {
+    std::lock_guard<std::mutex> lock(m_targetMutex);
+    m_targetEspActor = actor;
+    m_targetEspHit = std::chrono::steady_clock::now();
+  }
+}
+
+TargetEspState Esp::copyTargetEsp() const {
+  std::lock_guard<std::mutex> lock(m_targetMutex);
+  return m_targetEspSnapshot;
+}
+
 std::string Esp::actorName(void *actor,
                            std::chrono::steady_clock::time_point now) {
   {
@@ -725,6 +757,119 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
   m_nameSnapshot = std::move(labels);
 }
 
+void Esp::updateTargetEsp(void *player, uintptr_t playerRenderer,
+                          const float camera[3]) {
+  TargetEspState state;
+  void *target = nullptr;
+  std::chrono::steady_clock::time_point hitTime{};
+  {
+    std::lock_guard<std::mutex> lock(m_targetMutex);
+    target = m_targetEspActor;
+    hitTime = m_targetEspHit;
+  }
+
+  const auto now = std::chrono::steady_clock::now();
+  const int64_t holdMs = m_targetEspHoldMs.load(std::memory_order_relaxed);
+  const int64_t ageMs =
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - hitTime)
+          .count();
+
+  bool targetKnown = false;
+  for (void *actor : m_actors) {
+    if (actor == target) {
+      targetKnown = true;
+      break;
+    }
+  }
+
+  const float width = m_surfaceWidth.load(std::memory_order_relaxed);
+  const float height = m_surfaceHeight.load(std::memory_order_relaxed);
+  ViewAngles view{};
+  if (targetKnown && target && ageMs >= 0 && ageMs <= holdMs &&
+      width > 1.0f && height > 1.0f &&
+      m_bridge.getViewAngles(player, view)) {
+    Aabb bounds{};
+    if (m_bridge.getActorBounds(target, bounds)) {
+      const float aspect = width / height;
+      float fovY = 0.0f;
+      const float liveFov = g_worldFovDeg.load(std::memory_order_relaxed);
+      if (std::isfinite(liveFov) && liveFov > 1.0f && liveFov < 179.0f) {
+        fovY = liveFov * 0.01745329252f;
+      }
+      if (fovY <= 0.0f) {
+        const uintptr_t client =
+            reinterpret_cast<uintptr_t>(m_bridge.getClientInstance());
+        if (!readFovY(client, offsets::kClientInstanceFovX,
+                      offsets::kClientInstanceFovY, aspect, fovY) &&
+            !readFovY(playerRenderer, offsets::kLevelRendererPlayerFovX,
+                      offsets::kLevelRendererPlayerFovY, aspect, fovY)) {
+          fovY = 70.0f * 0.01745329252f;
+        }
+      }
+
+      const float pitch = view.pitch * 0.01745329252f;
+      const float yaw = view.yaw * 0.01745329252f;
+      const float sy = std::sin(yaw);
+      const float cy = std::cos(yaw);
+      const float sp = std::sin(pitch);
+      const float cp = std::cos(pitch);
+
+      const float fx = -sy * cp;
+      const float fy = -sp;
+      const float fz = cy * cp;
+      const float rx = -cy;
+      const float rz = -sy;
+      const float ux = -rz * fy;
+      const float uy = rz * fx - rx * fz;
+      const float uz = rx * fy;
+      const float focal = (height * 0.5f) / std::tan(fovY * 0.5f);
+
+      float minX = 1e9f;
+      float minY = 1e9f;
+      float maxX = -1e9f;
+      float maxY = -1e9f;
+      bool anyBehind = false;
+      for (int corner = 0; corner < 8; ++corner) {
+        const float px = (corner & 1) ? bounds.max.x : bounds.min.x;
+        const float py = (corner & 2) ? bounds.max.y : bounds.min.y;
+        const float pz = (corner & 4) ? bounds.max.z : bounds.min.z;
+        const float dx = px - camera[0];
+        const float dy = py - camera[1];
+        const float dz = pz - camera[2];
+        const float depth = dx * fx + dy * fy + dz * fz;
+        if (depth <= 0.15f) {
+          anyBehind = true;
+          break;
+        }
+        const float right = dx * rx + dz * rz;
+        const float up = dx * ux + dy * uy + dz * uz;
+        const float sx = width * 0.5f + (right / depth) * focal;
+        const float sy2 = height * 0.5f - (up / depth) * focal;
+        minX = std::min(minX, sx);
+        minY = std::min(minY, sy2);
+        maxX = std::max(maxX, sx);
+        maxY = std::max(maxY, sy2);
+      }
+      if (!anyBehind && minX < maxX && minY < maxY) {
+        state.visible = true;
+        state.x = minX;
+        state.y = minY;
+        state.width = maxX - minX;
+        state.height = maxY - minY;
+        state.ageMs = std::max<int64_t>(0, ageMs);
+      }
+    }
+  }
+
+  if (!state.visible && (ageMs > holdMs || !targetKnown)) {
+    std::lock_guard<std::mutex> lock(m_targetMutex);
+    m_targetEspActor = nullptr;
+  }
+
+  std::lock_guard<std::mutex> lock(m_targetMutex);
+  m_targetEspSnapshot = state;
+}
+
 void Esp::render(void *levelRenderer, void *screenContext) {
   if (!m_initialized.load(std::memory_order_acquire)) return;
   if (!mem::isPlausiblePointer(reinterpret_cast<uintptr_t>(levelRenderer))) {
@@ -735,8 +880,9 @@ void Esp::render(void *levelRenderer, void *screenContext) {
   const bool showPlayers = m_showPlayers.load(std::memory_order_relaxed);
   const bool showMobs = m_showMobs.load(std::memory_order_relaxed);
   const bool nameTags = m_nameTags.load(std::memory_order_relaxed);
-  if (!espBoxes && !nameTags) return;
-  if (espBoxes && !showPlayers && !showMobs && !nameTags) return;
+  const bool targetEsp = m_targetEsp.load(std::memory_order_relaxed);
+  if (!espBoxes && !nameTags && !targetEsp) return;
+  if (espBoxes && !showPlayers && !showMobs && !nameTags && !targetEsp) return;
 
   void *player = m_bridge.getLocalPlayer();
   if (!player) return;
@@ -757,10 +903,13 @@ void Esp::render(void *levelRenderer, void *screenContext) {
     return;
   }
 
-  m_bridge.fillNearbyActors(player, m_range.load(std::memory_order_relaxed),
-                            m_actors);
+  const float scanRange = targetEsp
+      ? std::max(m_range.load(std::memory_order_relaxed), 64.0f)
+      : m_range.load(std::memory_order_relaxed);
+  m_bridge.fillNearbyActors(player, scanRange, m_actors);
 
   if (nameTags) updateNameTags(player, playerRenderer, camera);
+  if (targetEsp) updateTargetEsp(player, playerRenderer, camera);
   if (!espBoxes) return;
 
   if (!mem::isPlausiblePointer(reinterpret_cast<uintptr_t>(screenContext))) {

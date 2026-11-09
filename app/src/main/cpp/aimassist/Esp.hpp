@@ -18,6 +18,15 @@ struct NameTagLabel {
   std::string name;
 };
 
+struct TargetEspState {
+  bool visible = false;
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 0.0f;
+  float height = 0.0f;
+  int64_t ageMs = 0;
+};
+
 class Esp {
 public:
   static Esp &instance();
@@ -43,6 +52,14 @@ public:
   void setNameTagSurface(float width, float height);
   std::vector<NameTagLabel> copyNameTags() const;
 
+  // Target ESP: виден только после удара TriggerBot по цели. Native
+  // считает экранный прямоугольник цели, Java рисует модель.
+  void setTargetEsp(bool enabled);
+  bool isTargetEspEnabled() const;
+  void setTargetEspHoldMs(int holdMs);
+  void markTargetEspHit(void *actor);
+  TargetEspState copyTargetEsp() const;
+
   // Called from the LevelRenderer::renderLevel detour.
   void render(void *levelRenderer, void *screenContext);
 
@@ -51,6 +68,8 @@ private:
 
   void updateNameTags(void *player, uintptr_t playerRenderer,
                       const float camera[3]);
+  void updateTargetEsp(void *player, uintptr_t playerRenderer,
+                       const float camera[3]);
   std::string actorName(void *actor, std::chrono::steady_clock::time_point now);
 
   ClientBridge &m_bridge = ClientBridge::instance();
@@ -71,6 +90,12 @@ private:
   std::chrono::steady_clock::time_point m_lastLog{};
   mutable std::mutex m_nameMutex;
   std::vector<NameTagLabel> m_nameSnapshot;
+  std::atomic<bool> m_targetEsp{false};
+  std::atomic<int> m_targetEspHoldMs{650};
+  mutable std::mutex m_targetMutex;
+  void *m_targetEspActor = nullptr;
+  std::chrono::steady_clock::time_point m_targetEspHit{};
+  TargetEspState m_targetEspSnapshot;
   std::unordered_map<void *, std::pair<std::string,
                                        std::chrono::steady_clock::time_point>>
       m_nameCache;

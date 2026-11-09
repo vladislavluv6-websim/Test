@@ -60,6 +60,7 @@ public class InbuiltOverlayManager {
     private boolean modMenuOpenedFromButton;
     private HudOverlay hudOverlay;
     private NameTagsOverlay nameTagsOverlay;
+    private TargetEspOverlay targetEspOverlay;
     private BaseOverlayButton selectedHudEditorOverlay;
     private String selectedDisplayModId;
     private HudEditorSelectionListener hudEditorSelectionListener;
@@ -155,6 +156,9 @@ public class InbuiltOverlayManager {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
         // Modules without a HUD button are restored regardless of whether the
         // mod menu itself is enabled.
+        if (manager.resolveInbuiltModEnabled(ModIds.TARGET_ESP, false)) {
+            handleModToggle(ModIds.TARGET_ESP, true);
+        }
         if (manager.resolveInbuiltModEnabled(ModIds.NAME_TAGS, false)) {
             handleModToggle(ModIds.NAME_TAGS, true);
         }
@@ -323,6 +327,12 @@ public class InbuiltOverlayManager {
                 overlays.add(fullbright);
                 modOverlayMap.put(modId, fullbright);
                 break;
+            case ModIds.TARGET_ESP:
+                if (targetEspOverlay == null) {
+                    targetEspOverlay = new TargetEspOverlay(activity);
+                    targetEspOverlay.show();
+                }
+                break;
             case ModIds.NAME_TAGS:
                 if (nameTagsOverlay == null) {
                     nameTagsOverlay = new NameTagsOverlay(activity);
@@ -399,6 +409,13 @@ public class InbuiltOverlayManager {
                     activity instanceof PojavControlsHost ? (PojavControlsHost) activity : null,
                     false);
             PojavControlsMod.setEnabled(false);
+            return;
+        }
+        if (modId.equals(ModIds.TARGET_ESP)) {
+            if (targetEspOverlay != null) {
+                targetEspOverlay.hide();
+                targetEspOverlay = null;
+            }
             return;
         }
         if (modId.equals(ModIds.NAME_TAGS)) {
@@ -760,6 +777,10 @@ public class InbuiltOverlayManager {
             nameTagsOverlay.hide();
             nameTagsOverlay = null;
         }
+        if (targetEspOverlay != null) {
+            targetEspOverlay.hide();
+            targetEspOverlay = null;
+        }
         if (chickPetOverlay != null) {
             chickPetOverlay.hide();
             chickPetOverlay = null;
@@ -968,6 +989,9 @@ public class InbuiltOverlayManager {
         if (modId.equals(ModIds.HOTBAR_SLOT)) {
             refreshHotbarSlots();
         }
+        if (modId.equals(ModIds.TARGET_ESP) && targetEspOverlay != null) {
+            targetEspOverlay.applyConfigurationChanges();
+        }
     }
 
     public void setHudEditorMode(boolean active) {
@@ -1168,6 +1192,9 @@ public class InbuiltOverlayManager {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
         if (nameTagsOverlay != null) {
             nameTagsOverlay.setModuleEnabled(manager.isNameTagsEnabled());
+        }
+        if (targetEspOverlay != null) {
+            targetEspOverlay.setModuleEnabled(manager.isTargetEspEnabled());
         }
         boolean isPauseOnly = manager.isPauseMenuOnly();
         boolean isPauseOpen = org.levimc.launcher.preloader.PreloaderInput.isPauseMenuOpen();

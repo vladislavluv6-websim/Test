@@ -89,6 +89,18 @@ public final class EspMod {
         return initialized ? nativeGetNameTags() : null;
     }
 
+    public static void setTargetEsp(boolean enabled) {
+        if (initialized) nativeSetTargetEsp(enabled);
+    }
+
+    public static void setTargetEspHold(int holdMs) {
+        if (initialized) nativeSetTargetEspHold(holdMs);
+    }
+
+    public static String getTargetEsp() {
+        return initialized ? nativeGetTargetEsp() : null;
+    }
+
     public static boolean isInitialized() {
         return initialized;
     }
@@ -105,4 +117,7 @@ public final class EspMod {
     private static native void nativeSetNameTags(boolean enabled);
     private static native void nativeSetNameTagScreenSize(float width, float height);
     private static native String[] nativeGetNameTags();
+    private static native void nativeSetTargetEsp(boolean enabled);
+    private static native void nativeSetTargetEspHold(int holdMs);
+    private static native String nativeGetTargetEsp();
 }

@@ -72,6 +72,9 @@ public final class InbuiltModuleProvider {
     private static final String CFG_ESP_MOB_COLOR = "esp_mob_color";
     private static final String CFG_ESP_ARMOR_COLORS = "esp_armor_colors";
     private static final String CFG_ESP_ARMORED_COLOR = "esp_armored_color";
+    private static final String CFG_TARGET_ESP_STYLE = "target_esp_style";
+    private static final String CFG_TARGET_ESP_COLOR = "target_esp_color";
+    private static final String CFG_TARGET_ESP_HOLD = "target_esp_hold_ms";
     private static final String CFG_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String CFG_TRIGGER_BOT_REACTION_JITTER = "trigger_bot_reaction_jitter";
     private static final String CFG_TRIGGER_BOT_RANGE = "trigger_bot_range";
@@ -124,6 +127,9 @@ public final class InbuiltModuleProvider {
         mods.add(create(activity, manager, overlayManager, ModIds.TRIGGER_BOT,
                 R.string.inbuilt_mod_trigger_bot, R.string.inbuilt_mod_trigger_bot_desc,
                 groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.TARGET_ESP,
+                R.string.inbuilt_mod_target_esp, R.string.inbuilt_mod_target_esp_desc,
+                groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.NAME_TAGS,
                 R.string.inbuilt_mod_name_tags, R.string.inbuilt_mod_name_tags_desc,
                 groupName));
@@ -171,6 +177,7 @@ public final class InbuiltModuleProvider {
         boolean aim = ModIds.AIM_ASSIST.equals(modId);
         boolean trigger = ModIds.TRIGGER_BOT.equals(modId);
         boolean esp = ModIds.ESP.equals(modId);
+        boolean targetEsp = ModIds.TARGET_ESP.equals(modId);
         try {
             JSONArray categories = new JSONArray();
             JSONArray nodes = new JSONArray();
@@ -214,7 +221,7 @@ public final class InbuiltModuleProvider {
                         R.string.mod_config_category_trigger_timing));
                 categories.put(configCategory(context, "appearance",
                         R.string.mod_config_category_appearance));
-            } else if (esp) {
+            } else if (esp || targetEsp) {
                 defaultCategory = "appearance";
                 categories.put(configCategory(context, "appearance",
                         R.string.mod_config_category_appearance));
@@ -247,8 +254,9 @@ public final class InbuiltModuleProvider {
                     category = "trigger_timing";
                 } else if (trigger && config.key.startsWith("trigger_bot_")) {
                     category = "trigger_target";
-                } else if (esp && (CFG_ESP_PLAYER_COLOR.equals(config.key)
-                        || CFG_ESP_MOB_COLOR.equals(config.key))) {
+                } else if ((esp && (CFG_ESP_PLAYER_COLOR.equals(config.key)
+                        || CFG_ESP_MOB_COLOR.equals(config.key)))
+                        || (targetEsp && config.key.startsWith("target_esp_"))) {
                     category = "appearance";
                 } else if (config.key.startsWith("gyro_") || CFG_CURSOR_SENSITIVITY.equals(config.key)) {
                     category = "motion";
@@ -627,6 +635,27 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.COLOR,
                     formatColor(manager.getEspArmoredColor()), "", "",
                     formatColor(manager.getEspArmoredColor())));
+        } else if (ModIds.TARGET_ESP.equals(modId)) {
+            configs.add(config(CFG_TARGET_ESP_STYLE,
+                    context.getString(R.string.mod_config_target_esp_style),
+                    UnifiedMod.ConfigType.RADIO,
+                    "0",
+                    context.getString(R.string.mod_config_target_esp_ghost) + ","
+                            + context.getString(R.string.mod_config_target_esp_square) + ","
+                            + context.getString(R.string.mod_config_target_esp_circle) + ","
+                            + context.getString(R.string.mod_config_target_esp_crystal),
+                    "",
+                    String.valueOf(manager.getTargetEspStyle())));
+            configs.add(config(CFG_TARGET_ESP_COLOR,
+                    context.getString(R.string.mod_config_target_esp_color),
+                    UnifiedMod.ConfigType.COLOR,
+                    formatColor(manager.getTargetEspColor()), "", "",
+                    formatColor(manager.getTargetEspColor())));
+            configs.add(config(CFG_TARGET_ESP_HOLD,
+                    context.getString(R.string.mod_config_target_esp_hold),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "650", "200", "3000",
+                    String.valueOf(manager.getTargetEspHoldMs())));
         } else if (ModIds.TRIGGER_BOT.equals(modId)) {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
@@ -939,6 +968,15 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_ESP_MOB_COLOR:
                 manager.setEspMobColor(parseColor(value, manager.getEspMobColor()));
+                break;
+            case CFG_TARGET_ESP_STYLE:
+                manager.setTargetEspStyle(parseInt(value, manager.getTargetEspStyle()));
+                break;
+            case CFG_TARGET_ESP_COLOR:
+                manager.setTargetEspColor(parseColor(value, manager.getTargetEspColor()));
+                break;
+            case CFG_TARGET_ESP_HOLD:
+                manager.setTargetEspHoldMs(parseInt(value, manager.getTargetEspHoldMs()));
                 break;
             case CFG_TRIGGER_BOT_DELAY:
                 manager.setTriggerBotDelay(parseInt(value, manager.getTriggerBotDelay()));
