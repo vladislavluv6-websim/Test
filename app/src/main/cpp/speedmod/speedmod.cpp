@@ -130,6 +130,8 @@ std::chrono::steady_clock::time_point g_lastInitAttempt{};
 // Tick-thread only state.
 void *g_tickRuntime = nullptr;
 int g_airTicks = 0;
+int g_jumpPhase = 0;   // 0 = grounded, 1 = ascending, 2 = falling
+int g_landTicks = 0;
 bool g_jumpSampled = false;
 bool g_jumpWasGround = false;
 int g_jumpWindowTicks = 11;
@@ -157,6 +159,8 @@ void resetMovementState() {
   g_avoidClipPending.store(false, std::memory_order_relaxed);
   g_tickRuntime = nullptr;
   g_airTicks = 0;
+  g_jumpPhase = 0;
+  g_landTicks = 0;
   g_jumpSampled = false;
   g_jumpWasGround = false;
   g_jumpWindowTicks = 11;
@@ -247,6 +251,8 @@ void applySpeed(void *actor) {
   if (g_tickRuntime != actor) {
     g_tickRuntime = actor;
     g_airTicks = 0;
+    g_jumpPhase = 0;
+    g_landTicks = 0;
     g_jumpSampled = false;
     g_jumpWasGround = false;
     g_jumpWindowTicks = 11;
@@ -258,9 +264,36 @@ void applySpeed(void *actor) {
   const float current = horizontalLength(vx, vz);
   const float moveDist = horizontalLength(dx, dz);
   const bool moving = moveDist > 0.003f || current > 0.005f;
-  // The BaseTick hook has no direct OnGround accessor, so infer it from the
-  // vertical delta/velocity. Airborne ticks always carry vertical motion.
-  const bool ground = std::fabs(dy) < 0.002f && std::fabs(vy) < 0.01f;
+
+  // The BaseTick hook has no direct OnGround accessor, so track a small
+  // vertical state machine. A jump or auto-jump starts the ascending phase,
+  // a downgoing velocity starts the falling phase and the actor is grounded
+  // again only after the vertical motion settles. This keeps the apex of a
+  // jump from being mistaken for ground (which would allow mid-air re-jumps).
+  if (g_jumpPhase == 0) {
+    if (dy < -0.004f || vy < -0.08f) {
+      g_jumpPhase = 2;
+      g_landTicks = 0;
+    } else if (dy > 0.004f && vy > 0.05f) {
+      g_jumpPhase = 1;
+    }
+  } else if (g_jumpPhase == 1) {
+    if (vy <= -0.03f) {
+      g_jumpPhase = 2;
+      g_landTicks = 0;
+    }
+  } else {
+    if (std::fabs(vy) < 0.012f && std::fabs(dy) < 0.004f) {
+      if (++g_landTicks >= 1) {
+        g_jumpPhase = 0;
+        g_landTicks = 0;
+      }
+    } else {
+      g_landTicks = 0;
+      if (vy > 0.05f) g_jumpPhase = 1;
+    }
+  }
+  const bool ground = g_jumpPhase == 0;
 
   g_onGround.store(ground, std::memory_order_relaxed);
   g_moving.store(moving, std::memory_order_relaxed);
@@ -337,6 +370,8 @@ void applySpeed(void *actor) {
         static_cast<float>(g_jumpHeightRaw.load(std::memory_order_relaxed)) / 100.0f;
     if (std::isfinite(height) && height > 0.0f) {
       velocity[1] = std::min(height, 1.0f);
+      g_jumpPhase = 1;
+      g_landTicks = 0;
       if (jumpType == kJumpVanilla) {
         g_pendingJump.store(true, std::memory_order_release);
       }
