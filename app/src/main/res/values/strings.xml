@@ -1172,7 +1172,9 @@
     <string name="bg_media_blur_unavailable">Android 12+</string>
     <string name="screenshot_saved">Screenshot saved</string>
     <string name="backup_select_downloads">Select the Downloads folder to save backups in Downloads/LeviLauncher/Backups.</string>
-    <string name="zenix_brand">ZENIX CLIENT</string>
+    <string name="zenix_brand">NEVERLOSE</string>
+    <string name="nl_section_main">MAIN</string>
+    <string name="nl_section_common">COMMON</string>
     <string name="zenix_subtitle">BEDROCK MOD MENU</string>
     <string name="mod_menu_all_modules">All modules</string>
     <string name="mod_menu_details_empty">Select a module to open its settings.</string>

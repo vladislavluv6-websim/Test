@@ -148,7 +148,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             title.setLayoutParams(params);
             title.setGravity(Gravity.CENTER_VERTICAL);
             title.setPadding((int) (6 * density), 0, (int) (6 * density), 0);
-            title.setTextColor(0xFFFF63CA);
+            title.setTextColor(0xFF4E83FF);
             title.setTextSize(10);
             title.setTypeface(null, Typeface.BOLD);
             title.setSingleLine(true);
@@ -278,7 +278,7 @@ public class ModMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((Switch) holder.statusText).setChecked(enabled);
         } else if (enabled) {
             holder.statusText.setText(R.string.mod_status_enabled);
-            holder.statusText.setTextColor(0xFFFF63CA);
+            holder.statusText.setTextColor(0xFF4E83FF);
             holder.statusText.setBackgroundResource(R.drawable.bg_zenix_status_on);
         } else {
             holder.statusText.setText(R.string.mod_status_disabled);

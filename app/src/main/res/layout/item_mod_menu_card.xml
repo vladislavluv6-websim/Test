@@ -40,32 +40,29 @@
                 android:id="@+id/mod_card_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#F2F2F2"
+                android:textColor="#D9DBE2"
                 android:textSize="13sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="8sp" android:autoSizeMaxTextSize="13sp" android:autoSizeStepGranularity="1sp" />
 
             <TextView
                 android:id="@+id/mod_card_group"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="1dp"
-                android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#FF63CA"
+                android:textColor="#FF4E83FF"
                 android:textSize="9sp"
-                android:visibility="gone" />
+                android:visibility="gone" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="8sp" android:autoSizeMaxTextSize="13sp" android:autoSizeStepGranularity="1sp" />
 
             <TextView
                 android:id="@+id/mod_card_desc"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="1dp"
-                android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#9A9A9A"
-                android:textSize="10sp" />
+                android:textColor="#9296A2"
+                android:textSize="10sp" android:autoSizeTextType="uniform" android:autoSizeMinTextSize="8sp" android:autoSizeMaxTextSize="13sp" android:autoSizeStepGranularity="1sp" />
 
         </LinearLayout>
 
@@ -78,7 +75,7 @@
             android:defaultFocusHighlightEnabled="false"
             android:padding="7dp"
             android:src="@drawable/ic_star"
-            android:tint="#8A8A8A" />
+            android:tint="#5E6370" />
 
         <ImageButton
             android:id="@+id/mod_card_config"
@@ -88,7 +85,7 @@
             android:defaultFocusHighlightEnabled="false"
             android:padding="7dp"
             android:src="@drawable/ic_settings"
-            android:tint="#8A8A8A" />
+            android:tint="#5E6370" />
 
         <Switch
             android:id="@+id/mod_card_status"

@@ -39,17 +39,19 @@ public class SolsticeModulesView extends View {
         void onFavorite(UnifiedMod mod, boolean favorite);
     }
 
-    private static final int COLOR_HEADER = 0xFF181818;
-    private static final int COLOR_ROW = 0xFF282828;
-    private static final int COLOR_ROW_LAST = 0xFF242424;
-    private static final int COLOR_TEXT = 0xFFF2F2F2;
-    private static final int COLOR_TEXT_DIM = 0xFFB8B8B8;
-    private static final int COLOR_GEAR = 0xFFB0B0B0;
-    private static final int COLOR_STAR = 0xFF7A7A7A;
-    private static final int COLOR_STAR_ON = 0xFFFFC94D;
-    private static final int COLOR_SEPARATOR = 0x14FFFFFF;
-    private static final int ACCENT_START = 0xFFFF63CA;
-    private static final int ACCENT_END = 0xFF92F5FF;
+    private static final int COLOR_HEADER = 0xFF12151E;
+    private static final int COLOR_ROW = 0xFF11131B;
+    private static final int COLOR_ROW_LAST = 0xFF11131B;
+    private static final int COLOR_ROW_ON = 0xFF272B36;
+    private static final int COLOR_TEXT = 0xFFD9DBE2;
+    private static final int COLOR_TEXT_DIM = 0xFF9296A2;
+    private static final int COLOR_TEXT_FAINT = 0xFF5E6370;
+    private static final int COLOR_GEAR = 0xFF5E6370;
+    private static final int COLOR_STAR = 0xFF5E6370;
+    private static final int COLOR_STAR_ON = 0xFF66A4FF;
+    private static final int COLOR_SEPARATOR = 0xFF20232E;
+    private static final int COLOR_BORDER = 0xFF20232E;
+    private static final int COLOR_ACCENT = 0xFF4E83FF;
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -112,12 +114,12 @@ public class SolsticeModulesView extends View {
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         longPressTimeout = ViewConfiguration.getLongPressTimeout();
 
-        rowHeight = 34f * density;
-        headerHeight = 32f * density;
-        gap = 10f * density;
+        rowHeight = 37f * density;
+        headerHeight = 30f * density;
+        gap = 12f * density;
         padding = 8f * density;
-        radius = 9f * density;
-        columnWidth = 200f * density;
+        radius = 13f * density;
+        columnWidth = 230f * density;
 
         textPaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         setClickable(true);
@@ -159,12 +161,25 @@ public class SolsticeModulesView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        columnWidth = Math.max(150f * density, Math.min(210f * density, w * 0.62f));
         recomputeLayout();
         clampScroll();
     }
 
     private void recomputeLayout() {
+        float widest = 0f;
+        textPaint.setTextSize(12.5f * scaledDensity);
+        for (Column column : columns) {
+            for (Row row : column.rows) {
+                if (row.mod.getName() != null) {
+                    widest = Math.max(widest, textPaint.measureText(row.mod.getName()));
+                }
+            }
+        }
+        float available = getWidth() > 0 ? getWidth() * 0.86f : 320f * density;
+        float wanted = widest + 70f * density + padding * 3f;
+        columnWidth = Math.max(190f * density, Math.min(available, wanted));
+        columnWidth = Math.min(columnWidth, 340f * density);
+
         float x = padding;
         float maxHeight = 0f;
         for (Column column : columns) {
@@ -207,13 +222,15 @@ public class SolsticeModulesView extends View {
         rect.set(x, top + headerHeight - radius, x + column.width, top + headerHeight);
         canvas.drawRect(rect, paint);
 
-        textPaint.setTextSize(11.5f * scaledDensity);
-        textPaint.setColor(COLOR_TEXT);
-        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setTextSize(10f * scaledDensity);
+        textPaint.setColor(COLOR_TEXT_FAINT);
+        textPaint.setTextAlign(Paint.Align.LEFT);
+        textPaint.setLetterSpacing(0.08f);
         float headerBaseline = top + headerHeight / 2f
             - (textPaint.ascent() + textPaint.descent()) / 2f;
         canvas.drawText(column.name.toUpperCase(java.util.Locale.ROOT),
-            x + column.width / 2f, headerBaseline, textPaint);
+            x + 14f * density, headerBaseline, textPaint);
+        textPaint.setLetterSpacing(0f);
 
         int count = column.rows.size();
         for (int i = 0; i < count; i++) {
@@ -226,40 +243,47 @@ public class SolsticeModulesView extends View {
             float corner = last ? radius : 0f;
             rect.set(x, rowTop, x + column.width, rowBottom);
 
+            paint.setShader(null);
+            paint.setColor(row.mod.isEnabled() ? COLOR_ROW_ON : (last ? COLOR_ROW_LAST : COLOR_ROW));
+            canvas.drawRoundRect(rect, corner, corner, paint);
+
             if (row.mod.isEnabled()) {
-                paint.setShader(new LinearGradient(x, rowTop, x + column.width, rowTop,
-                    ACCENT_START, ACCENT_END, Shader.TileMode.CLAMP));
-                paint.setAlpha(235);
-                canvas.drawRoundRect(rect, corner, corner, paint);
-                paint.setAlpha(255);
-                paint.setShader(null);
-                paint.setColor(0x33000000);
-                canvas.drawRoundRect(rect, corner, corner, paint);
-            } else {
-                paint.setShader(null);
-                paint.setColor(last ? COLOR_ROW_LAST : COLOR_ROW);
-                canvas.drawRoundRect(rect, corner, corner, paint);
+                paint.setColor(COLOR_ACCENT);
+                canvas.drawRoundRect(new RectF(x, rowTop, x + 2.5f * density, rowBottom),
+                    1.2f * density, 1.2f * density, paint);
             }
 
             paint.setColor(COLOR_SEPARATOR);
             paint.setStrokeWidth(density);
-            canvas.drawLine(x + padding / 2f, rowTop, x + column.width - padding / 2f,
+            canvas.drawLine(x + 12f * density, rowTop, x + column.width - 12f * density,
                 rowTop, paint);
 
             float iconSpace = 58f * density;
-            textPaint.setTextSize(12f * scaledDensity);
-            textPaint.setColor(row.mod.isEnabled() ? Color.WHITE : COLOR_TEXT_DIM);
-            textPaint.setTextAlign(Paint.Align.CENTER);
+            float maxTextWidth = column.width - iconSpace - 20f * density;
+            String name = row.mod.getName() == null ? "" : row.mod.getName();
+            float textSize = 12.5f * scaledDensity;
+            textPaint.setTextSize(textSize);
+            while (textSize > 9f * scaledDensity && textPaint.measureText(name) > maxTextWidth) {
+                textSize -= 0.5f * scaledDensity;
+                textPaint.setTextSize(textSize);
+            }
+            textPaint.setColor(row.mod.isEnabled() ? COLOR_TEXT : COLOR_TEXT_DIM);
+            textPaint.setTextAlign(Paint.Align.LEFT);
             float textBaseline = rowTop + rowHeight / 2f
                 - (textPaint.ascent() + textPaint.descent()) / 2f;
-            float textCenter = x + (column.width - iconSpace) / 2f;
-            canvas.drawText(ellipsize(row.mod.getName(), column.width - iconSpace - padding * 2f),
-                textCenter, textBaseline, textPaint);
+            canvas.drawText(name, x + 16f * density, textBaseline, textPaint);
 
             drawStar(canvas, x + column.width - 42f * density, rowTop + rowHeight / 2f,
                 row.favorite);
             drawGear(canvas, x + column.width - 17f * density, rowTop + rowHeight / 2f);
         }
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(density);
+        paint.setColor(COLOR_BORDER);
+        rect.set(x, top, x + column.width, top + headerHeight + count * rowHeight);
+        canvas.drawRoundRect(rect, radius, radius, paint);
+        paint.setStyle(Paint.Style.FILL);
     }
 
     private void drawStar(Canvas canvas, float cx, float cy, boolean filled) {

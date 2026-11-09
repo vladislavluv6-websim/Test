@@ -200,7 +200,7 @@ public class ModMenuOverlay {
     }
 
     private int getAccentColor() {
-        return 0xFFFF63CA;
+        return 0xFF4E83FF;
     }
     
     public interface ModMenuCallback {
@@ -1338,9 +1338,10 @@ public class ModMenuOverlay {
                 item.setLayoutParams(lp);
                 item.setGravity(Gravity.CENTER_VERTICAL);
                 item.setSingleLine(true);
-                item.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 item.setPadding(dp(12), 0, dp(8), 0);
                 item.setTextSize(13);
+                item.setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1,
+                    android.util.TypedValue.COMPLEX_UNIT_SP);
                 item.setText(CATEGORY_LABELS[i]);
                 item.setCompoundDrawablesWithIntrinsicBounds(CATEGORY_ICONS[i], 0, 0, 0);
                 item.setCompoundDrawablePadding(dp(9));
@@ -1379,12 +1380,12 @@ public class ModMenuOverlay {
             boolean selected = entry.getKey().equals(activeCategory)
                 && activeSection == MenuSection.MODULES;
             TextView view = entry.getValue();
-            view.setTextColor(selected ? 0xFFFF63CA : 0xFF85888E);
+            view.setTextColor(selected ? 0xFF4E83FF : 0xFF9296A2);
             view.setAlpha(selected ? 1f : 1f);
             view.setBackgroundResource(selected
                 ? R.drawable.bg_zenix_nav_active : R.drawable.bg_zenix_nav);
             android.content.res.ColorStateList tint = android.content.res.ColorStateList.valueOf(
-                selected ? 0xFFFF63CA : 0xFF85888E);
+                selected ? 0xFF4E83FF : 0xFF9296A2);
             view.setCompoundDrawableTintList(tint);
         }
         if (navCategories != null) {
@@ -1464,14 +1465,14 @@ public class ModMenuOverlay {
 
     private void updateFilterButton(TextView view, boolean selected) {
         if (view == null) return;
-        view.setTextColor(selected ? 0xFFFF63CA : 0xFF85888E);
+        view.setTextColor(selected ? 0xFF4E83FF : 0xFF9296A2);
         view.setAlpha(1f);
         view.setBackgroundResource(selected
             ? R.drawable.bg_zenix_chip_active : R.drawable.bg_zenix_chip);
     }
 
     private void updateNavigationItem(TextView fullView, ImageButton compactView, boolean selected) {
-        int color = selected ? getAccentColor() : 0xFF85888E;
+        int color = selected ? getAccentColor() : 0xFF9296A2;
         if (fullView != null) {
             fullView.setTextColor(color);
             fullView.setAlpha(selected ? 1f : 0.85f);

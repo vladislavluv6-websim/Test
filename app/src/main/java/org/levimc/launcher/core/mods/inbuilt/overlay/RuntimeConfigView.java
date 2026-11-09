@@ -59,11 +59,14 @@ final class RuntimeConfigView {
     private static final Map<String, String> LAST_SELECTED_CATEGORIES = new HashMap<>();
     private static final Map<String, Parcelable> CONTENT_SCROLL_STATES = new HashMap<>();
     private static final Map<String, Parcelable> CATEGORY_SCROLL_STATES = new HashMap<>();
-    private static final int ACCENT = 0xFFFF63CA;
-    private static final int TEXT_PRIMARY = 0xFFCECFD2;
-    private static final int TEXT_SECONDARY = 0xFF85888E;
-    private static final int CARD = 0xFF0F131C;
-    private static final int CARD_SELECTED = 0xFF1F2028;
+    private static final int ACCENT = 0xFF4E83FF;
+    private static final int TEXT_PRIMARY = 0xFFD9DBE2;
+    private static final int TEXT_SECONDARY = 0xFF9296A2;
+    private static final int TEXT_FAINT = 0xFF5E6370;
+    private static final int CARD = 0xFF11131B;
+    private static final int CARD_SELECTED = 0xFF272B36;
+    private static final int CONTROL = 0xFF181B25;
+    private static final int BORDER = 0xFF20232E;
 
     private final Context context;
     private final ViewGroup host;
@@ -192,22 +195,20 @@ final class RuntimeConfigView {
         selectedCategory = LAST_SELECTED_CATEGORIES.getOrDefault(mod.getStableKey(), "");
         host.removeAllViews();
         LinearLayout root = new LinearLayout(context);
-        root.setOrientation(compact ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
-        root.setPadding(dp(compact ? 8 : 12), dp(8), dp(compact ? 8 : 12), dp(10));
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(compact ? 8 : 12), dp(compact ? 8 : 10), dp(compact ? 8 : 12), dp(10));
         host.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         categoryRecycler = new RecyclerView(context);
         categoryRecycler.setOverScrollMode(View.OVER_SCROLL_NEVER);
         categoryRecycler.setLayoutManager(new LinearLayoutManager(context,
-                compact ? RecyclerView.HORIZONTAL : RecyclerView.VERTICAL, false));
+                RecyclerView.HORIZONTAL, false));
         categoryAdapter = new CategoryAdapter();
         categoryRecycler.setAdapter(categoryAdapter);
-        LinearLayout.LayoutParams categoryParams = compact
-                ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48))
-                : new LinearLayout.LayoutParams(dp(156), ViewGroup.LayoutParams.MATCH_PARENT);
-        if (!compact) categoryParams.setMarginEnd(dp(12));
-        else categoryParams.setMargins(0, 0, 0, dp(8));
+        LinearLayout.LayoutParams categoryParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+        categoryParams.setMargins(0, 0, 0, dp(8));
         root.addView(categoryRecycler, categoryParams);
 
         contentRecycler = new RecyclerView(context);
@@ -216,9 +217,8 @@ final class RuntimeConfigView {
         contentRecycler.setLayoutManager(new LinearLayoutManager(context));
         nodeAdapter = new NodeAdapter();
         contentRecycler.setAdapter(nodeAdapter);
-        LinearLayout.LayoutParams contentParams = compact
-                ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-                : new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+        LinearLayout.LayoutParams contentParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
         root.addView(contentRecycler, contentParams);
 
         host.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
@@ -360,13 +360,15 @@ final class RuntimeConfigView {
         @Override public long getItemId(int position) { return items.get(position).id.hashCode(); }
         @Override public CategoryHolder onCreateViewHolder(ViewGroup parent, int viewType) {
             TextView view = new TextView(context);
-            view.setGravity(compact ? Gravity.CENTER : Gravity.CENTER_VERTICAL);
+            view.setGravity(Gravity.CENTER);
             view.setTextSize(13);
-            view.setPadding(dp(12), 0, dp(12), 0);
-            RecyclerView.LayoutParams params = compact
-                    ? new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40))
-                    : new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
-            params.setMargins(compact ? dp(3) : 0, dp(2), compact ? dp(3) : 0, dp(2));
+            view.setSingleLine(true);
+            view.setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1,
+                    android.util.TypedValue.COMPLEX_UNIT_SP);
+            view.setPadding(dp(14), 0, dp(14), 0);
+            RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(34));
+            params.setMargins(dp(3), dp(1), dp(3), dp(1));
             view.setLayoutParams(params);
             return new CategoryHolder(view);
         }
@@ -374,9 +376,9 @@ final class RuntimeConfigView {
             RuntimeConfigSchema.Category category = items.get(position);
             boolean selected = category.id.equals(selectedCategory);
             holder.label.setText(category.title);
-            holder.label.setTextColor(selected ? ACCENT : TEXT_SECONDARY);
-            holder.label.setTypeface(null, selected ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-            holder.label.setBackground(roundRect(selected ? CARD_SELECTED : Color.TRANSPARENT, 10));
+            holder.label.setTextColor(selected ? TEXT_PRIMARY : TEXT_SECONDARY);
+            holder.label.setTypeface(null, android.graphics.Typeface.NORMAL);
+            holder.label.setBackground(roundRect(selected ? CARD_SELECTED : Color.TRANSPARENT, 6));
             holder.label.setOnClickListener(v -> {
                 if (category.id.equals(selectedCategory)) return;
                 saveScrollPositions();
@@ -445,47 +447,171 @@ final class RuntimeConfigView {
         if ("section".equals(node.type)) return buildSection(node);
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(12), dp(10), dp(12), dp(10));
-        card.setBackground(roundRect(CARD, 12));
+        card.setBackground(cardBackground());
         boolean enabled = !node.disabled && matches(node.enabledWhen);
-        addTitle(card, node.title, node.description);
 
-        switch (node.type) {
-            case "toggle": buildToggle(card, node); break;
-            case "slider_int": buildIntSlider(card, node); break;
-            case "slider_float": buildFloatSlider(card, node); break;
-            case "range_slider": buildRangeSlider(card, node); break;
-            case "choice": buildChoice(card, node); break;
-            case "multi_choice": buildMultiChoice(card, node); break;
-            case "toggle_group": buildToggleGroup(card, node); break;
-            case "ordered_list": buildOrderedList(card, node); break;
-            case "color": buildColor(card, node); break;
-            case "keybind": buildKeybind(card, node); break;
-            case "text": buildText(card, node, false); break;
-            case "multiline_text": buildText(card, node, true); break;
-            case "button": buildButton(card, node); break;
-            case "info": break;
-            default: break;
+        if (supportsInline(node)) {
+            LinearLayout row = new LinearLayout(context);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(dp(44));
+            row.setPadding(dp(14), dp(7), dp(10), dp(7));
+            LinearLayout labels = new LinearLayout(context);
+            labels.setOrientation(LinearLayout.VERTICAL);
+            addTitle(labels, node.title, node.description);
+            row.addView(labels, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            View control = buildInlineControl(node);
+            if (control != null) {
+                LinearLayout.LayoutParams controlParams = control instanceof Spinner
+                        ? new LinearLayout.LayoutParams(dp(136), dp(38))
+                        : new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT);
+                controlParams.setMarginStart(dp(10));
+                row.addView(control, controlParams);
+            }
+            card.addView(row);
+        } else {
+            card.setPadding(dp(14), dp(11), dp(14), dp(12));
+            addTitle(card, node.title, node.description);
+            switch (node.type) {
+                case "slider_int": buildIntSlider(card, node); break;
+                case "slider_float": buildFloatSlider(card, node); break;
+                case "range_slider": buildRangeSlider(card, node); break;
+                case "choice": buildChoice(card, node); break;
+                case "multi_choice": buildMultiChoice(card, node); break;
+                case "toggle_group": buildToggleGroup(card, node); break;
+                case "ordered_list": buildOrderedList(card, node); break;
+                case "text": buildText(card, node, false); break;
+                case "multiline_text": buildText(card, node, true); break;
+                case "button": buildButton(card, node); break;
+                case "info": break;
+                default: break;
+            }
         }
         setEnabledRecursive(card, enabled);
         card.setAlpha(enabled ? 1f : 0.5f);
         return card;
     }
 
+    private boolean supportsInline(RuntimeConfigSchema.Node node) {
+        switch (node.type) {
+            case "toggle":
+            case "keybind":
+            case "color":
+                return true;
+            case "choice":
+                return isDropdownChoice(node);
+            default:
+                return false;
+        }
+    }
+
+    private boolean isDropdownChoice(RuntimeConfigSchema.Node node) {
+        String style = node.style;
+        if ("auto".equals(style)) style = node.options.size() <= 4 ? "segmented" : "dropdown";
+        return "dropdown".equals(style);
+    }
+
+    private View buildInlineControl(RuntimeConfigSchema.Node node) {
+        switch (node.type) {
+            case "toggle": {
+                Switch control = new Switch(context);
+                control.setChecked(truthy(mod.getConfigValue(node.key, node.defaultValue)));
+                tintSwitch(control);
+                control.setOnCheckedChangeListener((button, checked) -> setValue(node.key, checked ? "true" : "false"));
+                return control;
+            }
+            case "choice":
+                return createChoiceSpinner(node);
+            case "keybind": {
+                int current = parseInt(mod.getConfigValue(node.key, node.defaultValue), 0);
+                Button button = pillButton(keyName(current));
+                button.setOnClickListener(v -> showKeybindDialog(node, button));
+                return button;
+            }
+            case "color": {
+                String hex = mod.getConfigValue(node.key, node.defaultValue);
+                if (hex.isEmpty()) hex = "#FFFFFFFF";
+                Button button = pillButton(hex);
+                final String initialValue = hex;
+                button.setOnClickListener(v -> showColorDialog(
+                        node, mod.getConfigValue(node.key, initialValue), button));
+                return button;
+            }
+            case "button": {
+                Button button = pillButton(node.title);
+                button.setTextColor(ACCENT);
+                button.setOnClickListener(v -> setValue(node.key, node.actionValue));
+                return button;
+            }
+            default:
+                return null;
+        }
+    }
+
+    private Button pillButton(String text) {
+        Button button = new Button(context);
+        button.setText(text);
+        button.setTextSize(12);
+        button.setTextColor(TEXT_PRIMARY);
+        button.setAllCaps(false);
+        button.setMinWidth(dp(96));
+        button.setMinimumWidth(dp(96));
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setPadding(dp(10), 0, dp(10), 0);
+        button.setBackground(roundRect(CONTROL, 6));
+        return button;
+    }
+
+    private void showKeybindDialog(RuntimeConfigSchema.Node node, Button button) {
+        AlertDialog dialog = new AlertDialog.Builder(context)
+                .setTitle(node.title)
+                .setMessage("Press a key")
+                .setNegativeButton(android.R.string.cancel, null)
+                .setNeutralButton(R.string.mod_config_clear_keybind, (d, which) -> {
+                    setValue(node.key, String.valueOf(KeyEvent.KEYCODE_UNKNOWN));
+                    button.setText(keyName(KeyEvent.KEYCODE_UNKNOWN));
+                })
+                .create();
+        dialog.setOnKeyListener((d, keyCode, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (keyCode == KeyEvent.KEYCODE_BACK) { dialog.dismiss(); return true; }
+            setValue(node.key, String.valueOf(keyCode));
+            button.setText(keyName(keyCode));
+            dialog.dismiss();
+            return true;
+        });
+        dialog.show();
+    }
+
+    private GradientDrawable cardBackground() {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(CARD);
+        drawable.setCornerRadius(dp(13));
+        drawable.setStroke(dp(1), BORDER);
+        return drawable;
+    }
+
     private View buildSection(RuntimeConfigSchema.Node node) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(dp(4), dp(10), dp(4), dp(5));
+        row.setPadding(dp(14), dp(14), dp(14), dp(6));
         TextView title = new TextView(context);
-        title.setText(node.title + (node.collapsible ? (collapsedSections.contains(node.id) ? "  ▸" : "  ▾") : ""));
-        title.setTextColor(TEXT_PRIMARY);
-        title.setTextSize(15);
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setText((node.title == null ? "" : node.title.toUpperCase(Locale.ROOT))
+                + (node.collapsible ? (collapsedSections.contains(node.id) ? "    +" : "    -") : ""));
+        title.setTextColor(TEXT_FAINT);
+        title.setTextSize(10);
+        title.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        title.setLetterSpacing(0.08f);
+        title.setSingleLine(true);
+        title.setAutoSizeTextTypeUniformWithConfiguration(9, 10, 1,
+                android.util.TypedValue.COMPLEX_UNIT_SP);
         row.addView(title);
         if (!node.description.isEmpty()) {
             TextView desc = new TextView(context);
             desc.setText(node.description);
-            desc.setTextColor(TEXT_SECONDARY);
+            desc.setTextColor(TEXT_FAINT);
             desc.setTextSize(11);
             row.addView(desc);
         }
@@ -502,20 +628,24 @@ final class RuntimeConfigView {
         TextView title = new TextView(context);
         title.setText(titleText);
         title.setTextColor(TEXT_PRIMARY);
-        title.setTextSize(14);
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setTextSize(15);
+        title.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        title.setSingleLine(true);
+        title.setEllipsize(null);
+        title.setAutoSizeTextTypeUniformWithConfiguration(10, 15, 1,
+                android.util.TypedValue.COMPLEX_UNIT_SP);
         parent.addView(title);
         if (description != null && !description.isEmpty()) {
             TextView desc = new TextView(context);
             desc.setText(description);
             desc.setTextColor(TEXT_SECONDARY);
-            desc.setTextSize(11);
+            desc.setTextSize(12);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             params.setMargins(0, dp(2), 0, dp(7));
             parent.addView(desc, params);
         } else {
-            title.setPadding(0, 0, 0, dp(6));
+            title.setPadding(0, 0, 0, 0);
         }
     }
 
@@ -620,41 +750,7 @@ final class RuntimeConfigView {
         String style = node.style;
         if ("auto".equals(style)) style = node.options.size() <= 4 ? "segmented" : "dropdown";
         if ("dropdown".equals(style)) {
-            Spinner spinner = new Spinner(context);
-            List<String> labels = new ArrayList<>();
-            int selected = 0;
-            for (int i = 0; i < node.options.size(); i++) {
-                labels.add(node.options.get(i).label);
-                if (node.options.get(i).value.equals(current)) selected = i;
-            }
-            ArrayAdapter<String> adapter = new ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, labels) {
-                @Override public boolean isEnabled(int position) {
-                    return position >= 0 && position < node.options.size() && !node.options.get(position).disabled;
-                }
-                @Override public View getDropDownView(int position, View convertView, ViewGroup parentView) {
-                    View view = super.getDropDownView(position, convertView, parentView);
-                    boolean enabled = isEnabled(position);
-                    view.setEnabled(enabled);
-                    view.setAlpha(enabled ? 1f : 0.45f);
-                    return view;
-                }
-            };
-            spinner.setAdapter(adapter);
-            spinner.setSelection(selected, false);
-            spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-                String lastSelectedValue = current;
-                @Override public void onItemSelected(android.widget.AdapterView<?> parentView, View view, int position, long id) {
-                    if (position >= 0 && position < node.options.size() && !node.options.get(position).disabled) {
-                        String value = node.options.get(position).value;
-                        // Initial callbacks are optional; ignore unchanged values, not the first event.
-                        if (value.equals(lastSelectedValue)) return;
-                        lastSelectedValue = value;
-                        setValue(node.key, value);
-                    }
-                }
-                @Override public void onNothingSelected(android.widget.AdapterView<?> parentView) {}
-            });
-            parent.addView(spinner, matchWidth());
+            parent.addView(createChoiceSpinner(node), matchWidth());
             return;
         }
         if ("radio".equals(style)) {
@@ -686,6 +782,59 @@ final class RuntimeConfigView {
             group.addView(chip);
         }
         parent.addView(group, matchWidth());
+    }
+
+    private Spinner createChoiceSpinner(RuntimeConfigSchema.Node node) {
+        String current = mod.getConfigValue(node.key, node.defaultValue);
+        Spinner spinner = new Spinner(context);
+        List<String> labels = new ArrayList<>();
+        int selected = 0;
+        for (int i = 0; i < node.options.size(); i++) {
+            labels.add(node.options.get(i).label);
+            if (node.options.get(i).value.equals(current)) selected = i;
+        }
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(context, android.R.layout.simple_spinner_item, labels) {
+            @Override public boolean isEnabled(int position) {
+                return position >= 0 && position < node.options.size() && !node.options.get(position).disabled;
+            }
+            @Override public View getView(int position, View convertView, ViewGroup parentView) {
+                TextView view = (TextView) super.getView(position, convertView, parentView);
+                view.setTextColor(TEXT_PRIMARY);
+                view.setTextSize(12.5f);
+                view.setSingleLine(true);
+                view.setEllipsize(null);
+                view.setAutoSizeTextTypeUniformWithConfiguration(9, 13, 1,
+                        android.util.TypedValue.COMPLEX_UNIT_SP);
+                return view;
+            }
+            @Override public View getDropDownView(int position, View convertView, ViewGroup parentView) {
+                View view = super.getDropDownView(position, convertView, parentView);
+                if (view instanceof TextView) {
+                    ((TextView) view).setTextColor(0xFFD9DBE2);
+                    view.setBackgroundColor(0xFF181B25);
+                }
+                boolean enabled = isEnabled(position);
+                view.setEnabled(enabled);
+                view.setAlpha(enabled ? 1f : 0.45f);
+                return view;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        spinner.setSelection(selected, false);
+        spinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            String lastSelectedValue = current;
+            @Override public void onItemSelected(android.widget.AdapterView<?> parentView, View view, int position, long id) {
+                if (position >= 0 && position < node.options.size() && !node.options.get(position).disabled) {
+                    String value = node.options.get(position).value;
+                    if (value.equals(lastSelectedValue)) return;
+                    lastSelectedValue = value;
+                    setValue(node.key, value);
+                }
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parentView) {}
+        });
+        return spinner;
     }
 
     private void buildMultiChoice(LinearLayout parent, RuntimeConfigSchema.Node node) {
@@ -1069,6 +1218,11 @@ final class RuntimeConfigView {
         view.setText(text);
         view.setTextColor(ACCENT);
         view.setTextSize(12);
+        view.setSingleLine(true);
+        view.setAutoSizeTextTypeUniformWithConfiguration(9, 12, 1,
+                android.util.TypedValue.COMPLEX_UNIT_SP);
+        view.setPadding(dp(9), dp(4), dp(9), dp(4));
+        view.setBackground(roundRect(CONTROL, 6));
         return view;
     }
 
@@ -1090,8 +1244,8 @@ final class RuntimeConfigView {
 
     private void tintSwitch(Switch control) {
         int[][] states = {{android.R.attr.state_checked}, {}};
-        control.setThumbTintList(new ColorStateList(states, new int[]{ACCENT, 0xFF85888E}));
-        control.setTrackTintList(new ColorStateList(states, new int[]{0x88FF63CA, 0xFF2A2E36}));
+        control.setThumbTintList(new ColorStateList(states, new int[]{0xFFFFFFFF, 0xFF9296A2}));
+        control.setTrackTintList(new ColorStateList(states, new int[]{ACCENT, 0xFF20232E}));
     }
 
     private void setEnabledRecursive(View view, boolean enabled) {
