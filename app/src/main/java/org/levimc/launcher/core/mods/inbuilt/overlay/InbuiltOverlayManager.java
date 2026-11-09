@@ -163,75 +163,25 @@ public class InbuiltOverlayManager {
         }
         if (!manager.isModMenuEnabled()) return;
 
-        if (hudOverlay == null) {
-            hudOverlay = new HudOverlay(activity);
-        }
-        hudOverlay.show();
-
         int nextY = baseY;
 
-        modActiveStates.put(ModIds.QUICK_DROP, false);
-        modActiveStates.put(ModIds.CAMERA_PERSPECTIVE, false);
-        modActiveStates.put(ModIds.TOGGLE_HUD, false);
         modActiveStates.put(ModIds.AUTO_SPRINT, false);
         modActiveStates.put(ModIds.SPEED, false);
         modActiveStates.put(ModIds.AIM_ASSIST, false);
         modActiveStates.put(ModIds.TRIGGER_BOT, false);
         modActiveStates.put(ModIds.ESP, false);
-        modActiveStates.put(ModIds.CHICK_PET, false);
-        modActiveStates.put(ModIds.ZOOM, false);
-        modActiveStates.put(ModIds.FPS_DISPLAY, false);
-        modActiveStates.put(ModIds.CPS_DISPLAY, false);
-        modActiveStates.put(ModIds.SNAPLOOK, false);
-        modActiveStates.put(ModIds.VIRTUAL_CURSOR, false);
-        modActiveStates.put(ModIds.GYRO, false);
-        modActiveStates.put(ModIds.POJAV_CONTROLS, false);
-        modActiveStates.put(ModIds.MORE_BUTTONS, false);
-        modActiveStates.put(ModIds.HOTBAR_SLOT, false);
 
-        modPositionMap.put(ModIds.QUICK_DROP, nextY + SPACING);
-        modPositionMap.put(ModIds.CAMERA_PERSPECTIVE, nextY + SPACING * 2);
-        modPositionMap.put(ModIds.TOGGLE_HUD, nextY + SPACING * 3);
         modPositionMap.put(ModIds.AUTO_SPRINT, nextY + SPACING * 4);
         modPositionMap.put(ModIds.SPEED, nextY + SPACING * 5);
         modPositionMap.put(ModIds.AIM_ASSIST, nextY + SPACING * 6);
         modPositionMap.put(ModIds.TRIGGER_BOT, nextY + SPACING * 12);
         modPositionMap.put(ModIds.ESP, nextY + SPACING * 6 + 60);
-        modPositionMap.put(ModIds.ZOOM, nextY + SPACING * 6);
-        modPositionMap.put(ModIds.FPS_DISPLAY, nextY + SPACING * 7);
-        modPositionMap.put(ModIds.CPS_DISPLAY, nextY + SPACING * 8);
-        modPositionMap.put(ModIds.SNAPLOOK, nextY + SPACING * 9);
-        modPositionMap.put(ModIds.VIRTUAL_CURSOR, nextY + SPACING * 10);
-        modPositionMap.put(ModIds.GYRO, nextY + SPACING * 11);
 
-        if (zoomOverlay == null) {
-            zoomOverlay = new ZoomOverlay(activity);
-            zoomOverlay.initializeForKeyboard();
-        }
-
-        if (snaplookOverlay == null) {
-            snaplookOverlay = new SnaplookOverlay(activity);
-            snaplookOverlay.initializeForKeyboard();
-        }
-
-        restorePersistedInbuiltModState(manager, ModIds.QUICK_DROP);
-        restorePersistedInbuiltModState(manager, ModIds.CAMERA_PERSPECTIVE);
-        restorePersistedInbuiltModState(manager, ModIds.TOGGLE_HUD);
         restorePersistedInbuiltModState(manager, ModIds.AUTO_SPRINT);
         restorePersistedInbuiltModState(manager, ModIds.SPEED);
         restorePersistedInbuiltModState(manager, ModIds.AIM_ASSIST);
         restorePersistedInbuiltModState(manager, ModIds.TRIGGER_BOT);
         restorePersistedInbuiltModState(manager, ModIds.ESP);
-        restorePersistedInbuiltModState(manager, ModIds.CHICK_PET);
-        restorePersistedInbuiltModState(manager, ModIds.ZOOM);
-        restorePersistedInbuiltModState(manager, ModIds.FPS_DISPLAY);
-        restorePersistedInbuiltModState(manager, ModIds.CPS_DISPLAY);
-        restorePersistedInbuiltModState(manager, ModIds.SNAPLOOK);
-        restorePersistedInbuiltModState(manager, ModIds.VIRTUAL_CURSOR);
-        restorePersistedInbuiltModState(manager, ModIds.GYRO);
-        restorePersistedInbuiltModState(manager, ModIds.POJAV_CONTROLS);
-        restorePersistedInbuiltModState(manager, ModIds.MORE_BUTTONS);
-        restorePersistedInbuiltModState(manager, ModIds.HOTBAR_SLOT);
 
         modMenuButton = new ModMenuButton(activity);
         modMenuButton.show(START_X, nextY);

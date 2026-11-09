@@ -280,10 +280,12 @@ void applyPacketBypass(void *packet) {
         1ULL << (kInputStopSprinting & 63);
   }
 
-  if (speedOn && autoSprint && !sneaking && !sprintSuppressed &&
-      g_moving.load(std::memory_order_relaxed)) {
-    inputBits[kInputSprinting >> 6] |= 1ULL << (kInputSprinting & 63);
-  }
+  // Sprint itself is driven through MoveInputComponent every tick (the same
+  // thing the userscript's requestSprint(1) does). The userscript never
+  // touches the sprint bits in player_auth_input, so neither do we: forcing
+  // them here can desync the local state from the server.
+  (void)autoSprint;
+  (void)sneaking;
 
   if (g_pendingJump.exchange(false, std::memory_order_acq_rel)) {
     inputBits[kInputStartJumping >> 6] |= 1ULL << (kInputStartJumping & 63);
@@ -627,7 +629,7 @@ void applySpeed(void *actor) {
   // Native sprint request: the packet bit alone does not engage the local
   // sprint state, so mirror it into MoveInputComponent.
   if (g_autoSprint.load(std::memory_order_relaxed) && !sneakBlocked &&
-      !combatstate::sprintSuppressed() && moving) {
+      !combatstate::sprintSuppressed()) {
     gameecs::MoveInputState input;
     if (gameecs::readMoveInput(actor, input) && !input.sprinting) {
       gameecs::setMoveSprinting(actor, true);

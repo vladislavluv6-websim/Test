@@ -24,8 +24,6 @@ public final class InbuiltModuleProvider {
 
     private static final String CFG_OVERLAY_SIZE = "overlay_size";
     private static final String CFG_OVERLAY_OPACITY = "overlay_opacity";
-    private static final String CFG_OVERLAY_LOCK = "overlay_lock";
-    private static final String CFG_OVERLAY_SHOW_EVERYWHERE = "overlay_show_everywhere";
     private static final String CFG_HIDE_LAUNCHER_HUD = "hide_launcher_hud";
     private static final String CFG_ACTIVATION_KEYBIND = "activation_keybind";
     private static final String CFG_EDIT_CONTROLS = "edit_controls";
@@ -111,15 +109,6 @@ public final class InbuiltModuleProvider {
         String groupName = activity.getString(R.string.mod_menu_group_inbuilt);
         List<UnifiedMod> mods = new ArrayList<>();
 
-        mods.add(create(activity, manager, overlayManager, ModIds.QUICK_DROP,
-                R.string.inbuilt_mod_quick_drop, R.string.inbuilt_mod_quick_drop_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.CAMERA_PERSPECTIVE,
-                R.string.inbuilt_mod_camera, R.string.inbuilt_mod_camera_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.TOGGLE_HUD,
-                R.string.inbuilt_mod_hud, R.string.inbuilt_mod_hud_desc,
-                groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.AUTO_SPRINT,
                 R.string.inbuilt_mod_autosprint, R.string.inbuilt_mod_autosprint_desc,
                 groupName));
@@ -140,36 +129,6 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.FULLBRIGHT,
                 R.string.inbuilt_mod_fullbright, R.string.inbuilt_mod_fullbright_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.CHICK_PET,
-                R.string.inbuilt_mod_chick_pet, R.string.inbuilt_mod_chick_pet_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.ZOOM,
-                R.string.inbuilt_mod_zoom, R.string.inbuilt_mod_zoom_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.FPS_DISPLAY,
-                R.string.inbuilt_mod_fps_display, R.string.inbuilt_mod_fps_display_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.CPS_DISPLAY,
-                R.string.inbuilt_mod_cps_display, R.string.inbuilt_mod_cps_display_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.SNAPLOOK,
-                R.string.inbuilt_mod_snaplook, R.string.inbuilt_mod_snaplook_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.VIRTUAL_CURSOR,
-                R.string.inbuilt_mod_virtual_cursor, R.string.inbuilt_mod_virtual_cursor_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.GYRO,
-                R.string.inbuilt_mod_gyro, R.string.inbuilt_mod_gyro_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.POJAV_CONTROLS,
-                R.string.inbuilt_mod_pojav_controls, R.string.inbuilt_mod_pojav_controls_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.MORE_BUTTONS,
-                R.string.inbuilt_mod_more_buttons, R.string.inbuilt_mod_more_buttons_desc,
-                groupName));
-        mods.add(create(activity, manager, overlayManager, ModIds.HOTBAR_SLOT,
-                R.string.inbuilt_mod_hotbar_slot, R.string.inbuilt_mod_hotbar_slot_desc,
                 groupName));
 
         return mods;
@@ -387,16 +346,6 @@ public final class InbuiltModuleProvider {
                         "100", "0", "100",
                         String.valueOf(manager.getOverlayOpacity(modId))));
             }
-            configs.add(config(CFG_OVERLAY_LOCK,
-                    context.getString(R.string.overlay_button_lock),
-                    UnifiedMod.ConfigType.TOGGLE,
-                    "false", "", "",
-                    String.valueOf(manager.isOverlayLocked(modId))));
-            configs.add(config(CFG_OVERLAY_SHOW_EVERYWHERE,
-                    context.getString(R.string.mod_config_overlay_show_everywhere),
-                    UnifiedMod.ConfigType.TOGGLE,
-                    "false", "", "",
-                    String.valueOf(manager.isOverlayShowEverywhere(modId))));
         }
 
         if (ModIds.TOGGLE_HUD.equals(modId)) {
@@ -595,27 +544,27 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_AIM_ASSIST_STICKY,
                     context.getString(R.string.mod_config_aim_assist_sticky),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "4", "0", "20",
+                    "3", "0", "20",
                     String.valueOf(manager.getAimAssistSticky())));
             configs.add(config(CFG_AIM_ASSIST_GRACE,
                     context.getString(R.string.mod_config_aim_assist_grace),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "12", "0", "30",
+                    "6", "0", "30",
                     String.valueOf(manager.getAimAssistGrace())));
             configs.add(config(CFG_AIM_ASSIST_MAX_SPEED,
                     context.getString(R.string.mod_config_aim_assist_max_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "650", "100", "1500",
+                    "1100", "100", "1500",
                     String.valueOf(manager.getAimAssistMaxSpeed())));
             configs.add(config(CFG_AIM_ASSIST_SMOOTHING,
                     context.getString(R.string.mod_config_aim_assist_smoothing),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "18", "1", "40",
+                    "38", "1", "40",
                     String.valueOf(manager.getAimAssistSmoothing())));
             configs.add(config(CFG_AIM_ASSIST_ACCEL,
                     context.getString(R.string.mod_config_aim_assist_accel),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "2600", "200", "10000",
+                    "5200", "200", "10000",
                     String.valueOf(manager.getAimAssistAcceleration())));
             configs.add(config(CFG_AIM_ASSIST_DEADZONE,
                     context.getString(R.string.mod_config_aim_assist_deadzone),
@@ -625,7 +574,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_AIM_ASSIST_FULL_RANGE,
                     context.getString(R.string.mod_config_aim_assist_full_range),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "12", "1", "45",
+                    "22", "1", "45",
                     String.valueOf(manager.getAimAssistFullRange())));
             configs.add(config(CFG_AIM_ASSIST_STRENGTH,
                     context.getString(R.string.mod_config_aim_assist_strength),
@@ -682,7 +631,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "280", "120", "400",
+                    "90", "40", "400",
                     String.valueOf(manager.getTriggerBotDelay())));
             configs.add(config(CFG_TRIGGER_BOT_REACTION_JITTER,
                     context.getString(R.string.mod_config_trigger_bot_reaction_jitter),
@@ -697,7 +646,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_TRIGGER_BOT_TOLERANCE,
                     context.getString(R.string.mod_config_trigger_bot_tolerance),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "3", "0", "25",
+                    "8", "0", "25",
                     String.valueOf(manager.getTriggerBotToleranceRaw())));
             configs.add(config(CFG_TRIGGER_BOT_TARGET_PLAYERS,
                     context.getString(R.string.mod_config_trigger_bot_target_players),
@@ -717,17 +666,17 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_TRIGGER_BOT_INTERVAL,
                     context.getString(R.string.mod_config_trigger_bot_interval),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "620", "200", "1200",
+                    "220", "100", "1200",
                     String.valueOf(manager.getTriggerBotInterval())));
             configs.add(config(CFG_TRIGGER_BOT_INTERVAL_JITTER,
                     context.getString(R.string.mod_config_trigger_bot_interval_jitter),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "170", "0", "400",
+                    "50", "0", "400",
                     String.valueOf(manager.getTriggerBotIntervalJitter())));
             configs.add(config(CFG_TRIGGER_BOT_SKIP_CHANCE,
                     context.getString(R.string.mod_config_trigger_bot_skip_chance),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "6", "0", "50",
+                    "1", "0", "50",
                     String.valueOf(manager.getTriggerBotSkipChance())));
             configs.add(config(CFG_TRIGGER_BOT_ONLY_CRIT,
                     context.getString(R.string.mod_config_trigger_bot_only_crit),
@@ -848,12 +797,6 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_OVERLAY_OPACITY:
                 manager.setOverlayOpacity(mod.getId(), parseInt(value, manager.getOverlayOpacity(mod.getId())));
-                break;
-            case CFG_OVERLAY_LOCK:
-                manager.setOverlayLocked(mod.getId(), parseBoolean(value));
-                break;
-            case CFG_OVERLAY_SHOW_EVERYWHERE:
-                manager.setOverlayShowEverywhere(mod.getId(), parseBoolean(value));
                 break;
             case CFG_HIDE_LAUNCHER_HUD:
                 manager.setLauncherHudHideEnabled(parseBoolean(value));

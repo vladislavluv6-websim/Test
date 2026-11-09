@@ -306,19 +306,19 @@ void AimAssist::setLegitMode(bool legit) {
   if (legit) {
     // Мягкий довод с заметным лагом и «мёртвой зоной»: камера не прилипает
     // к центру хитбокса и не повторяет одинаковые шаги каждый кадр.
-    m_settings.smoothingSpeed = 15.0f;
-    m_settings.maxDegPerSecond = 560.0f;
-    m_settings.maxAccelDegPerSecond2 = 2200.0f;
-    m_settings.deadzoneDeg = 0.30f;
-    m_settings.fullSpeedRangeDeg = 18.0f;
-    m_settings.targetSmoothFrames = 6;
+    m_settings.smoothingSpeed = 38.0f;
+    m_settings.maxDegPerSecond = 1100.0f;
+    m_settings.maxAccelDegPerSecond2 = 5200.0f;
+    m_settings.deadzoneDeg = 0.10f;
+    m_settings.fullSpeedRangeDeg = 22.0f;
+    m_settings.targetSmoothFrames = 2;
   } else {
-    m_settings.smoothingSpeed = 24.0f;
-    m_settings.maxDegPerSecond = 900.0f;
-    m_settings.maxAccelDegPerSecond2 = 3600.0f;
-    m_settings.deadzoneDeg = 0.18f;
-    m_settings.fullSpeedRangeDeg = 16.0f;
-    m_settings.targetSmoothFrames = 3;
+    m_settings.smoothingSpeed = 46.0f;
+    m_settings.maxDegPerSecond = 1400.0f;
+    m_settings.maxAccelDegPerSecond2 = 6500.0f;
+    m_settings.deadzoneDeg = 0.06f;
+    m_settings.fullSpeedRangeDeg = 20.0f;
+    m_settings.targetSmoothFrames = 1;
   }
 }
 
@@ -1091,9 +1091,18 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     bestActor = actor;
   }
 
-  // Строго по хитбоксу: удар возможен только если луч прицела реально
-  // пересекает AABB актёра. Никаких «добиваний» по углу/ближайшему —
-  // удар при взгляде в сторону мгновенно ловится killaura/aim-проверками.
+  // Если луч прошёл рядом с хитбоксом (интерполяция позиции между
+  // тиками), допускаем удар по очень маленькому угловому допуску. Это
+  // компенсирует рассинхрон клиент/сервер, но не превращается в killaura:
+  // допуск жёстко ограничен attackMaxAngleDeg (2°) и ванильной дистанцией.
+  bool fallbackHit = false;
+  if (!bestActor && minAngleActor &&
+      minAngle <= std::max(0.5f, settings.attackMaxAngleDeg) &&
+      minAngleDist <= reach + tolerance) {
+    bestActor = minAngleActor;
+    bestDistance = minAngleDist;
+    fallbackHit = true;
+  }
 
   static uint64_t s_triggerLog = 0;
   if ((++s_triggerLog % 60) == 1) {
@@ -1128,6 +1137,19 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   // внутренних читов (Killaura/Aura) — GameMode::attack, без инъекции
   // касаний и без участия UI-потока.
   const int64_t now = monotonicMs();
+  if (settings.onlyCrit) {
+    // Keep the server-side sprint state clear for the whole fall, not just
+    // on the attack frame: the attack packet is processed before the next
+    // auth input, so the previous ticks must already be non-sprinting.
+    if (isFallingForCrit(settings, now)) {
+      combatstate::suppressSprint(150);
+      if (player) {
+        gameecs::setMoveSprinting(player, false);
+        gameecs::setSprintingFlag(player, false);
+      }
+    }
+  }
+
   if (m_triggerSinceActor != bestActor) {
     m_triggerSinceActor = bestActor;
     m_triggerSinceMs = now;
@@ -1157,9 +1179,14 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   }
 
   Vec3 hitPoint{};
-  hitPoint.x = eye.x + dir.x * bestDistance;
-  hitPoint.y = eye.y + dir.y * bestDistance;
-  hitPoint.z = eye.z + dir.z * bestDistance;
+  if (fallbackHit) {
+    hitPoint = minAngleCenter;
+    bestDistance = minAngleDist;
+  } else {
+    hitPoint.x = eye.x + dir.x * bestDistance;
+    hitPoint.y = eye.y + dir.y * bestDistance;
+    hitPoint.z = eye.z + dir.z * bestDistance;
+  }
 
   // Главная сетевая проверка: бьём только если ротация, которую сервер
   // уже получил на последнем тике 20 Гц, тоже смотрит на точку удара.
@@ -1183,7 +1210,11 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
             1.0f);
         netAngle = std::acos(dot) * kRadToDeg;
       }
-      if (netAngle > settings.serverViewToleranceDeg) {
+      const float guardTolerance =
+          settings.onlyCrit
+              ? std::max(settings.serverViewToleranceDeg, 18.0f)
+              : settings.serverViewToleranceDeg;
+      if (netAngle > guardTolerance) {
         m_serverViewSinceMs = 0;
         m_nextAttackAtMs = now + 40;
         static uint64_t s_guardLog = 0;
@@ -1193,18 +1224,21 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
               "trigger guard: server view off by %.2f deg (tol %.1f), "
               "age=%lldms",
               static_cast<double>(netAngle),
-              static_cast<double>(settings.serverViewToleranceDeg),
+              static_cast<double>(guardTolerance),
               static_cast<long long>(netAgeMs));
         }
         return;
       }
-      // Сервер должен видеть прицел на цели минимум один полный тик.
-      if (m_serverViewSinceMs == 0) {
-        m_serverViewSinceMs = now;
-      }
-      if (now - m_serverViewSinceMs < 60) {
-        m_nextAttackAtMs = now + 20;
-        return;
+      // Сервер должен видеть прицел на цели минимум один тик. Крит-окно
+      // короткое, поэтому там ждём только фактическое совпадение ротации.
+      if (!settings.onlyCrit) {
+        if (m_serverViewSinceMs == 0) {
+          m_serverViewSinceMs = now;
+        }
+        if (now - m_serverViewSinceMs < 30) {
+          m_nextAttackAtMs = now + 15;
+          return;
+        }
       }
     }
   }
@@ -1245,7 +1279,8 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     if (settings.humanize && randomFloat(0.0f, 1.0f) < 0.08f) {
       next += randomInt(120, 320);
     }
-    m_nextAttackAtMs = std::max(now + 120, next);
+    m_nextAttackAtMs =
+        std::max(now + (settings.onlyCrit ? 80 : 120), next);
   } else {
     // GameMode ещё не готов (меню/загрузка) — не долбим каждый кадр.
     m_nextAttackAtMs = now + 100;

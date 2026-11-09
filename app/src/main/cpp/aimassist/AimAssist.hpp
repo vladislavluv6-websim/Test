@@ -48,24 +48,24 @@ struct Settings {
 
   float fovDeg = 90.0f;
   float range = 8.0f;
-  float smoothingSpeed = 15.0f;
-  float maxDegPerSecond = 560.0f;
-  float maxAccelDegPerSecond2 = 2200.0f;
-  float deadzoneDeg = 0.30f;
-  float fullSpeedRangeDeg = 18.0f;
+  float smoothingSpeed = 38.0f;
+  float maxDegPerSecond = 1100.0f;
+  float maxAccelDegPerSecond2 = 5200.0f;
+  float deadzoneDeg = 0.10f;
+  float fullSpeedRangeDeg = 22.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
   TargetBone targetBone = TargetBone::Head;
 
-  int stickyTicks = 6;
+  int stickyTicks = 3;
   // Target lock: держим одну цель, пока она жива и в радиусе. Переключение
   // только если прицел стоит точно на другой цели.
   bool targetLock = false;
   float switchHysteresisDeg = 4.0f;
   // EMA-лаг позиции цели (в кадрах при 120 Гц). Даёт «догоняющее» наведение,
   // как у живой руки, вместо мгновенной привязки к центру хитбокса.
-  int targetSmoothFrames = 6;
-  int targetGraceFrames = 10;
+  int targetSmoothFrames = 2;
+  int targetGraceFrames = 6;
 
   float randomJitterDeg = 0.0f;
   int randomJitterIntervalMs = 150;
@@ -104,8 +104,8 @@ struct Settings {
   // Реакция перед началом доводки: живой игрок не начинает вести цель
   // в тот же кадр, в котором она появилась.
   bool humanize = true;
-  float reactionDelayMs = 140.0f;
-  float reactionJitterMs = 90.0f;
+  float reactionDelayMs = 60.0f;
+  float reactionJitterMs = 35.0f;
   // Дополнительный вклад в шум сопровождения (0 — только trackingNoiseDeg).
   float aimTremorDeg = 0.0f;
   // Верхний предел поворота за один серверный тик (50 мс). Защита от
@@ -126,22 +126,22 @@ struct Settings {
   // Постоянное смещение точки прицеливания от центра хитбокса. Игрок не
   // держит прицел математически точно в центре; это ломает проверки
   // "aim placement"/"target offset" и статистику идеальной точности.
-  float restOffsetDeg = 0.28f;
+  float restOffsetDeg = 0.20f;
   // Одноразовый перелёт при захвате новой цели (доля начальной ошибки).
-  float overshootFactor = 0.10f;
+  float overshootFactor = 0.07f;
   // Медленная вариация «моторной» скорости (доля единицы).
-  float motorVariation = 0.18f;
+  float motorVariation = 0.22f;
   // Минимальное время удержания текущей цели перед переключением, мс.
-  int switchDelayMs = 240;
+  int switchDelayMs = 140;
   // Триггер: максимальный угол от прицела до центра цели для «мягкого»
   // добивания, если луч не попал в AABB. В legit-режиме не используется.
-  float attackMaxAngleDeg = 3.5f;
+  float attackMaxAngleDeg = 2.0f;
   // Вероятность «промаха» (пропуска удара) для humanization.
-  float attackMissChance = 0.05f;
+  float attackMissChance = 0.01f;
   // Разброс интервала между ударами, мс (±).
-  int attackIntervalJitterMs = 180;
+  int attackIntervalJitterMs = 60;
   // Задержка реакции триггера на новую цель (разброс), мс.
-  int triggerDelayJitterMs = 120;
+  int triggerDelayJitterMs = 40;
   // Бить только когда луч реально пересекает хитбокс (без «добивания»
   // по минимальному углу). Это самая шумная для анти-читов ветка.
   bool legitAttackOnly = true;
@@ -154,7 +154,7 @@ struct Settings {
   // Минимальная скорость падения по Y, блоков/с.
   float critMinFallSpeed = 0.18f;
   // Сколько миллисекунд нужно непрерывно падать перед ударом.
-  int critSettleMs = 30;
+  int critSettleMs = 20;
 
   // ------------------------------------------------------------
   // Сетевое формирование ротации (то, что реально видит сервер)
@@ -163,7 +163,7 @@ struct Settings {
   // тик 20 Гц), тоже смотрит на цель. Убирает «удар при взгляде в сторону»
   // из-за рассинхрона кадр/тик — прямая проверка Polar/GhostAC.
   bool serverViewGuard = true;
-  float serverViewToleranceDeg = 7.0f;
+  float serverViewToleranceDeg = 10.0f;
   // Устойчивая скорость сопровождения: не больше N градусов за тик 50 мс
   // (12°/тик = 240°/с). Быстрее — только в коротком окне флика.
   float sustainedTickDeltaDeg = 12.0f;

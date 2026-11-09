@@ -135,13 +135,13 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
     private static final int DEFAULT_AIM_ASSIST_BODY_PART = 0;
-    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 560;
-    private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 15;
-    private static final int DEFAULT_AIM_ASSIST_ACCEL = 2200;
-    private static final int DEFAULT_AIM_ASSIST_DEADZONE = 30;
-    private static final int DEFAULT_AIM_ASSIST_FULL_RANGE = 18;
-    private static final int DEFAULT_AIM_ASSIST_STICKY = 6;
-    private static final int DEFAULT_AIM_ASSIST_GRACE = 10;
+    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 1100;
+    private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 38;
+    private static final int DEFAULT_AIM_ASSIST_ACCEL = 5200;
+    private static final int DEFAULT_AIM_ASSIST_DEADZONE = 10;
+    private static final int DEFAULT_AIM_ASSIST_FULL_RANGE = 22;
+    private static final int DEFAULT_AIM_ASSIST_STICKY = 3;
+    private static final int DEFAULT_AIM_ASSIST_GRACE = 6;
     private static final boolean DEFAULT_AIM_ASSIST_PREFER_CLOSEST = false;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_LOCK = false;
     private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
@@ -153,16 +153,16 @@ public class InbuiltModManager {
     private static final int DEFAULT_ESP_PLAYER_COLOR = 0xFFFF5555;
     private static final int DEFAULT_ESP_MOB_COLOR = 0xFFFFAA00;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
-    private static final int DEFAULT_TRIGGER_BOT_DELAY = 280;
-    private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 70;
+    private static final int DEFAULT_TRIGGER_BOT_DELAY = 90;
+    private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 40;
     private static final int DEFAULT_TRIGGER_BOT_RANGE = 30;
-    private static final int DEFAULT_TRIGGER_BOT_TOLERANCE = 3;
+    private static final int DEFAULT_TRIGGER_BOT_TOLERANCE = 8;
     private static final boolean DEFAULT_TRIGGER_BOT_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_TRIGGER_BOT_TARGET_MOBS = true;
     private static final boolean DEFAULT_TRIGGER_BOT_HUMANIZATION = true;
-    private static final int DEFAULT_TRIGGER_BOT_INTERVAL = 620;
-    private static final int DEFAULT_TRIGGER_BOT_INTERVAL_JITTER = 170;
-    private static final int DEFAULT_TRIGGER_BOT_SKIP_CHANCE = 6;
+    private static final int DEFAULT_TRIGGER_BOT_INTERVAL = 220;
+    private static final int DEFAULT_TRIGGER_BOT_INTERVAL_JITTER = 50;
+    private static final int DEFAULT_TRIGGER_BOT_SKIP_CHANCE = 1;
     private static final boolean DEFAULT_TRIGGER_BOT_ONLY_CRIT = false;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
@@ -729,13 +729,13 @@ public class InbuiltModManager {
     }
 
     public int getTriggerBotInterval() {
-        return Math.max(200, Math.min(1200,
+        return Math.max(100, Math.min(1200,
                 prefs.getInt(KEY_TRIGGER_BOT_INTERVAL, DEFAULT_TRIGGER_BOT_INTERVAL)));
     }
 
     public void setTriggerBotInterval(int intervalMs) {
         prefs.edit().putInt(KEY_TRIGGER_BOT_INTERVAL,
-                Math.max(200, Math.min(1200, intervalMs))).apply();
+                Math.max(100, Math.min(1200, intervalMs))).apply();
     }
 
     public int getTriggerBotIntervalJitter() {
@@ -981,7 +981,9 @@ public class InbuiltModManager {
     }
 
     public boolean isOverlayLocked(String modId) {
-        return prefs.getBoolean(KEY_OVERLAY_LOCK_PREFIX + sharedOverlaySettingsId(modId), false);
+        // Position locking was removed from the UI: overlays are always
+        // draggable, even if an old preference is still present.
+        return false;
     }
 
     public void setOverlayLocked(String modId, boolean locked) {
@@ -989,7 +991,8 @@ public class InbuiltModManager {
     }
 
     public boolean isOverlayShowEverywhere(String modId) {
-        return prefs.getBoolean(KEY_OVERLAY_SHOW_EVERYWHERE_PREFIX + sharedOverlaySettingsId(modId), false);
+        // "Show everywhere" was removed from the UI.
+        return false;
     }
 
     public void setOverlayShowEverywhere(String modId, boolean showEverywhere) {
