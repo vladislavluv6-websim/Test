@@ -53,15 +53,14 @@ public class SpeedOverlay extends BaseOverlayButton {
         SpeedMod.setAvoidCheck(manager.isSpeedAvoidCheck());
         SpeedMod.setAvoidDelay(manager.getSpeedAvoidDelay());
         SpeedMod.setDebug(manager.isSpeedDebug());
-        SpeedMod.setMultiplier(manager.getSpeedValue() / 100f);
+        SpeedMod.setMultiplier(1.0f);
     }
 
     @Override
     public void show(int startX, int startY) {
         if (!isActive && isSupportedVersion()) {
             InbuiltModManager manager = InbuiltModManager.getInstance(activity);
-            float multiplier = manager.getSpeedValue() / 100f;
-            isActive = SpeedMod.setEnabled(true, multiplier);
+            isActive = SpeedMod.setEnabled(true, 1.0f);
             if (isActive) {
                 applyNativeSettings(manager);
             }
@@ -78,8 +77,7 @@ public class SpeedOverlay extends BaseOverlayButton {
                 nextState = false;
             } else {
                 InbuiltModManager manager = InbuiltModManager.getInstance(activity);
-                float multiplier = manager.getSpeedValue() / 100f;
-                if (!SpeedMod.setEnabled(true, multiplier)) {
+                if (!SpeedMod.setEnabled(true, 1.0f)) {
                     Toast.makeText(activity, R.string.speed_mod_unavailable, Toast.LENGTH_SHORT).show();
                     nextState = false;
                 } else {
