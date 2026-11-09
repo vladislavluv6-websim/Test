@@ -21,6 +21,14 @@ public class InbuiltModManager {
     private static final String KEY_SPEED_AVOID_CHECK = "speed_avoid_check";
     private static final String KEY_SPEED_AVOID_DELAY = "speed_avoid_delay";
     private static final String KEY_SPEED_DEBUG = "speed_debug";
+    private static final String KEY_AIM_ASSIST_RANGE = "aim_assist_range";
+    private static final String KEY_AIM_ASSIST_STRENGTH = "aim_assist_strength";
+    private static final String KEY_AIM_ASSIST_LEGIT = "aim_assist_legit";
+    private static final String KEY_AIM_ASSIST_FOV = "aim_assist_fov";
+    private static final String KEY_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
+    private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
+    private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
+    private static final String KEY_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
     private static final String KEY_AIM_ASSIST_MAX_SPEED = "aim_assist_max_speed";
     private static final String KEY_AIM_ASSIST_SMOOTHING = "aim_assist_smoothing";
     private static final String KEY_AIM_ASSIST_ACCEL = "aim_assist_accel";
