@@ -1470,7 +1470,7 @@ void ClientBridge::appendNearbyActors(void *player, const Vec3 &extent,
   size_t count = static_cast<size_t>(end - begin) /
                  sizeof(DistanceSortedActor);
   if (count == 0) return;
-  if (count > 512) count = 512;
+  if (count > 1024) count = 1024;
   if (out.capacity() < out.size() + count) {
     out.reserve(out.size() + count);
   }

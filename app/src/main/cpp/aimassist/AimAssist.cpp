@@ -230,7 +230,7 @@ void AimAssist::setTargetMobs(bool enabled) {
 
 void AimAssist::setBodyPart(int bodyPart) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
-  switch (std::max(0, std::min(3, bodyPart))) {
+  switch (std::max(0, std::min(4, bodyPart))) {
   case 1:
     m_settings.targetBone = TargetBone::Chest;
     break;
@@ -239,6 +239,9 @@ void AimAssist::setBodyPart(int bodyPart) {
     break;
   case 3:
     m_settings.targetBone = TargetBone::UpperChest;
+    break;
+  case 4:
+    m_settings.targetBone = TargetBone::LowerChest;
     break;
   default:
     m_settings.targetBone = TargetBone::Head;
@@ -1593,6 +1596,9 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
     break;
   case TargetBone::UpperChest:
     fraction = offsets::kUpperChestFraction;
+    break;
+  case TargetBone::LowerChest:
+    fraction = offsets::kLowerChestFraction;
     break;
   case TargetBone::Head:
   default:

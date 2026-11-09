@@ -66,6 +66,24 @@ inline constexpr const char *kActorIsPlayerSignature =
     "? ? ? 92 ? ? ? B8 28 01 08 4A ? ? ? 12 1F 01 09 6B E0 27 9F 1A C0 03 5F D6 "
     "E0 03 1F 2A C0 03 5F D6 ? ? ? D1 ? ? ? FD";
 
+// GetFov: float(void *self, float delta, int variable) — живой вертикальный
+// FOV в градусах (1..179) при variable != 0 (проверено motionblur BedrockTools).
+inline constexpr const char *kGetFovSignature =
+    "? ? ? FC ? ? ? 6D ? ? ? A9 ? ? ? F9 ? ? ? A9 ? ? ? 91 08 40 20 1E "
+    "F4 03 01 2A";
+
+// Actor::getNameTag() — ARM64-сигнатура для 1.26.6X (любезно проверена
+// BedrockTools, тот же Preloader/ABI). Возвращает std::string по значению.
+inline constexpr const char *kActorGetNameTagSignature =
+    "? ? ? D1 ? ? ? A9 ? ? ? F9 ? ? ? A9 ? ? ? 91 55 D0 3B D5 F3 03 08 AA "
+    "F4 03 00 AA ? ? ? F9 ? ? ? F8 E8 03 00 91 ? ? ? ? E0 03 00 91";
+
+// Поля имени (Android 1.26.6X, ARM64):
+//   Actor::mFilteredNameTag — std::string с уже отфильтрованным ником;
+//   Player::mName           — std::string с чистым ником игрока.
+inline constexpr uintptr_t kActorFilteredNameTag = 0x2E0;
+inline constexpr uintptr_t kPlayerName = 0xB28;
+
 // ============================================================
 // ESP / hitbox render (1.26.60, ARM64)
 // ============================================================
@@ -159,6 +177,8 @@ inline constexpr float kHeadFraction = 0.88f;
 // Верх груди / шея: между грудью (0.62) и головой (0.88).
 inline constexpr float kUpperChestFraction = 0.78f;
 inline constexpr float kChestFraction = 0.62f;
+// Чуть ниже груди (нижняя часть грудной клетки / солнечное сплетение).
+inline constexpr float kLowerChestFraction = 0.56f;
 inline constexpr float kLegsFraction = 0.25f;
 
 // ============================================================
@@ -202,6 +222,12 @@ inline constexpr uintptr_t kScreenContextColorHolder = 0x30;
 inline constexpr uintptr_t kShaderColorDirty = 0x10;
 inline constexpr uintptr_t kLevelRendererPlayer = 0x430;
 inline constexpr uintptr_t kLevelRendererPlayerCamPos = 0x614;
+// FOV (радианы или градусы — определяется по величине). Два кандидата:
+// LevelRendererPlayer (проверено в 1.21.80) и ClientInstance.
+inline constexpr uintptr_t kLevelRendererPlayerFovX = 0xF58;
+inline constexpr uintptr_t kLevelRendererPlayerFovY = 0xF6C;
+inline constexpr uintptr_t kClientInstanceFovX = 0x740;
+inline constexpr uintptr_t kClientInstanceFovY = 0x754;
 inline constexpr uintptr_t kLevelRendererSelectionMaterial = 0x10A0;
 inline constexpr uint32_t kMobCategory = 2;
 

@@ -2,6 +2,10 @@
 
 #include <android/log.h>
 
+#include <cstdio>
+#include <string>
+#include <vector>
+
 #include "DiagLog.hpp"
 
 #include "AimAssist.hpp"
@@ -298,4 +302,49 @@ extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetMobColor(
     JNIEnv *, jclass, jint argb) {
   aimbot::Esp::instance().setMobColor(static_cast<uint32_t>(argb));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetNameTags(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::Esp::instance().setNameTags(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetNameTagScreenSize(
+    JNIEnv *, jclass, jfloat width, jfloat height) {
+  aimbot::Esp::instance().setNameTagSurface(width, height);
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetNameTags(
+    JNIEnv *env, jclass) {
+  const std::vector<aimbot::NameTagLabel> labels =
+      aimbot::Esp::instance().copyNameTags();
+  if (labels.empty() || !env) return nullptr;
+
+  jclass stringClass = env->FindClass("java/lang/String");
+  if (!stringClass) return nullptr;
+
+  jobjectArray result =
+      env->NewObjectArray(static_cast<jsize>(labels.size()), stringClass, nullptr);
+  if (!result) {
+    env->DeleteLocalRef(stringClass);
+    return nullptr;
+  }
+
+  for (size_t i = 0; i < labels.size(); ++i) {
+    char coordinates[32]{};
+    std::snprintf(coordinates, sizeof(coordinates), "%.1f	%.1f	",
+                  labels[i].x, labels[i].y);
+    const std::string entry = std::string(coordinates) + labels[i].name;
+    jstring item = env->NewStringUTF(entry.c_str());
+    if (item) {
+      env->SetObjectArrayElement(result, static_cast<jsize>(i), item);
+      env->DeleteLocalRef(item);
+    }
+  }
+
+  env->DeleteLocalRef(stringClass);
+  return result;
 }

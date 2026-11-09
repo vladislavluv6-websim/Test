@@ -69,6 +69,18 @@ public final class EspMod {
         if (initialized) nativeSetMobColor(argb);
     }
 
+    public static void setNameTags(boolean enabled) {
+        if (initialized) nativeSetNameTags(enabled);
+    }
+
+    public static void setNameTagScreenSize(float width, float height) {
+        if (initialized) nativeSetNameTagScreenSize(width, height);
+    }
+
+    public static String[] getNameTags() {
+        return initialized ? nativeGetNameTags() : null;
+    }
+
     public static boolean isInitialized() {
         return initialized;
     }
@@ -80,4 +92,7 @@ public final class EspMod {
     private static native void nativeSetRange(float range);
     private static native void nativeSetPlayerColor(int argb);
     private static native void nativeSetMobColor(int argb);
+    private static native void nativeSetNameTags(boolean enabled);
+    private static native void nativeSetNameTagScreenSize(float width, float height);
+    private static native String[] nativeGetNameTags();
 }

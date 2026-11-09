@@ -13,13 +13,25 @@ import java.util.concurrent.atomic.AtomicLong;
 public class InbuiltModManager {
     private static final String PREFS_NAME = "inbuilt_mods_prefs";
     private static final String KEY_AUTOSPRINT_KEY = "autosprint_key";
+    private static final String KEY_SPEED_MULTIPLIER = "speed_multiplier";
+    private static final String KEY_SPEED_S1_ENABLED = "speed_s1_enabled";
     private static final String KEY_SPEED_MODE = "speed_mode";
-    private static final String KEY_SPEED_VALUE = "speed_value";
-    private static final String KEY_SPEED_TICK_SPEED = "speed_tick_speed";
-    private static final String KEY_SPEED_JUMP_TYPE = "speed_jump_type";
-    private static final String KEY_SPEED_JUMP_HEIGHT = "speed_jump_height";
-    private static final String KEY_SPEED_AVOID_CHECK = "speed_avoid_check";
-    private static final String KEY_SPEED_AVOID_DELAY = "speed_avoid_delay";
+    private static final String KEY_SPEED_MOTION_BOOST = "speed_motion_boost";
+    private static final String KEY_SPEED_MAX_SPEED = "speed_max_speed";
+    private static final String KEY_SPEED_GAP_MAX = "speed_gap_max";
+    private static final String KEY_SPEED_RESET_INTERVAL = "speed_reset_interval";
+    private static final String KEY_SPEED_MAX_RESET_TICKS = "speed_max_reset_ticks";
+    private static final String KEY_SPEED_HOP_ENABLED = "speed_hop_enabled";
+    private static final String KEY_SPEED_HOP_HEIGHT = "speed_hop_height";
+    private static final String KEY_SPEED_HOP_INTERVAL = "speed_hop_interval";
+    private static final String KEY_SPEED_MASK_Y = "speed_mask_y";
+    private static final String KEY_SPEED_PHANTOM_HOLD = "speed_phantom_hold";
+    private static final String KEY_SPEED_FAKE_JUMP_TICKS = "speed_fake_jump_ticks";
+    private static final String KEY_SPEED_CANCEL_CORRECTIONS = "speed_cancel_corrections";
+    private static final String KEY_SPEED_PAUSE_ON_FALL = "speed_pause_on_fall";
+    private static final String KEY_SPEED_PAUSE_IF_SNEAKING = "speed_pause_if_sneaking";
+    private static final String KEY_SPEED_PAUSE_IF_NOT_MOVING = "speed_pause_if_not_moving";
+    private static final String KEY_SPEED_AUTO_SPRINT = "speed_auto_sprint";
     private static final String KEY_SPEED_DEBUG = "speed_debug";
     private static final String KEY_AIM_ASSIST_RANGE = "aim_assist_range";
     private static final String KEY_AIM_ASSIST_STRENGTH = "aim_assist_strength";
@@ -39,6 +51,7 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
     private static final String KEY_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String KEY_ESP_SHOW_MOBS = "esp_show_mobs";
+    private static final String KEY_ESP_NAME_TAGS = "esp_name_tags";
     private static final String KEY_ESP_RANGE = "esp_range";
     private static final String KEY_ESP_PLAYER_COLOR = "esp_player_color";
     private static final String KEY_ESP_MOB_COLOR = "esp_mob_color";
@@ -91,13 +104,25 @@ public class InbuiltModManager {
     private static final int DEFAULT_ZOOM_LEVEL = 10;
     private static final int DEFAULT_ZOOM_TRANSITION_DURATION = 150;
     private static final int DEFAULT_CURSOR_SENSITIVITY = 120;
-    private static final int DEFAULT_SPEED_MODE = 0;
-    private static final int DEFAULT_SPEED_VALUE = 50;
-    private static final int DEFAULT_SPEED_TICK_SPEED = 3;
-    private static final int DEFAULT_SPEED_JUMP_TYPE = 0;
-    private static final int DEFAULT_SPEED_JUMP_HEIGHT = 42;
-    private static final boolean DEFAULT_SPEED_AVOID_CHECK = false;
-    private static final int DEFAULT_SPEED_AVOID_DELAY = 400;
+    private static final int DEFAULT_SPEED_MULTIPLIER = 200;
+    private static final boolean DEFAULT_SPEED_S1_ENABLED = true;
+    private static final int DEFAULT_SPEED_MODE = 2;
+    private static final int DEFAULT_SPEED_MOTION_BOOST = 15;
+    private static final int DEFAULT_SPEED_MAX_SPEED = 50;
+    private static final int DEFAULT_SPEED_GAP_MAX = 40;
+    private static final int DEFAULT_SPEED_RESET_INTERVAL = 2500;
+    private static final int DEFAULT_SPEED_MAX_RESET_TICKS = 6;
+    private static final boolean DEFAULT_SPEED_HOP_ENABLED = true;
+    private static final int DEFAULT_SPEED_HOP_HEIGHT = 0;
+    private static final int DEFAULT_SPEED_HOP_INTERVAL = 1;
+    private static final boolean DEFAULT_SPEED_MASK_Y = true;
+    private static final int DEFAULT_SPEED_PHANTOM_HOLD = 3;
+    private static final int DEFAULT_SPEED_FAKE_JUMP_TICKS = 4;
+    private static final boolean DEFAULT_SPEED_CANCEL_CORRECTIONS = true;
+    private static final boolean DEFAULT_SPEED_PAUSE_ON_FALL = true;
+    private static final boolean DEFAULT_SPEED_PAUSE_IF_SNEAKING = true;
+    private static final boolean DEFAULT_SPEED_PAUSE_IF_NOT_MOVING = true;
+    private static final boolean DEFAULT_SPEED_AUTO_SPRINT = true;
     private static final boolean DEFAULT_SPEED_DEBUG = false;
     private static final int DEFAULT_AIM_ASSIST_RANGE = 10;
     private static final int DEFAULT_AIM_ASSIST_STRENGTH = 100;
@@ -117,6 +142,7 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_PREFER_CLOSEST = false;
     private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
     private static final boolean DEFAULT_ESP_SHOW_MOBS = true;
+    private static final boolean DEFAULT_ESP_NAME_TAGS = true;
     private static final int DEFAULT_ESP_RANGE = 32;
     private static final int DEFAULT_ESP_PLAYER_COLOR = 0xFFFF5555;
     private static final int DEFAULT_ESP_MOB_COLOR = 0xFFFFAA00;
@@ -171,66 +197,195 @@ public class InbuiltModManager {
         prefs.edit().putInt(KEY_AUTOSPRINT_KEY, keyCode).apply();
     }
 
+    public int getSpeedMultiplier() {
+        return Math.max(100, Math.min(500,
+                prefs.getInt(KEY_SPEED_MULTIPLIER, DEFAULT_SPEED_MULTIPLIER)));
+    }
+
+    public void setSpeedMultiplier(int multiplier) {
+        prefs.edit().putInt(KEY_SPEED_MULTIPLIER,
+                Math.max(100, Math.min(500, multiplier))).apply();
+    }
+
+    public boolean isSpeedS1Enabled() {
+        return prefs.getBoolean(KEY_SPEED_S1_ENABLED, DEFAULT_SPEED_S1_ENABLED);
+    }
+
+    public void setSpeedS1Enabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_SPEED_S1_ENABLED, enabled).apply();
+    }
+
     public int getSpeedMode() {
-        return Math.max(0, Math.min(3,
+        return Math.max(0, Math.min(2,
                 prefs.getInt(KEY_SPEED_MODE, DEFAULT_SPEED_MODE)));
     }
 
     public void setSpeedMode(int mode) {
-        prefs.edit().putInt(KEY_SPEED_MODE, Math.max(0, Math.min(3, mode))).apply();
+        prefs.edit().putInt(KEY_SPEED_MODE, Math.max(0, Math.min(2, mode))).apply();
     }
 
-    public int getSpeedValue() {
-        return Math.max(0, Math.min(1000,
-                prefs.getInt(KEY_SPEED_VALUE, DEFAULT_SPEED_VALUE)));
+    public int getSpeedMotionBoostRaw() {
+        return Math.max(1, Math.min(200,
+                prefs.getInt(KEY_SPEED_MOTION_BOOST, DEFAULT_SPEED_MOTION_BOOST)));
     }
 
-    public void setSpeedValue(int value) {
-        prefs.edit().putInt(KEY_SPEED_VALUE, Math.max(0, Math.min(1000, value))).apply();
+    public float getSpeedMotionBoost() {
+        return getSpeedMotionBoostRaw() / 1000f;
     }
 
-    public int getSpeedTickSpeed() {
-        return Math.max(0, Math.min(10,
-                prefs.getInt(KEY_SPEED_TICK_SPEED, DEFAULT_SPEED_TICK_SPEED)));
+    public void setSpeedMotionBoostRaw(int value) {
+        prefs.edit().putInt(KEY_SPEED_MOTION_BOOST,
+                Math.max(1, Math.min(200, value))).apply();
     }
 
-    public void setSpeedTickSpeed(int ticks) {
-        prefs.edit().putInt(KEY_SPEED_TICK_SPEED, Math.max(0, Math.min(10, ticks))).apply();
+    public int getSpeedMaxSpeedRaw() {
+        return Math.max(28, Math.min(200,
+                prefs.getInt(KEY_SPEED_MAX_SPEED, DEFAULT_SPEED_MAX_SPEED)));
     }
 
-    public int getSpeedJumpType() {
-        return Math.max(0, Math.min(2,
-                prefs.getInt(KEY_SPEED_JUMP_TYPE, DEFAULT_SPEED_JUMP_TYPE)));
+    public float getSpeedMaxSpeed() {
+        return getSpeedMaxSpeedRaw() / 100f;
     }
 
-    public void setSpeedJumpType(int type) {
-        prefs.edit().putInt(KEY_SPEED_JUMP_TYPE, Math.max(0, Math.min(2, type))).apply();
+    public void setSpeedMaxSpeedRaw(int value) {
+        prefs.edit().putInt(KEY_SPEED_MAX_SPEED,
+                Math.max(28, Math.min(200, value))).apply();
     }
 
-    public int getSpeedJumpHeight() {
-        return Math.max(0, Math.min(100,
-                prefs.getInt(KEY_SPEED_JUMP_HEIGHT, DEFAULT_SPEED_JUMP_HEIGHT)));
+    public int getSpeedGapMaxRaw() {
+        return Math.max(15, Math.min(300,
+                prefs.getInt(KEY_SPEED_GAP_MAX, DEFAULT_SPEED_GAP_MAX)));
     }
 
-    public void setSpeedJumpHeight(int height) {
-        prefs.edit().putInt(KEY_SPEED_JUMP_HEIGHT, Math.max(0, Math.min(100, height))).apply();
+    public float getSpeedGapMax() {
+        return getSpeedGapMaxRaw() / 100f;
     }
 
-    public boolean isSpeedAvoidCheck() {
-        return prefs.getBoolean(KEY_SPEED_AVOID_CHECK, DEFAULT_SPEED_AVOID_CHECK);
+    public void setSpeedGapMaxRaw(int value) {
+        prefs.edit().putInt(KEY_SPEED_GAP_MAX,
+                Math.max(15, Math.min(300, value))).apply();
     }
 
-    public void setSpeedAvoidCheck(boolean enabled) {
-        prefs.edit().putBoolean(KEY_SPEED_AVOID_CHECK, enabled).apply();
+    public int getSpeedResetInterval() {
+        return Math.max(1000, Math.min(10000,
+                prefs.getInt(KEY_SPEED_RESET_INTERVAL, DEFAULT_SPEED_RESET_INTERVAL)));
     }
 
-    public int getSpeedAvoidDelay() {
-        return Math.max(100, Math.min(3000,
-                prefs.getInt(KEY_SPEED_AVOID_DELAY, DEFAULT_SPEED_AVOID_DELAY)));
+    public void setSpeedResetInterval(int value) {
+        prefs.edit().putInt(KEY_SPEED_RESET_INTERVAL,
+                Math.max(1000, Math.min(10000, value))).apply();
     }
 
-    public void setSpeedAvoidDelay(int ms) {
-        prefs.edit().putInt(KEY_SPEED_AVOID_DELAY, Math.max(100, Math.min(3000, ms))).apply();
+    public int getSpeedMaxResetTicks() {
+        return Math.max(2, Math.min(20,
+                prefs.getInt(KEY_SPEED_MAX_RESET_TICKS, DEFAULT_SPEED_MAX_RESET_TICKS)));
+    }
+
+    public void setSpeedMaxResetTicks(int value) {
+        prefs.edit().putInt(KEY_SPEED_MAX_RESET_TICKS,
+                Math.max(2, Math.min(20, value))).apply();
+    }
+
+    public boolean isSpeedHopEnabled() {
+        return prefs.getBoolean(KEY_SPEED_HOP_ENABLED, DEFAULT_SPEED_HOP_ENABLED);
+    }
+
+    public void setSpeedHopEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_SPEED_HOP_ENABLED, enabled).apply();
+    }
+
+    public int getSpeedHopHeightRaw() {
+        return Math.max(0, Math.min(420,
+                prefs.getInt(KEY_SPEED_HOP_HEIGHT, DEFAULT_SPEED_HOP_HEIGHT)));
+    }
+
+    public float getSpeedHopHeight() {
+        final float h = getSpeedHopHeightRaw() / 1000f;
+        // 0 means the "fake" sub-centimetre hop from the original script.
+        return h <= 0.0f ? 0.0000000000001f : h;
+    }
+
+    public void setSpeedHopHeightRaw(int value) {
+        prefs.edit().putInt(KEY_SPEED_HOP_HEIGHT,
+                Math.max(0, Math.min(420, value))).apply();
+    }
+
+    public int getSpeedHopInterval() {
+        return Math.max(0, Math.min(20,
+                prefs.getInt(KEY_SPEED_HOP_INTERVAL, DEFAULT_SPEED_HOP_INTERVAL)));
+    }
+
+    public void setSpeedHopInterval(int value) {
+        prefs.edit().putInt(KEY_SPEED_HOP_INTERVAL,
+                Math.max(0, Math.min(20, value))).apply();
+    }
+
+    public boolean isSpeedMaskY() {
+        return prefs.getBoolean(KEY_SPEED_MASK_Y, DEFAULT_SPEED_MASK_Y);
+    }
+
+    public void setSpeedMaskY(boolean enabled) {
+        prefs.edit().putBoolean(KEY_SPEED_MASK_Y, enabled).apply();
+    }
+
+    public int getSpeedPhantomHoldTicks() {
+        return Math.max(1, Math.min(8,
+                prefs.getInt(KEY_SPEED_PHANTOM_HOLD, DEFAULT_SPEED_PHANTOM_HOLD)));
+    }
+
+    public void setSpeedPhantomHoldTicks(int value) {
+        prefs.edit().putInt(KEY_SPEED_PHANTOM_HOLD,
+                Math.max(1, Math.min(8, value))).apply();
+    }
+
+    public int getSpeedFakeJumpTicks() {
+        return Math.max(1, Math.min(12,
+                prefs.getInt(KEY_SPEED_FAKE_JUMP_TICKS, DEFAULT_SPEED_FAKE_JUMP_TICKS)));
+    }
+
+    public void setSpeedFakeJumpTicks(int value) {
+        prefs.edit().putInt(KEY_SPEED_FAKE_JUMP_TICKS,
+                Math.max(1, Math.min(12, value))).apply();
+    }
+
+    public boolean isSpeedCancelCorrections() {
+        return prefs.getBoolean(KEY_SPEED_CANCEL_CORRECTIONS, DEFAULT_SPEED_CANCEL_CORRECTIONS);
+    }
+
+    public void setSpeedCancelCorrections(boolean enabled) {
+        prefs.edit().putBoolean(KEY_SPEED_CANCEL_CORRECTIONS, enabled).apply();
+    }
+
+    public boolean isSpeedPauseOnFall() {
+        return prefs.getBoolean(KEY_SPEED_PAUSE_ON_FALL, DEFAULT_SPEED_PAUSE_ON_FALL);
+    }
+
+    public void setSpeedPauseOnFall(boolean enabled) {
+        prefs.edit().putBoolean(KEY_SPEED_PAUSE_ON_FALL, enabled).apply();
+    }
+
+    public boolean isSpeedPauseIfSneaking() {
+        return prefs.getBoolean(KEY_SPEED_PAUSE_IF_SNEAKING, DEFAULT_SPEED_PAUSE_IF_SNEAKING);
+    }
+
+    public void setSpeedPauseIfSneaking(boolean enabled) {
+        prefs.edit().putBoolean(KEY_SPEED_PAUSE_IF_SNEAKING, enabled).apply();
+    }
+
+    public boolean isSpeedPauseIfNotMoving() {
+        return prefs.getBoolean(KEY_SPEED_PAUSE_IF_NOT_MOVING, DEFAULT_SPEED_PAUSE_IF_NOT_MOVING);
+    }
+
+    public void setSpeedPauseIfNotMoving(boolean enabled) {
+        prefs.edit().putBoolean(KEY_SPEED_PAUSE_IF_NOT_MOVING, enabled).apply();
+    }
+
+    public boolean isSpeedAutoSprint() {
+        return prefs.getBoolean(KEY_SPEED_AUTO_SPRINT, DEFAULT_SPEED_AUTO_SPRINT);
+    }
+
+    public void setSpeedAutoSprint(boolean enabled) {
+        prefs.edit().putBoolean(KEY_SPEED_AUTO_SPRINT, enabled).apply();
     }
 
     public boolean isSpeedDebug() {
@@ -286,13 +441,13 @@ public class InbuiltModManager {
     }
 
     public int getAimAssistBodyPart() {
-        return Math.max(0, Math.min(3,
+        return Math.max(0, Math.min(4,
                 prefs.getInt(KEY_AIM_ASSIST_BODY_PART, DEFAULT_AIM_ASSIST_BODY_PART)));
     }
 
     public void setAimAssistBodyPart(int bodyPart) {
         prefs.edit().putInt(KEY_AIM_ASSIST_BODY_PART,
-                Math.max(0, Math.min(3, bodyPart))).apply();
+                Math.max(0, Math.min(4, bodyPart))).apply();
     }
 
     public boolean isEspShowPlayers() {
@@ -311,14 +466,22 @@ public class InbuiltModManager {
         prefs.edit().putBoolean(KEY_ESP_SHOW_MOBS, enabled).apply();
     }
 
+    public boolean isEspNameTags() {
+        return prefs.getBoolean(KEY_ESP_NAME_TAGS, DEFAULT_ESP_NAME_TAGS);
+    }
+
+    public void setEspNameTags(boolean enabled) {
+        prefs.edit().putBoolean(KEY_ESP_NAME_TAGS, enabled).apply();
+    }
+
     public int getEspRange() {
-        return Math.max(4, Math.min(96,
+        return Math.max(4, Math.min(512,
                 prefs.getInt(KEY_ESP_RANGE, DEFAULT_ESP_RANGE)));
     }
 
     public void setEspRange(int range) {
         prefs.edit().putInt(KEY_ESP_RANGE,
-                Math.max(4, Math.min(96, range))).apply();
+                Math.max(4, Math.min(512, range))).apply();
     }
 
     public int getEspPlayerColor() {

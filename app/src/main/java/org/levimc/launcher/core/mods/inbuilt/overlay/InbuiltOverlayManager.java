@@ -59,6 +59,7 @@ public class InbuiltOverlayManager {
     private ModMenuOverlay modMenuOverlay;
     private boolean modMenuOpenedFromButton;
     private HudOverlay hudOverlay;
+    private NameTagsOverlay nameTagsOverlay;
     private BaseOverlayButton selectedHudEditorOverlay;
     private String selectedDisplayModId;
     private HudEditorSelectionListener hudEditorSelectionListener;
@@ -152,6 +153,10 @@ public class InbuiltOverlayManager {
 
     public void showEnabledOverlays() {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+        if (nameTagsOverlay == null) {
+            nameTagsOverlay = new NameTagsOverlay(activity);
+            nameTagsOverlay.show();
+        }
         if (!manager.isModMenuEnabled()) return;
 
         if (hudOverlay == null) {
@@ -776,6 +781,10 @@ public class InbuiltOverlayManager {
         PojavControls.setHudVisible(true);
         LogcatOverlayManager logcatManager = LogcatOverlayManager.getInstance();
         if (logcatManager != null) logcatManager.setGameHudHidden(false);
+        if (nameTagsOverlay != null) {
+            nameTagsOverlay.hide();
+            nameTagsOverlay = null;
+        }
         if (chickPetOverlay != null) {
             chickPetOverlay.hide();
             chickPetOverlay = null;
@@ -1182,6 +1191,9 @@ public class InbuiltOverlayManager {
 
     public void tick() {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+        if (nameTagsOverlay != null) {
+            nameTagsOverlay.setModuleEnabled(manager.isEspNameTags());
+        }
         boolean isPauseOnly = manager.isPauseMenuOnly();
         boolean isPauseOpen = org.levimc.launcher.preloader.PreloaderInput.isPauseMenuOpen();
         boolean isHudScreenOpen = org.levimc.launcher.preloader.PreloaderInput.isHudScreenOpen();

@@ -40,32 +40,76 @@ public final class SpeedMod {
         if (initialized) nativeSetMultiplier(multiplier);
     }
 
+    public static void setSpeedEnabled(boolean enabled) {
+        if (initialized) nativeSetSpeedEnabled(enabled);
+    }
+
     public static void setSpeedMode(int mode) {
         if (initialized) nativeSetSpeedMode(mode);
     }
 
-    public static void setSpeedValue(int raw) {
-        if (initialized) nativeSetSpeedValue(raw);
+    public static void setMotionBoost(float boost) {
+        if (initialized) nativeSetMotionBoost(boost);
     }
 
-    public static void setTickSpeed(int ticks) {
-        if (initialized) nativeSetTickSpeed(ticks);
+    public static void setMaxSpeed(float maxSpeed) {
+        if (initialized) nativeSetMaxSpeed(maxSpeed);
     }
 
-    public static void setJumpType(int type) {
-        if (initialized) nativeSetJumpType(type);
+    public static void setGapMax(float gapMax) {
+        if (initialized) nativeSetGapMax(gapMax);
     }
 
-    public static void setJumpHeight(int raw) {
-        if (initialized) nativeSetJumpHeight(raw);
+    public static void setResetInterval(int ms) {
+        if (initialized) nativeSetResetInterval(ms);
     }
 
-    public static void setAvoidCheck(boolean enabled) {
-        if (initialized) nativeSetAvoidCheck(enabled);
+    public static void setMaxResetTicks(int ticks) {
+        if (initialized) nativeSetMaxResetTicks(ticks);
     }
 
-    public static void setAvoidDelay(int ms) {
-        if (initialized) nativeSetAvoidDelay(ms);
+    public static void setHopEnabled(boolean enabled) {
+        if (initialized) nativeSetHopEnabled(enabled);
+    }
+
+    public static void setHopHeight(float height) {
+        if (initialized) nativeSetHopHeight(height);
+    }
+
+    public static void setHopInterval(int interval) {
+        if (initialized) nativeSetHopInterval(interval);
+    }
+
+    public static void setMaskY(boolean enabled) {
+        if (initialized) nativeSetMaskY(enabled);
+    }
+
+    public static void setPhantomHoldTicks(int ticks) {
+        if (initialized) nativeSetPhantomHoldTicks(ticks);
+    }
+
+    public static void setFakeJumpTicks(int ticks) {
+        if (initialized) nativeSetFakeJumpTicks(ticks);
+    }
+
+    public static void setCancelCorrections(boolean enabled) {
+        if (initialized) nativeSetCancelCorrections(enabled);
+    }
+
+    public static void setPauseOnFall(boolean enabled) {
+        if (initialized) nativeSetPauseOnFall(enabled);
+    }
+
+    public static void setPauseIfSneaking(boolean enabled) {
+        if (initialized) nativeSetPauseIfSneaking(enabled);
+    }
+
+    public static void setPauseIfNotMoving(boolean enabled) {
+        if (initialized) nativeSetPauseIfNotMoving(enabled);
+    }
+
+    public static void setAutoSprint(boolean enabled) {
+        if (initialized) nativeSetAutoSprint(enabled);
     }
 
     public static void setDebug(boolean enabled) {
@@ -84,12 +128,23 @@ public final class SpeedMod {
     private static native void nativeSetEnabled(boolean enabled);
     private static native boolean nativeIsEnabled();
     private static native void nativeSetMultiplier(float multiplier);
+    private static native void nativeSetSpeedEnabled(boolean enabled);
     private static native void nativeSetSpeedMode(int mode);
-    private static native void nativeSetSpeedValue(int raw);
-    private static native void nativeSetTickSpeed(int ticks);
-    private static native void nativeSetJumpType(int type);
-    private static native void nativeSetJumpHeight(int raw);
-    private static native void nativeSetAvoidCheck(boolean enabled);
-    private static native void nativeSetAvoidDelay(int ms);
+    private static native void nativeSetMotionBoost(float boost);
+    private static native void nativeSetMaxSpeed(float maxSpeed);
+    private static native void nativeSetGapMax(float gapMax);
+    private static native void nativeSetResetInterval(int ms);
+    private static native void nativeSetMaxResetTicks(int ticks);
+    private static native void nativeSetHopEnabled(boolean enabled);
+    private static native void nativeSetHopHeight(float height);
+    private static native void nativeSetHopInterval(int interval);
+    private static native void nativeSetMaskY(boolean enabled);
+    private static native void nativeSetPhantomHoldTicks(int ticks);
+    private static native void nativeSetFakeJumpTicks(int ticks);
+    private static native void nativeSetCancelCorrections(boolean enabled);
+    private static native void nativeSetPauseOnFall(boolean enabled);
+    private static native void nativeSetPauseIfSneaking(boolean enabled);
+    private static native void nativeSetPauseIfNotMoving(boolean enabled);
+    private static native void nativeSetAutoSprint(boolean enabled);
     private static native void nativeSetDebug(boolean enabled);
 }
