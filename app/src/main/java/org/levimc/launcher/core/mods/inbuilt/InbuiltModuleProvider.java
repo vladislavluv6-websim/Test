@@ -30,6 +30,25 @@ public final class InbuiltModuleProvider {
     private static final String CFG_EDIT_CONTROLS = "edit_controls";
     private static final String CFG_AUTO_SPRINT_KEYBIND = "auto_sprint_keybind";
     private static final String CFG_SPEED_MULTIPLIER = "speed_multiplier";
+    private static final String CFG_SPEED_S1_ENABLED = "speed_s1_enabled";
+    private static final String CFG_SPEED_MODE = "speed_mode";
+    private static final String CFG_SPEED_MOTION_BOOST = "speed_motion_boost";
+    private static final String CFG_SPEED_MAX_SPEED = "speed_max_speed";
+    private static final String CFG_SPEED_GAP_MAX = "speed_gap_max";
+    private static final String CFG_SPEED_RESET_INTERVAL = "speed_reset_interval";
+    private static final String CFG_SPEED_MAX_RESET_TICKS = "speed_max_reset_ticks";
+    private static final String CFG_SPEED_HOP_ENABLED = "speed_hop_enabled";
+    private static final String CFG_SPEED_HOP_HEIGHT = "speed_hop_height";
+    private static final String CFG_SPEED_HOP_INTERVAL = "speed_hop_interval";
+    private static final String CFG_SPEED_MASK_Y = "speed_mask_y";
+    private static final String CFG_SPEED_PHANTOM_HOLD = "speed_phantom_hold";
+    private static final String CFG_SPEED_FAKE_JUMP_TICKS = "speed_fake_jump_ticks";
+    private static final String CFG_SPEED_CANCEL_CORRECTIONS = "speed_cancel_corrections";
+    private static final String CFG_SPEED_PAUSE_ON_FALL = "speed_pause_on_fall";
+    private static final String CFG_SPEED_PAUSE_IF_SNEAKING = "speed_pause_if_sneaking";
+    private static final String CFG_SPEED_PAUSE_IF_NOT_MOVING = "speed_pause_if_not_moving";
+    private static final String CFG_SPEED_AUTO_SPRINT = "speed_auto_sprint";
+    private static final String CFG_SPEED_DEBUG = "speed_debug";
     private static final String CFG_AIM_ASSIST_RANGE = "aim_assist_range";
     private static final String CFG_AIM_ASSIST_STRENGTH = "aim_assist_strength";
     private static final String CFG_AIM_ASSIST_LEGIT = "aim_assist_legit";
@@ -422,6 +441,105 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "200", "100", "500",
                     String.valueOf(manager.getSpeedMultiplier())));
+            configs.add(config(CFG_SPEED_S1_ENABLED,
+                    context.getString(R.string.mod_config_speed_s1_enabled),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isSpeedS1Enabled())));
+            configs.add(config(CFG_SPEED_MODE,
+                    context.getString(R.string.mod_config_speed_mode),
+                    UnifiedMod.ConfigType.RADIO,
+                    "2",
+                    context.getString(R.string.mod_config_speed_mode_air) + ","
+                            + context.getString(R.string.mod_config_speed_mode_ground) + ","
+                            + context.getString(R.string.mod_config_speed_mode_both),
+                    "",
+                    String.valueOf(manager.getSpeedMode())));
+            configs.add(config(CFG_SPEED_MOTION_BOOST,
+                    context.getString(R.string.mod_config_speed_motion_boost),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "15", "1", "200",
+                    String.valueOf(manager.getSpeedMotionBoostRaw())));
+            configs.add(config(CFG_SPEED_MAX_SPEED,
+                    context.getString(R.string.mod_config_speed_max_speed),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "50", "28", "200",
+                    String.valueOf(manager.getSpeedMaxSpeedRaw())));
+            configs.add(config(CFG_SPEED_GAP_MAX,
+                    context.getString(R.string.mod_config_speed_gap_max),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "40", "15", "300",
+                    String.valueOf(manager.getSpeedGapMaxRaw())));
+            configs.add(config(CFG_SPEED_RESET_INTERVAL,
+                    context.getString(R.string.mod_config_speed_reset_interval),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "2500", "1000", "10000",
+                    String.valueOf(manager.getSpeedResetInterval())));
+            configs.add(config(CFG_SPEED_MAX_RESET_TICKS,
+                    context.getString(R.string.mod_config_speed_max_reset_ticks),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "6", "2", "20",
+                    String.valueOf(manager.getSpeedMaxResetTicks())));
+            configs.add(config(CFG_SPEED_HOP_ENABLED,
+                    context.getString(R.string.mod_config_speed_hop_enabled),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isSpeedHopEnabled())));
+            configs.add(config(CFG_SPEED_HOP_HEIGHT,
+                    context.getString(R.string.mod_config_speed_hop_height),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "0", "0", "420",
+                    String.valueOf(manager.getSpeedHopHeightRaw())));
+            configs.add(config(CFG_SPEED_HOP_INTERVAL,
+                    context.getString(R.string.mod_config_speed_hop_interval),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "1", "0", "20",
+                    String.valueOf(manager.getSpeedHopInterval())));
+            configs.add(config(CFG_SPEED_MASK_Y,
+                    context.getString(R.string.mod_config_speed_mask_y),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isSpeedMaskY())));
+            configs.add(config(CFG_SPEED_PHANTOM_HOLD,
+                    context.getString(R.string.mod_config_speed_phantom_hold),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "3", "1", "8",
+                    String.valueOf(manager.getSpeedPhantomHoldTicks())));
+            configs.add(config(CFG_SPEED_FAKE_JUMP_TICKS,
+                    context.getString(R.string.mod_config_speed_fake_jump_ticks),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "4", "1", "12",
+                    String.valueOf(manager.getSpeedFakeJumpTicks())));
+            configs.add(config(CFG_SPEED_CANCEL_CORRECTIONS,
+                    context.getString(R.string.mod_config_speed_cancel_corrections),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isSpeedCancelCorrections())));
+            configs.add(config(CFG_SPEED_PAUSE_ON_FALL,
+                    context.getString(R.string.mod_config_speed_pause_on_fall),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isSpeedPauseOnFall())));
+            configs.add(config(CFG_SPEED_PAUSE_IF_SNEAKING,
+                    context.getString(R.string.mod_config_speed_pause_if_sneaking),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isSpeedPauseIfSneaking())));
+            configs.add(config(CFG_SPEED_PAUSE_IF_NOT_MOVING,
+                    context.getString(R.string.mod_config_speed_pause_if_not_moving),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isSpeedPauseIfNotMoving())));
+            configs.add(config(CFG_SPEED_AUTO_SPRINT,
+                    context.getString(R.string.mod_config_speed_auto_sprint),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isSpeedAutoSprint())));
+            configs.add(config(CFG_SPEED_DEBUG,
+                    context.getString(R.string.mod_config_speed_debug),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "false", "", "",
+                    String.valueOf(manager.isSpeedDebug())));
         } else if (ModIds.AIM_ASSIST.equals(modId)) {
             configs.add(config(CFG_AIM_ASSIST_RANGE,
                     context.getString(R.string.mod_config_aim_assist_range),
@@ -721,6 +839,63 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_SPEED_MULTIPLIER:
                 manager.setSpeedMultiplier(parseInt(value, manager.getSpeedMultiplier()));
+                break;
+            case CFG_SPEED_S1_ENABLED:
+                manager.setSpeedS1Enabled(parseBoolean(value));
+                break;
+            case CFG_SPEED_MODE:
+                manager.setSpeedMode(parseInt(value, manager.getSpeedMode()));
+                break;
+            case CFG_SPEED_MOTION_BOOST:
+                manager.setSpeedMotionBoostRaw(parseInt(value, manager.getSpeedMotionBoostRaw()));
+                break;
+            case CFG_SPEED_MAX_SPEED:
+                manager.setSpeedMaxSpeedRaw(parseInt(value, manager.getSpeedMaxSpeedRaw()));
+                break;
+            case CFG_SPEED_GAP_MAX:
+                manager.setSpeedGapMaxRaw(parseInt(value, manager.getSpeedGapMaxRaw()));
+                break;
+            case CFG_SPEED_RESET_INTERVAL:
+                manager.setSpeedResetInterval(parseInt(value, manager.getSpeedResetInterval()));
+                break;
+            case CFG_SPEED_MAX_RESET_TICKS:
+                manager.setSpeedMaxResetTicks(parseInt(value, manager.getSpeedMaxResetTicks()));
+                break;
+            case CFG_SPEED_HOP_ENABLED:
+                manager.setSpeedHopEnabled(parseBoolean(value));
+                break;
+            case CFG_SPEED_HOP_HEIGHT:
+                manager.setSpeedHopHeightRaw(parseInt(value, manager.getSpeedHopHeightRaw()));
+                break;
+            case CFG_SPEED_HOP_INTERVAL:
+                manager.setSpeedHopInterval(parseInt(value, manager.getSpeedHopInterval()));
+                break;
+            case CFG_SPEED_MASK_Y:
+                manager.setSpeedMaskY(parseBoolean(value));
+                break;
+            case CFG_SPEED_PHANTOM_HOLD:
+                manager.setSpeedPhantomHoldTicks(parseInt(value, manager.getSpeedPhantomHoldTicks()));
+                break;
+            case CFG_SPEED_FAKE_JUMP_TICKS:
+                manager.setSpeedFakeJumpTicks(parseInt(value, manager.getSpeedFakeJumpTicks()));
+                break;
+            case CFG_SPEED_CANCEL_CORRECTIONS:
+                manager.setSpeedCancelCorrections(parseBoolean(value));
+                break;
+            case CFG_SPEED_PAUSE_ON_FALL:
+                manager.setSpeedPauseOnFall(parseBoolean(value));
+                break;
+            case CFG_SPEED_PAUSE_IF_SNEAKING:
+                manager.setSpeedPauseIfSneaking(parseBoolean(value));
+                break;
+            case CFG_SPEED_PAUSE_IF_NOT_MOVING:
+                manager.setSpeedPauseIfNotMoving(parseBoolean(value));
+                break;
+            case CFG_SPEED_AUTO_SPRINT:
+                manager.setSpeedAutoSprint(parseBoolean(value));
+                break;
+            case CFG_SPEED_DEBUG:
+                manager.setSpeedDebug(parseBoolean(value));
                 break;
             case CFG_AIM_ASSIST_RANGE:
                 manager.setAimAssistRange(parseInt(value, manager.getAimAssistRange()));

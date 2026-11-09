@@ -44,11 +44,38 @@ public class SpeedOverlay extends BaseOverlayButton {
         return isActive ? R.drawable.ic_speed_pressed : R.drawable.ic_speed_normal;
     }
 
+    private void applyNativeSettings(InbuiltModManager manager) {
+        SpeedMod.setSpeedEnabled(manager.isSpeedS1Enabled());
+        SpeedMod.setSpeedMode(manager.getSpeedMode());
+        SpeedMod.setMotionBoost(manager.getSpeedMotionBoost());
+        SpeedMod.setMaxSpeed(manager.getSpeedMaxSpeed());
+        SpeedMod.setGapMax(manager.getSpeedGapMax());
+        SpeedMod.setResetInterval(manager.getSpeedResetInterval());
+        SpeedMod.setMaxResetTicks(manager.getSpeedMaxResetTicks());
+        SpeedMod.setHopEnabled(manager.isSpeedHopEnabled());
+        SpeedMod.setHopHeight(manager.getSpeedHopHeight());
+        SpeedMod.setHopInterval(manager.getSpeedHopInterval());
+        SpeedMod.setMaskY(manager.isSpeedMaskY());
+        SpeedMod.setPhantomHoldTicks(manager.getSpeedPhantomHoldTicks());
+        SpeedMod.setFakeJumpTicks(manager.getSpeedFakeJumpTicks());
+        SpeedMod.setCancelCorrections(manager.isSpeedCancelCorrections());
+        SpeedMod.setPauseOnFall(manager.isSpeedPauseOnFall());
+        SpeedMod.setPauseIfSneaking(manager.isSpeedPauseIfSneaking());
+        SpeedMod.setPauseIfNotMoving(manager.isSpeedPauseIfNotMoving());
+        SpeedMod.setAutoSprint(manager.isSpeedAutoSprint());
+        SpeedMod.setDebug(manager.isSpeedDebug());
+        SpeedMod.setMultiplier(manager.getSpeedMultiplier() / 100f);
+    }
+
     @Override
     public void show(int startX, int startY) {
         if (!isActive && isSupportedVersion()) {
-            float multiplier = InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f;
+            InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+            float multiplier = manager.getSpeedMultiplier() / 100f;
             isActive = SpeedMod.setEnabled(true, multiplier);
+            if (isActive) {
+                applyNativeSettings(manager);
+            }
         }
         super.show(startX, startY);
     }
@@ -61,10 +88,13 @@ public class SpeedOverlay extends BaseOverlayButton {
                 Toast.makeText(activity, R.string.speed_mod_unavailable, Toast.LENGTH_SHORT).show();
                 nextState = false;
             } else {
-                float multiplier = InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f;
+                InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+                float multiplier = manager.getSpeedMultiplier() / 100f;
                 if (!SpeedMod.setEnabled(true, multiplier)) {
                     Toast.makeText(activity, R.string.speed_mod_unavailable, Toast.LENGTH_SHORT).show();
                     nextState = false;
+                } else {
+                    applyNativeSettings(manager);
                 }
             }
         } else {
@@ -88,7 +118,7 @@ public class SpeedOverlay extends BaseOverlayButton {
     public void applyConfigurationChanges() {
         super.applyConfigurationChanges();
         if (isActive) {
-            SpeedMod.setMultiplier(InbuiltModManager.getInstance(activity).getSpeedMultiplier() / 100f);
+            applyNativeSettings(InbuiltModManager.getInstance(activity));
         }
     }
 
