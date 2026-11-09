@@ -168,6 +168,16 @@ public final class AimAssistMod {
         if (initialized) nativeSetAttackMissChance(chance);
     }
 
+    /** Бить только если серверная (тиковая) ротация тоже смотрит на цель. */
+    public static void setServerViewGuard(boolean enabled) {
+        if (initialized) nativeSetServerViewGuard(enabled);
+    }
+
+    /** Устойчивая скорость сопровождения в градусах за тик 50 мс. */
+    public static void setSustainedTickDelta(float degrees) {
+        if (initialized) nativeSetSustainedTickDelta(degrees);
+    }
+
     public static boolean isOnTarget() {
         return initialized && nativeIsOnTarget();
     }
@@ -229,6 +239,8 @@ public final class AimAssistMod {
     private static native void nativeSetAntiCheatMode(boolean enabled);
     private static native void nativeSetAssistCone(float degrees);
     private static native void nativeSetAttackMissChance(float chance);
+    private static native void nativeSetServerViewGuard(boolean enabled);
+    private static native void nativeSetSustainedTickDelta(float degrees);
     private static native boolean nativeIsOnTarget();
     private static native void nativeSetTouchActive(boolean active);
     private static native void nativeNotifyCameraLook();

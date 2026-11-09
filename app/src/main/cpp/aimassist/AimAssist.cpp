@@ -122,6 +122,18 @@ void AimAssist::onEnable() {
   m_jitterPitch = 0.0f;
   m_lastSwitchMs = 0;
   m_triggerDelayForTargetMs = 0;
+  m_fatigueScale = 1.0f;
+  m_nextFatigueMs = 0;
+  m_fatigueUntilMs = 0;
+  m_tickAccumYaw = 0.0f;
+  m_tickAccumPitch = 0.0f;
+  m_lastTickYaw = 0.0f;
+  m_lastTickPitch = 0.0f;
+  m_prevTickDeltaDeg = 0.0f;
+  m_haveTickSample = false;
+  m_lastNetTickMs = 0;
+  m_serverViewSinceMs = 0;
+  m_flickTicksLeft = 0;
   resetHumanProfile();
   m_onTarget.store(false, std::memory_order_release);
   // Release-публикация после сброса состояния: render-поток увидит
@@ -360,6 +372,16 @@ void AimAssist::setAssistCone(float degrees) {
 void AimAssist::setAttackMissChance(float chance) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.attackMissChance = clampf(chance, 0.0f, 0.35f);
+}
+
+void AimAssist::setServerViewGuard(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.serverViewGuard = enabled;
+}
+
+void AimAssist::setSustainedTickDelta(float degrees) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.sustainedTickDeltaDeg = clampf(degrees, 4.0f, 40.0f);
 }
 
 void AimAssist::setTouchActive(bool) {
@@ -606,6 +628,25 @@ void AimAssist::updateVisual(float dt) {
         aim.pitch + m_restPitch + m_noisePitch + m_overPitch, -89.9f, 89.9f);
   }
 
+  if (settings.humanize) {
+    updateFatigue(settings, aimNow);
+  }
+
+  // Окно «флика»: быстрый поворот разрешён только сразу после захвата
+  // цели или при большой ошибке. Постоянное сопровождение на 500°/с —
+  // сильный маркер ML-моделей.
+  {
+    const float curYaw = m_localYaw.load(std::memory_order_relaxed);
+    const float curPitch = m_localPitch.load(std::memory_order_relaxed);
+    const float errYaw = shortestDelta(curYaw, aim.yaw);
+    const float errPitch = aim.pitch - curPitch;
+    const float err = std::sqrt(errYaw * errYaw + errPitch * errPitch);
+    if (m_targetLockMs == aimNow || err > 25.0f) {
+      m_flickTicksLeft =
+          std::max(m_flickTicksLeft, settings.flickTickBudget);
+    }
+  }
+
   // Jitter по умолчанию 0. Если включён — обновляем редко, не каждый кадр.
   if (settings.randomJitterDeg > 0.0f) {
     if (aimNow - m_lastJitterMs >= settings.randomJitterIntervalMs) {
@@ -661,14 +702,50 @@ void AimAssist::updateVisual(float dt) {
 void AimAssist::updateNetwork() {
   const float localYaw = m_localYaw.load(std::memory_order_relaxed);
   const float localPitch = m_localPitch.load(std::memory_order_relaxed);
+  // Это ровно та ротация, которую сервер получит в ближайшем
+  // PlayerAuthInput/tick. Храним её отдельно от локальной камеры.
   m_networkYaw.store(localYaw, std::memory_order_relaxed);
   m_networkPitch.store(localPitch, std::memory_order_relaxed);
+
+  const Settings settings = getSettings();
+  const int64_t tickNow = monotonicMs();
+  if (!m_haveTickSample) {
+    m_lastTickYaw = localYaw;
+    m_lastTickPitch = localPitch;
+    m_prevTickDeltaDeg = 0.0f;
+    m_haveTickSample = true;
+  } else {
+    const float tickDeltaYaw = shortestDelta(m_lastTickYaw, localYaw);
+    const float tickDeltaPitch = localPitch - m_lastTickPitch;
+    const float tickMagnitude =
+        std::sqrt(tickDeltaYaw * tickDeltaYaw + tickDeltaPitch * tickDeltaPitch);
+    m_lastTickYaw = localYaw;
+    m_lastTickPitch = localPitch;
+    m_prevTickDeltaDeg = tickMagnitude;
+
+    static uint64_t s_netTicks = 0;
+    const uint64_t netTicks = ++s_netTicks;
+    if (settings.debugOverlay && (netTicks % 20) == 1) {
+      aimbot::diagLog(kTag,
+                      "net tick dy=%.2f dp=%.2f |d|=%.2f flick=%d "
+                      "age=%lldms",
+                      static_cast<double>(tickDeltaYaw),
+                      static_cast<double>(tickDeltaPitch),
+                      static_cast<double>(tickMagnitude), m_flickTicksLeft,
+                      static_cast<long long>(tickNow - m_lastNetTickMs));
+    }
+  }
+  m_lastNetTickMs = tickNow;
+  m_tickAccumYaw = 0.0f;
+  m_tickAccumPitch = 0.0f;
+  if (m_flickTicksLeft > 0) {
+    --m_flickTicksLeft;
+  }
 
   if (m_stickyLeft > 0) {
     --m_stickyLeft;
   }
 
-  const Settings settings = getSettings();
   if (settings.freezeNetwork || !m_enabled.load(std::memory_order_acquire)) {
     return;
   }
@@ -860,6 +937,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
       m_aimEngageAtMs = 0;
       m_lastAimActor = nullptr;
       m_lastSwitchMs = nowMs();
+      m_serverViewSinceMs = 0;
       resetHumanProfile();
     }
     m_stickyLeft = std::max(0, settings.stickyTicks);
@@ -1040,6 +1118,54 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     hitPoint.z = eye.z + dir.z * bestDistance;
   }
 
+  // Главная сетевая проверка: бьём только если ротация, которую сервер
+  // уже получил на последнем тике 20 Гц, тоже смотрит на точку удара.
+  // Иначе Java-античит (Polar/GhostAC) сравнивает удар со старой
+  // ротацией и видит «удар смотря в сторону».
+  if (settings.serverViewGuard && m_haveTickSample) {
+    const int64_t netAgeMs = now - m_lastNetTickMs;
+    if (netAgeMs >= 0 && netAgeMs <= 150) {
+      ViewAngles netView{};
+      netView.pitch = m_networkPitch.load(std::memory_order_relaxed);
+      netView.yaw = m_networkYaw.load(std::memory_order_relaxed);
+      const Vec3 netDir = directionFromAngles(netView);
+      const float hx = hitPoint.x - eye.x;
+      const float hy = hitPoint.y - eye.y;
+      const float hz = hitPoint.z - eye.z;
+      const float hlen = std::sqrt(hx * hx + hy * hy + hz * hz);
+      float netAngle = 180.0f;
+      if (hlen > 1e-4f) {
+        const float dot = clampf(
+            (netDir.x * hx + netDir.y * hy + netDir.z * hz) / hlen, -1.0f,
+            1.0f);
+        netAngle = std::acos(dot) * kRadToDeg;
+      }
+      if (netAngle > settings.serverViewToleranceDeg) {
+        m_serverViewSinceMs = 0;
+        m_nextAttackAtMs = now + 40;
+        static uint64_t s_guardLog = 0;
+        if ((++s_guardLog % 20) == 1) {
+          aimbot::diagLog(
+              kTag,
+              "trigger guard: server view off by %.2f deg (tol %.1f), "
+              "age=%lldms",
+              static_cast<double>(netAngle),
+              static_cast<double>(settings.serverViewToleranceDeg),
+              static_cast<long long>(netAgeMs));
+        }
+        return;
+      }
+      // Сервер должен видеть прицел на цели минимум один полный тик.
+      if (m_serverViewSinceMs == 0) {
+        m_serverViewSinceMs = now;
+      }
+      if (now - m_serverViewSinceMs < 60) {
+        m_nextAttackAtMs = now + 20;
+        return;
+      }
+    }
+  }
+
   {
     static uint64_t s_fireLog = 0;
     const uint64_t n = ++s_fireLog;
@@ -1135,8 +1261,12 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 
   // Медленная вариация «мотора»: скорость и ускорение не постоянны от
   // секунды к секунде. Убирает одинаковые шаги поворота (проверки
-  // step modulo / step quotient у FairPlay и аналогов).
-  const float motor = clampf(m_motorScale, 0.5f, 1.5f);
+  // step modulo / step quotient у FairPlay и аналогов). Усталость и окно
+  // флика дополнительно меняют профиль.
+  float motor = clampf(m_motorScale * m_fatigueScale, 0.4f, 1.6f);
+  if (m_flickTicksLeft > 0) {
+    motor = clampf(motor * 1.12f, 0.4f, 1.8f);
+  }
 
   {
     const float curYaw = m_localYaw.load(std::memory_order_relaxed);
@@ -1174,9 +1304,16 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     // Слегка недодемпфированная пружина (zeta ~0.88): довод имеет
     // естественный перелёт на 1-3%, который затем гасится. Идеально
     // критический довод даёт «прилипание» и подозрительно нулевую ошибку.
-    const float damping = 1.76f * omega;
-    float accelYaw = omega * omega * deltaYaw - damping * m_velYaw;
-    float accelPitch = omega * omega * deltaPitch - damping * m_velPitch;
+    // Оси не одинаковы: человек ведёт по горизонтали быстрее и резче,
+    // чем по вертикали. Разные коэффициенты ломают «идеальную» корреляцию
+    // yaw/pitch, которую ищут ML-модели.
+    const float omegaYaw = omega;
+    const float omegaPitch = omega * 0.84f;
+    const float dampingYaw = 1.76f * omegaYaw;
+    const float dampingPitch = 1.82f * omegaPitch;
+    float accelYaw = omegaYaw * omegaYaw * deltaYaw - dampingYaw * m_velYaw;
+    float accelPitch =
+        omegaPitch * omegaPitch * deltaPitch - dampingPitch * m_velPitch;
     if (maxAccel > 0.0f) {
       const float maxAccelScaled = maxAccel * motor;
       accelYaw = clampf(accelYaw, -maxAccelScaled, maxAccelScaled);
@@ -1205,6 +1342,12 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     if (std::fabs(stepPitch) > std::fabs(deltaPitch)) {
       stepPitch = deltaPitch;
       m_velPitch = 0.0f;
+    }
+
+    // Сетевой бюджет: ограничиваем суммарный поворот с прошлого тика 20 Гц.
+    // Именно эту дельту увидит сервер в PlayerAuthInput.
+    if (settings.antiCheatMode) {
+      applyTickBudget(stepYaw, stepPitch, settings, h);
     }
 
     const float newYaw = normalizeYaw(curYaw + stepYaw);
@@ -1296,6 +1439,75 @@ void AimAssist::updateHumanProfile(const Settings &settings, float dt,
   m_overPitch *= decay;
 }
 
+void AimAssist::updateFatigue(const Settings &settings, int64_t now) {
+  if (!settings.humanize) {
+    m_fatigueScale = 1.0f;
+    return;
+  }
+  if (m_nextFatigueMs == 0) {
+    m_nextFatigueMs = now + randomInt(2500, 6000);
+    m_fatigueUntilMs = 0;
+  }
+  if (now >= m_nextFatigueMs && now >= m_fatigueUntilMs) {
+    m_fatigueScale = randomFloat(0.78f, 0.95f);
+    m_fatigueUntilMs = now + randomInt(300, 900);
+    m_nextFatigueMs = now + randomInt(2500, 6000);
+  } else if (now >= m_fatigueUntilMs) {
+    m_fatigueScale += (1.0f - m_fatigueScale) * 0.08f;
+    if (m_fatigueScale > 0.999f) m_fatigueScale = 1.0f;
+  }
+}
+
+// Бюджет поворота на один тик сервера (50 мс). Ограничивает то, что
+// реально уйдёт в PlayerAuthInput: устойчивую скорость, прирост скорости
+// между тиками и суммарную дельту. Короткий флик разрешён отдельно.
+void AimAssist::applyTickBudget(float &stepYaw, float &stepPitch,
+                                const Settings &settings, float) {
+  const float cap = (m_flickTicksLeft > 0)
+                        ? std::max(1.0f, settings.maxTickDeltaDeg)
+                        : std::min(std::max(1.0f, settings.maxTickDeltaDeg),
+                                   std::max(1.0f, settings.sustainedTickDeltaDeg));
+  const float growth = std::max(0.0f, settings.maxTickAccelDeg);
+  const float allowed = std::min(cap, std::fabs(m_prevTickDeltaDeg) + growth);
+
+  bool clampedYaw = false;
+  bool clampedPitch = false;
+  auto limitAxis = [&](float &step, float accum, bool &clamped) {
+    const float target = accum + step;
+    if (std::fabs(target) > allowed) {
+      const float limited = std::copysign(allowed, target);
+      const float next = limited - accum;
+      // Не разворачиваем камеру бюджетом в противоположную сторону.
+      if (next * step < 0.0f) {
+        step = 0.0f;
+      } else {
+        step = next;
+      }
+      clamped = true;
+    }
+  };
+  limitAxis(stepYaw, m_tickAccumYaw, clampedYaw);
+  limitAxis(stepPitch, m_tickAccumPitch, clampedPitch);
+
+  // Суммарная дельта по обеим осям тоже не должна превышать бюджет.
+  const float ny = m_tickAccumYaw + stepYaw;
+  const float np = m_tickAccumPitch + stepPitch;
+  const float mag = std::sqrt(ny * ny + np * np);
+  if (mag > allowed && mag > 1e-5f) {
+    const float k = allowed / mag;
+    stepYaw = ny * k - m_tickAccumYaw;
+    stepPitch = np * k - m_tickAccumPitch;
+    clampedYaw = true;
+    clampedPitch = true;
+  }
+
+  if (clampedYaw) m_velYaw *= 0.5f;
+  if (clampedPitch) m_velPitch *= 0.5f;
+
+  m_tickAccumYaw += stepYaw;
+  m_tickAccumPitch += stepPitch;
+}
+
 // ============================================================
 // Вспомогательное
 // ============================================================
@@ -1383,6 +1595,7 @@ void AimAssist::clearTarget() {
   m_lastAimActor = nullptr;
   m_aimEngageAtMs = 0;
   m_targetLockMs = 0;
+  m_serverViewSinceMs = 0;
   resetHumanProfile();
   // m_onTarget принадлежит триггеру: очистка цели aim assist не должна
   // гасить триггер посреди кадра.

@@ -137,6 +137,23 @@ struct Settings {
   // Бить только когда луч реально пересекает хитбокс (без «добивания»
   // по минимальному углу). Это самая шумная для анти-читов ветка.
   bool legitAttackOnly = true;
+
+  // ------------------------------------------------------------
+  // Сетевое формирование ротации (то, что реально видит сервер)
+  // ------------------------------------------------------------
+  // Бить только если ротация, уже отправленная на сервер (последний
+  // тик 20 Гц), тоже смотрит на цель. Убирает «удар при взгляде в сторону»
+  // из-за рассинхрона кадр/тик — прямая проверка Polar/GhostAC.
+  bool serverViewGuard = true;
+  float serverViewToleranceDeg = 7.0f;
+  // Устойчивая скорость сопровождения: не больше N градусов за тик 50 мс
+  // (12°/тик = 240°/с). Быстрее — только в коротком окне флика.
+  float sustainedTickDeltaDeg = 12.0f;
+  // Максимальный прирост поворота за тик между соседними тиками
+  // (сглаживание ускорения, «ступенек» скорости).
+  float maxTickAccelDeg = 20.0f;
+  // Сколько тиков длится окно быстрого флика после захвата/большой ошибки.
+  int flickTickBudget = 3;
 };
 
 struct DebugState {
@@ -207,6 +224,8 @@ public:
   void setAntiCheatMode(bool enabled);
   void setAssistCone(float degrees);
   void setAttackMissChance(float chance);
+  void setServerViewGuard(bool enabled);
+  void setSustainedTickDelta(float degrees);
   void setTouchActive(bool active);
   void notifyCameraLook();
   void setActivationHeld(bool held);
@@ -248,6 +267,9 @@ private:
   // одноразовый перелёт и медленная вариация скорости.
   void resetHumanProfile();
   void updateHumanProfile(const Settings &settings, float dt, int64_t now);
+  void updateFatigue(const Settings &settings, int64_t now);
+  void applyTickBudget(float &stepYaw, float &stepPitch,
+                       const Settings &settings, float dt);
   float randomFloat(float lo, float hi);
   int randomInt(int lo, int hi);
 
@@ -306,6 +328,21 @@ private:
   // Медленная вариация моторной скорости.
   float m_motorScale = 1.0f;
   int64_t m_nextMotorMs = 0;
+  // Усталость: периодическое кратковременное снижение скорости.
+  float m_fatigueScale = 1.0f;
+  int64_t m_nextFatigueMs = 0;
+  int64_t m_fatigueUntilMs = 0;
+
+  // Сетевое формирование: бюджет поворота на тик 20 Гц.
+  float m_tickAccumYaw = 0.0f;
+  float m_tickAccumPitch = 0.0f;
+  float m_lastTickYaw = 0.0f;
+  float m_lastTickPitch = 0.0f;
+  float m_prevTickDeltaDeg = 0.0f;
+  bool m_haveTickSample = false;
+  int64_t m_lastNetTickMs = 0;
+  int64_t m_serverViewSinceMs = 0;
+  int m_flickTicksLeft = 0;
 
   float m_velYaw = 0.0f;
   float m_velPitch = 0.0f;
