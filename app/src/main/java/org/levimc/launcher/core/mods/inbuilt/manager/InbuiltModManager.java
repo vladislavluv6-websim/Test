@@ -167,6 +167,8 @@ public class InbuiltModManager {
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
+    private static final String KEY_TUNING_REVISION = "tuning_revision";
+    private static final int TUNING_REVISION = 2;
 
     private static volatile InbuiltModManager instance;
     private final SharedPreferences prefs;
@@ -182,6 +184,48 @@ public class InbuiltModManager {
             }
         };
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener);
+        migrateTuningDefaults();
+    }
+
+    /**
+     * One-time reset of tuning values so installs created before the
+     * fast-aim/trigger rework do not keep the old sluggish presets.
+     */
+    private void migrateTuningDefaults() {
+        if (prefs.getInt(KEY_TUNING_REVISION, 0) >= TUNING_REVISION) return;
+        prefs.edit()
+                .putInt(KEY_AIM_ASSIST_MAX_SPEED, DEFAULT_AIM_ASSIST_MAX_SPEED)
+                .putInt(KEY_AIM_ASSIST_SMOOTHING, DEFAULT_AIM_ASSIST_SMOOTHING)
+                .putInt(KEY_AIM_ASSIST_ACCEL, DEFAULT_AIM_ASSIST_ACCEL)
+                .putInt(KEY_AIM_ASSIST_DEADZONE, DEFAULT_AIM_ASSIST_DEADZONE)
+                .putInt(KEY_AIM_ASSIST_FULL_RANGE, DEFAULT_AIM_ASSIST_FULL_RANGE)
+                .putInt(KEY_AIM_ASSIST_STICKY, DEFAULT_AIM_ASSIST_STICKY)
+                .putInt(KEY_AIM_ASSIST_GRACE, DEFAULT_AIM_ASSIST_GRACE)
+                .putInt(KEY_TRIGGER_BOT_DELAY, DEFAULT_TRIGGER_BOT_DELAY)
+                .putInt(KEY_TRIGGER_BOT_REACTION_JITTER, DEFAULT_TRIGGER_BOT_REACTION_JITTER)
+                .putInt(KEY_TRIGGER_BOT_TOLERANCE, DEFAULT_TRIGGER_BOT_TOLERANCE)
+                .putInt(KEY_TRIGGER_BOT_INTERVAL, DEFAULT_TRIGGER_BOT_INTERVAL)
+                .putInt(KEY_TRIGGER_BOT_INTERVAL_JITTER, DEFAULT_TRIGGER_BOT_INTERVAL_JITTER)
+                .putInt(KEY_TRIGGER_BOT_SKIP_CHANCE, DEFAULT_TRIGGER_BOT_SKIP_CHANCE)
+                .putInt(KEY_SPEED_MODE, DEFAULT_SPEED_MODE)
+                .putInt(KEY_SPEED_MOTION_BOOST, DEFAULT_SPEED_MOTION_BOOST)
+                .putInt(KEY_SPEED_MAX_SPEED, DEFAULT_SPEED_MAX_SPEED)
+                .putInt(KEY_SPEED_GAP_MAX, DEFAULT_SPEED_GAP_MAX)
+                .putInt(KEY_SPEED_RESET_INTERVAL, DEFAULT_SPEED_RESET_INTERVAL)
+                .putInt(KEY_SPEED_MAX_RESET_TICKS, DEFAULT_SPEED_MAX_RESET_TICKS)
+                .putBoolean(KEY_SPEED_HOP_ENABLED, DEFAULT_SPEED_HOP_ENABLED)
+                .putInt(KEY_SPEED_HOP_HEIGHT, DEFAULT_SPEED_HOP_HEIGHT)
+                .putInt(KEY_SPEED_HOP_INTERVAL, DEFAULT_SPEED_HOP_INTERVAL)
+                .putBoolean(KEY_SPEED_MASK_Y, DEFAULT_SPEED_MASK_Y)
+                .putInt(KEY_SPEED_PHANTOM_HOLD, DEFAULT_SPEED_PHANTOM_HOLD)
+                .putInt(KEY_SPEED_FAKE_JUMP_TICKS, DEFAULT_SPEED_FAKE_JUMP_TICKS)
+                .putBoolean(KEY_SPEED_CANCEL_CORRECTIONS, DEFAULT_SPEED_CANCEL_CORRECTIONS)
+                .putBoolean(KEY_SPEED_PAUSE_ON_FALL, DEFAULT_SPEED_PAUSE_ON_FALL)
+                .putBoolean(KEY_SPEED_PAUSE_IF_SNEAKING, DEFAULT_SPEED_PAUSE_IF_SNEAKING)
+                .putBoolean(KEY_SPEED_PAUSE_IF_NOT_MOVING, DEFAULT_SPEED_PAUSE_IF_NOT_MOVING)
+                .putBoolean(KEY_SPEED_AUTO_SPRINT, DEFAULT_SPEED_AUTO_SPRINT)
+                .putInt(KEY_TUNING_REVISION, TUNING_REVISION)
+                .apply();
     }
 
     public static InbuiltModManager getInstance(Context context) {
