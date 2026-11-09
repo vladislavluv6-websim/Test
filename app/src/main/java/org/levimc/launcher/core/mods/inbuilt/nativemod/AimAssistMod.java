@@ -178,6 +178,11 @@ public final class AimAssistMod {
         if (initialized) nativeSetSustainedTickDelta(degrees);
     }
 
+    /** Trigger Bot бьёт только в падении (криты). */
+    public static void setOnlyCrit(boolean enabled) {
+        if (initialized) nativeSetOnlyCrit(enabled);
+    }
+
     public static boolean isOnTarget() {
         return initialized && nativeIsOnTarget();
     }
@@ -241,6 +246,7 @@ public final class AimAssistMod {
     private static native void nativeSetAttackMissChance(float chance);
     private static native void nativeSetServerViewGuard(boolean enabled);
     private static native void nativeSetSustainedTickDelta(float degrees);
+    private static native void nativeSetOnlyCrit(boolean enabled);
     private static native boolean nativeIsOnTarget();
     private static native void nativeSetTouchActive(boolean active);
     private static native void nativeNotifyCameraLook();

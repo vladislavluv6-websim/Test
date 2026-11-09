@@ -48,6 +48,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     private int attackIntervalJitterMs = 170;
     private int skipChancePercent = 6;
     private boolean humanizationEnabled = true;
+    private boolean onlyCrit = false;
     private float triggerRange = 3.0f;
     private float triggerTolerance = 0.03f;
 
@@ -120,6 +121,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         attackIntervalJitterMs = manager.getTriggerBotIntervalJitter();
         skipChancePercent = manager.getTriggerBotSkipChance();
         humanizationEnabled = manager.isTriggerBotHumanization();
+        onlyCrit = manager.isTriggerBotOnlyCrit();
 
         // Настройки самого триггера (не трогаем параметры aim assist, чтобы
         // модули не перезаписывали друг друга).
@@ -129,6 +131,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setTriggerTolerance(triggerTolerance);
         AimAssistMod.setTargetPlayers(manager.isTriggerBotTargetPlayers());
         AimAssistMod.setTargetMobs(manager.isTriggerBotTargetMobs());
+        AimAssistMod.setOnlyCrit(onlyCrit);
+        AimAssistMod.setAttackMissChance(skipChancePercent / 100.0f);
         AimAssistMod.setTriggerBot(true);
         nativeTriggerEnabled = true;
     }

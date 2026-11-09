@@ -684,6 +684,7 @@
     <string name="mod_config_aim_assist_head">Голова</string>
     <string name="mod_config_aim_assist_chest">Грудь</string>
     <string name="mod_config_aim_assist_legs">Ноги</string>
+    <string name="mod_config_aim_assist_upper_chest">Верх груди</string>
     <string name="mod_config_aim_assist_prefer_closest">Приоритет ближайшей цели</string>
     <string name="mod_config_aim_assist_sticky">Удержание цели (тики)</string>
     <string name="mod_config_aim_assist_grace">Запас удержания (кадры)</string>
@@ -702,6 +703,7 @@
     <string name="mod_config_trigger_bot_interval">Интервал ударов (мс)</string>
     <string name="mod_config_trigger_bot_interval_jitter">Разброс интервала (мс)</string>
     <string name="mod_config_trigger_bot_skip_chance">Шанс промаха (%)</string>
+    <string name="mod_config_trigger_bot_only_crit">Только криты (прыжок)</string>
     <string name="aim_assist_mod_unavailable">Аим-ассист недоступен для этой версии игры</string>
     <string name="inbuilt_mod_chick_pet">Питомец-цыплёнок</string>
     <string name="inbuilt_mod_chick_pet_desc">Милый пиксельный цыплёнок, который гуляет, спит и убегает при касании!</string>

@@ -134,6 +134,11 @@ void AimAssist::onEnable() {
   m_lastNetTickMs = 0;
   m_serverViewSinceMs = 0;
   m_flickTicksLeft = 0;
+  m_haveEyeSample = false;
+  m_lastEyeY = 0.0f;
+  m_lastEyeMs = 0;
+  m_vertVel = 0.0f;
+  m_fallingSinceMs = 0;
   resetHumanProfile();
   m_onTarget.store(false, std::memory_order_release);
   // Release-публикация после сброса состояния: render-поток увидит
@@ -225,12 +230,15 @@ void AimAssist::setTargetMobs(bool enabled) {
 
 void AimAssist::setBodyPart(int bodyPart) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
-  switch (std::max(0, std::min(2, bodyPart))) {
+  switch (std::max(0, std::min(3, bodyPart))) {
   case 1:
     m_settings.targetBone = TargetBone::Chest;
     break;
   case 2:
     m_settings.targetBone = TargetBone::Legs;
+    break;
+  case 3:
+    m_settings.targetBone = TargetBone::UpperChest;
     break;
   default:
     m_settings.targetBone = TargetBone::Head;
@@ -384,6 +392,14 @@ void AimAssist::setSustainedTickDelta(float degrees) {
   m_settings.sustainedTickDeltaDeg = clampf(degrees, 4.0f, 40.0f);
 }
 
+void AimAssist::setOnlyCrit(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.onlyCrit = enabled;
+  if (enabled) {
+    m_fallingSinceMs = 0;
+  }
+}
+
 void AimAssist::setTouchActive(bool) {
   // Ручной look больше не ставит наведение на паузу. View всё равно
   // перечитывается каждый кадр, поэтому цель не теряется.
@@ -481,6 +497,13 @@ void AimAssist::updateVisual(float dt) {
   const bool haveEye = m_bridge.getEyePosition(player, eyeNow);
   if (haveEye) {
     m_eye = eyeNow;
+    // Вертикальная скорость локального игрока — нужна для only crit.
+    // Считаем по низу хитбокса (ноги), а не по глазам: приседание меняет
+    // высоту глаз и давало ложное «падение».
+    Aabb localBounds{};
+    if (m_bridge.getActorBounds(player, localBounds)) {
+      updateVerticalMotion(localBounds.min.y, nowMs());
+    }
   }
 
   const Settings settings = getSettings();
@@ -1041,17 +1064,9 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     bestActor = actor;
   }
 
-  // Мягкое добивание допустимо только в не-legit режиме и только когда
-  // прицел почти на цели (малый угол), а не «ближайший в радиусе». Удар
-  // при взгляде в сторону — прямой триггер aim/killaura-проверок
-  // (Polar, FairPlay AimbotTargetOffset, GhostAC aim window).
-  bool angleFallback = false;
-  if (!bestActor && minAngleActor && minAngleDist <= reach &&
-      !settings.legitAttackOnly && minAngle <= settings.attackMaxAngleDeg) {
-    bestActor = minAngleActor;
-    bestDistance = minAngleDist;
-    angleFallback = true;
-  }
+  // Строго по хитбоксу: удар возможен только если луч прицела реально
+  // пересекает AABB актёра. Никаких «добиваний» по углу/ближайшему —
+  // удар при взгляде в сторону мгновенно ловится killaura/aim-проверками.
 
   static uint64_t s_triggerLog = 0;
   if ((++s_triggerLog % 60) == 1) {
@@ -1096,11 +1111,16 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
           randomInt(0, settings.triggerDelayJitterMs);
     }
   }
-  if (now - m_triggerSinceMs < m_triggerDelayForTargetMs) return;
+  // В режиме only crit окно падения короткое: не тратим его на полную
+  // «человеческую» задержку и случайные пропуски.
+  const int64_t effectiveDelay =
+      settings.onlyCrit ? std::min(m_triggerDelayForTargetMs, 40)
+                        : static_cast<int64_t>(m_triggerDelayForTargetMs);
+  if (now - m_triggerSinceMs < effectiveDelay) return;
   if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
 
   // Не бьём сразу после смены цели и иногда «промахиваемся» (не жмём).
-  if (settings.humanize) {
+  if (settings.humanize && !settings.onlyCrit) {
     if (m_lastSwitchMs != 0 && now - m_lastSwitchMs < 120) return;
     if (settings.attackMissChance > 0.0f &&
         randomFloat(0.0f, 1.0f) < settings.attackMissChance) {
@@ -1110,13 +1130,9 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   }
 
   Vec3 hitPoint{};
-  if (angleFallback) {
-    hitPoint = minAngleCenter;
-  } else {
-    hitPoint.x = eye.x + dir.x * bestDistance;
-    hitPoint.y = eye.y + dir.y * bestDistance;
-    hitPoint.z = eye.z + dir.z * bestDistance;
-  }
+  hitPoint.x = eye.x + dir.x * bestDistance;
+  hitPoint.y = eye.y + dir.y * bestDistance;
+  hitPoint.z = eye.z + dir.z * bestDistance;
 
   // Главная сетевая проверка: бьём только если ротация, которую сервер
   // уже получил на последнем тике 20 Гц, тоже смотрит на точку удара.
@@ -1164,6 +1180,12 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
         return;
       }
     }
+  }
+
+  // Only crit: удар только в падении после прыжка. На земле/в подъёме
+  // атака не отправляется, поэтому каждый удар идёт критом.
+  if (settings.onlyCrit && !isFallingForCrit(settings, now)) {
+    return;
   }
 
   {
@@ -1508,6 +1530,45 @@ void AimAssist::applyTickBudget(float &stepYaw, float &stepPitch,
   m_tickAccumPitch += stepPitch;
 }
 
+void AimAssist::updateVerticalMotion(float feetY, int64_t now) {
+  if (!m_haveEyeSample) {
+    m_lastEyeY = feetY;
+    m_lastEyeMs = now;
+    m_haveEyeSample = true;
+    m_vertVel = 0.0f;
+    return;
+  }
+  const float dt = clampf(
+      static_cast<float>(now - m_lastEyeMs) / 1000.0f, 0.001f, 0.10f);
+  const float instant = (feetY - m_lastEyeY) / dt;
+  // Респавн/телепорт/смена измерения — сбрасываем, иначе получим ложное
+  // «падение» с огромной скоростью.
+  if (std::fabs(instant) > 40.0f) {
+    m_vertVel = 0.0f;
+    m_fallingSinceMs = 0;
+  } else {
+    const float alpha = clampf(dt / 0.07f, 0.0f, 1.0f);
+    m_vertVel += (instant - m_vertVel) * alpha;
+  }
+  m_lastEyeY = feetY;
+  m_lastEyeMs = now;
+}
+
+// Крит в Bedrock засчитывается в падении (не на земле, вертикальная
+// скорость отрицательная). Ждём несколько миллисекунд непрерывного
+// падения, чтобы не поймать шум на вершине прыжка.
+bool AimAssist::isFallingForCrit(const Settings &settings, int64_t now) {
+  const float minFall = std::max(0.01f, settings.critMinFallSpeed);
+  if (m_vertVel > -minFall) {
+    m_fallingSinceMs = 0;
+    return false;
+  }
+  if (m_fallingSinceMs == 0) {
+    m_fallingSinceMs = now;
+  }
+  return (now - m_fallingSinceMs) >= std::max(0, settings.critSettleMs);
+}
+
 // ============================================================
 // Вспомогательное
 // ============================================================
@@ -1529,6 +1590,9 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
     break;
   case TargetBone::Legs:
     fraction = offsets::kLegsFraction;
+    break;
+  case TargetBone::UpperChest:
+    fraction = offsets::kUpperChestFraction;
     break;
   case TargetBone::Head:
   default:

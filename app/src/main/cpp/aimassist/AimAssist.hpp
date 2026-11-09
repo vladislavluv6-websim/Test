@@ -33,6 +33,9 @@ enum class TargetBone : int {
   Head = 0,
   Chest = 1,
   Legs = 2,
+  // Верх груди / шея: между грудью и головой. Компромисс, когда грудь
+  // слишком «центровая», а голова уводит прицел слишком высоко.
+  UpperChest = 3,
 };
 
 struct Settings {
@@ -139,6 +142,16 @@ struct Settings {
   bool legitAttackOnly = true;
 
   // ------------------------------------------------------------
+  // Only crit
+  // ------------------------------------------------------------
+  // Бить только в падении (после прыжка), чтобы каждый удар был критом.
+  bool onlyCrit = false;
+  // Минимальная скорость падения по Y, блоков/с.
+  float critMinFallSpeed = 0.18f;
+  // Сколько миллисекунд нужно непрерывно падать перед ударом.
+  int critSettleMs = 30;
+
+  // ------------------------------------------------------------
   // Сетевое формирование ротации (то, что реально видит сервер)
   // ------------------------------------------------------------
   // Бить только если ротация, уже отправленная на сервер (последний
@@ -226,6 +239,7 @@ public:
   void setAttackMissChance(float chance);
   void setServerViewGuard(bool enabled);
   void setSustainedTickDelta(float degrees);
+  void setOnlyCrit(bool enabled);
   void setTouchActive(bool active);
   void notifyCameraLook();
   void setActivationHeld(bool held);
@@ -268,6 +282,8 @@ private:
   void resetHumanProfile();
   void updateHumanProfile(const Settings &settings, float dt, int64_t now);
   void updateFatigue(const Settings &settings, int64_t now);
+  void updateVerticalMotion(float feetY, int64_t now);
+  bool isFallingForCrit(const Settings &settings, int64_t now);
   void applyTickBudget(float &stepYaw, float &stepPitch,
                        const Settings &settings, float dt);
   float randomFloat(float lo, float hi);
@@ -332,6 +348,13 @@ private:
   float m_fatigueScale = 1.0f;
   int64_t m_nextFatigueMs = 0;
   int64_t m_fatigueUntilMs = 0;
+
+  // Вертикальная скорость локального игрока для режима only crit.
+  bool m_haveEyeSample = false;
+  float m_lastEyeY = 0.0f;
+  int64_t m_lastEyeMs = 0;
+  float m_vertVel = 0.0f;
+  int64_t m_fallingSinceMs = 0;
 
   // Сетевое формирование: бюджет поворота на тик 20 Гц.
   float m_tickAccumYaw = 0.0f;

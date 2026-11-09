@@ -46,6 +46,7 @@ public class InbuiltModManager {
     private static final String KEY_TRIGGER_BOT_INTERVAL = "trigger_bot_interval";
     private static final String KEY_TRIGGER_BOT_INTERVAL_JITTER = "trigger_bot_interval_jitter";
     private static final String KEY_TRIGGER_BOT_SKIP_CHANCE = "trigger_bot_skip_chance";
+    private static final String KEY_TRIGGER_BOT_ONLY_CRIT = "trigger_bot_only_crit";
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
     private static final String KEY_OVERLAY_BUTTON_SIZE_PREFIX = "overlay_button_size_";
     private static final String KEY_OVERLAY_OPACITY_PREFIX = "overlay_opacity_";
@@ -116,6 +117,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_TRIGGER_BOT_INTERVAL = 620;
     private static final int DEFAULT_TRIGGER_BOT_INTERVAL_JITTER = 170;
     private static final int DEFAULT_TRIGGER_BOT_SKIP_CHANCE = 6;
+    private static final boolean DEFAULT_TRIGGER_BOT_ONLY_CRIT = false;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
@@ -210,13 +212,13 @@ public class InbuiltModManager {
     }
 
     public int getAimAssistBodyPart() {
-        return Math.max(0, Math.min(2,
+        return Math.max(0, Math.min(3,
                 prefs.getInt(KEY_AIM_ASSIST_BODY_PART, DEFAULT_AIM_ASSIST_BODY_PART)));
     }
 
     public void setAimAssistBodyPart(int bodyPart) {
         prefs.edit().putInt(KEY_AIM_ASSIST_BODY_PART,
-                Math.max(0, Math.min(2, bodyPart))).apply();
+                Math.max(0, Math.min(3, bodyPart))).apply();
     }
 
     public boolean isEspShowPlayers() {
@@ -471,6 +473,14 @@ public class InbuiltModManager {
     public void setTriggerBotSkipChance(int percent) {
         prefs.edit().putInt(KEY_TRIGGER_BOT_SKIP_CHANCE,
                 Math.max(0, Math.min(50, percent))).apply();
+    }
+
+    public boolean isTriggerBotOnlyCrit() {
+        return prefs.getBoolean(KEY_TRIGGER_BOT_ONLY_CRIT, DEFAULT_TRIGGER_BOT_ONLY_CRIT);
+    }
+
+    public void setTriggerBotOnlyCrit(boolean enabled) {
+        prefs.edit().putBoolean(KEY_TRIGGER_BOT_ONLY_CRIT, enabled).apply();
     }
 
     public int getDefaultInbuiltModKeybind(String modId) {

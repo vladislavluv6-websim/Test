@@ -61,6 +61,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_TRIGGER_BOT_INTERVAL = "trigger_bot_interval";
     private static final String CFG_TRIGGER_BOT_INTERVAL_JITTER = "trigger_bot_interval_jitter";
     private static final String CFG_TRIGGER_BOT_SKIP_CHANCE = "trigger_bot_skip_chance";
+    private static final String CFG_TRIGGER_BOT_ONLY_CRIT = "trigger_bot_only_crit";
     private static final String CFG_CURSOR_SENSITIVITY = "cursor_sensitivity";
     private static final String CFG_ZOOM_LEVEL = "zoom_level";
     private static final String CFG_ZOOM_TRANSITION = "zoom_transition";
@@ -438,7 +439,8 @@ public final class InbuiltModuleProvider {
                     "0",
                     context.getString(R.string.mod_config_aim_assist_head) + ","
                             + context.getString(R.string.mod_config_aim_assist_chest) + ","
-                            + context.getString(R.string.mod_config_aim_assist_legs),
+                            + context.getString(R.string.mod_config_aim_assist_legs) + ","
+                            + context.getString(R.string.mod_config_aim_assist_upper_chest),
                     "",
                     String.valueOf(manager.getAimAssistBodyPart())));
             configs.add(config(CFG_AIM_ASSIST_TARGET_PLAYERS,
@@ -583,6 +585,11 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "6", "0", "50",
                     String.valueOf(manager.getTriggerBotSkipChance())));
+            configs.add(config(CFG_TRIGGER_BOT_ONLY_CRIT,
+                    context.getString(R.string.mod_config_trigger_bot_only_crit),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "false", "", "",
+                    String.valueOf(manager.isTriggerBotOnlyCrit())));
         } else if (ModIds.VIRTUAL_CURSOR.equals(modId)) {
             configs.add(config(CFG_CURSOR_SENSITIVITY,
                     context.getString(R.string.mod_config_cursor_sensitivity_percent),
@@ -807,6 +814,9 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_TRIGGER_BOT_SKIP_CHANCE:
                 manager.setTriggerBotSkipChance(parseInt(value, manager.getTriggerBotSkipChance()));
+                break;
+            case CFG_TRIGGER_BOT_ONLY_CRIT:
+                manager.setTriggerBotOnlyCrit(parseBoolean(value));
                 break;
             case CFG_CURSOR_SENSITIVITY:
                 manager.setCursorSensitivity(parseInt(value, manager.getCursorSensitivity()));
