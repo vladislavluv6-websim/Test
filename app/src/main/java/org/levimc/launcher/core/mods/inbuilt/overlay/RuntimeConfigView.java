@@ -602,8 +602,8 @@ final class RuntimeConfigView {
                 + (node.collapsible ? (collapsedSections.contains(node.id) ? "    +" : "    -") : ""));
         title.setTextColor(TEXT_FAINT);
         title.setTextSize(10);
-        title.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
-        title.setLetterSpacing(0.08f);
+        title.setTypeface(displayFont());
+        title.setLetterSpacing(0.10f);
         title.setSingleLine(true);
         title.setAutoSizeTextTypeUniformWithConfiguration(9, 10, 1,
                 android.util.TypedValue.COMPLEX_UNIT_SP);
@@ -629,7 +629,7 @@ final class RuntimeConfigView {
         title.setText(titleText);
         title.setTextColor(TEXT_PRIMARY);
         title.setTextSize(15);
-        title.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        title.setTypeface(uiFont());
         title.setSingleLine(true);
         title.setEllipsize(null);
         title.setAutoSizeTextTypeUniformWithConfiguration(10, 15, 1,
@@ -1265,6 +1265,22 @@ final class RuntimeConfigView {
 
     private int dp(int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
+    }
+
+    private android.graphics.Typeface uiFont() {
+        try {
+            return androidx.core.content.res.ResourcesCompat.getFont(context, R.font.inter_medium);
+        } catch (Exception ignored) {
+            return android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL);
+        }
+    }
+
+    private android.graphics.Typeface displayFont() {
+        try {
+            return androidx.core.content.res.ResourcesCompat.getFont(context, R.font.space_grotesk_semibold);
+        } catch (Exception ignored) {
+            return android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL);
+        }
     }
 
     private static boolean truthy(String value) {

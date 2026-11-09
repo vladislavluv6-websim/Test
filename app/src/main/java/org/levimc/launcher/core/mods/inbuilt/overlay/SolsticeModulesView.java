@@ -16,6 +16,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 
+import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.inbuilt.UnifiedMod;
 
 import java.util.ArrayList;
@@ -62,6 +63,8 @@ public class SolsticeModulesView extends View {
 
     private final float density;
     private final float scaledDensity;
+    private android.graphics.Typeface uiTypeface;
+    private android.graphics.Typeface displayTypeface;
     private final int touchSlop;
     private final int longPressTimeout;
 
@@ -121,7 +124,14 @@ public class SolsticeModulesView extends View {
         radius = 13f * density;
         columnWidth = 230f * density;
 
-        textPaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        try {
+            uiTypeface = androidx.core.content.res.ResourcesCompat.getFont(context, R.font.inter_medium);
+            displayTypeface = androidx.core.content.res.ResourcesCompat.getFont(context, R.font.space_grotesk_semibold);
+        } catch (Exception ignored) {
+            uiTypeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL);
+            displayTypeface = android.graphics.Typeface.DEFAULT_BOLD;
+        }
+        textPaint.setTypeface(uiTypeface);
         setClickable(true);
         setFocusable(false);
     }
@@ -222,6 +232,7 @@ public class SolsticeModulesView extends View {
         rect.set(x, top + headerHeight - radius, x + column.width, top + headerHeight);
         canvas.drawRect(rect, paint);
 
+        textPaint.setTypeface(displayTypeface);
         textPaint.setTextSize(10f * scaledDensity);
         textPaint.setColor(COLOR_TEXT_FAINT);
         textPaint.setTextAlign(Paint.Align.LEFT);
@@ -267,6 +278,7 @@ public class SolsticeModulesView extends View {
                 textSize -= 0.5f * scaledDensity;
                 textPaint.setTextSize(textSize);
             }
+            textPaint.setTypeface(uiTypeface);
             textPaint.setColor(row.mod.isEnabled() ? COLOR_TEXT : COLOR_TEXT_DIM);
             textPaint.setTextAlign(Paint.Align.LEFT);
             float textBaseline = rowTop + rowHeight / 2f
