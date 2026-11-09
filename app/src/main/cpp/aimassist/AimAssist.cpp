@@ -12,7 +12,9 @@
 #include <cstdio>
 #include <random>
 
+#include "GameEcs.hpp"
 #include "Offsets.hpp"
+#include "CombatState.hpp"
 
 namespace aimbot {
 namespace {
@@ -277,6 +279,14 @@ void AimAssist::setFullSpeedRange(float deg) {
 void AimAssist::setStickyTicks(int ticks) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.stickyTicks = std::max(0, std::min(40, ticks));
+}
+
+void AimAssist::setTargetLock(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.targetLock = enabled;
+  if (!enabled) {
+    m_stickyLeft = 0;
+  }
 }
 
 void AimAssist::setTargetGrace(int frames) {
@@ -914,6 +924,16 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     chosen = triggerTarget;
   }
 
+  // Target lock: удерживаем выбранную цель, пока она валидна. Быстрое
+  // переключение остаётся только когда прицел стоит точно на другой цели.
+  if (settings.targetLock && currentStillValid && !triggerOverride) {
+    chosen = current;
+    if (bestAngle.valid && bestAngle.actor != current.actor &&
+        bestAngle.angle <= 1.2f) {
+      chosen = bestAngle;
+    }
+  }
+
   bool better = triggerOverride;
   bool directHit = false;
   if (!triggerOverride && currentStillValid && chosen.valid) {
@@ -1014,8 +1034,12 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   Vec3 minAngleCenter{};
   void *minAngleActor = nullptr;
 
+  void *lockedActor = nullptr;
+  if (settings.targetLock && m_target.valid) lockedActor = m_target.actor;
+
   for (void *actor : m_actors) {
     if (!actor || actor == player) continue;
+    if (lockedActor && actor != lockedActor) continue;
 
     const bool playerActor = m_bridge.isPlayer(actor);
     if (playerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
@@ -1201,6 +1225,16 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
                       m_bridge.getGameMode());
     }
   }
+  if (settings.onlyCrit) {
+    // Critical hits require the server to see a non-sprinting player on the
+    // attack tick: drop the local sprint request and arm the packet window.
+    combatstate::suppressSprint(120);
+    if (player) {
+      gameecs::setMoveSprinting(player, false);
+      gameecs::setSprintingFlag(player, false);
+    }
+  }
+
   if (m_bridge.attackActor(bestActor, hitPoint)) {
     // Интервал между ударами: база + разброс + редкая «задумчивость».
     int64_t next = now + settings.triggerIntervalMs;
@@ -1334,8 +1368,10 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     // yaw/pitch, которую ищут ML-модели.
     const float omegaYaw = omega;
     const float omegaPitch = omega * 0.84f;
-    const float dampingYaw = 1.76f * omegaYaw;
-    const float dampingPitch = 1.82f * omegaPitch;
+    // zeta ~0.92: почти критическое демпфирование, чтобы на высокой
+    // скорости сопровождения не было колебаний вокруг цели.
+    const float dampingYaw = 1.84f * omegaYaw;
+    const float dampingPitch = 1.88f * omegaPitch;
     float accelYaw = omegaYaw * omegaYaw * deltaYaw - dampingYaw * m_velYaw;
     float accelPitch =
         omegaPitch * omegaPitch * deltaPitch - dampingPitch * m_velPitch;
@@ -1347,8 +1383,12 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 
     m_velYaw += accelYaw * h;
     m_velPitch += accelPitch * h;
-    m_velYaw = clampf(m_velYaw, -localMaxVel, localMaxVel);
-    m_velPitch = clampf(m_velPitch, -localMaxVel, localMaxVel);
+    // Приближение к цели гасит скорость: без этого на быстрой цели
+    // пружина разгоняется и «звенит» вокруг точки прицела.
+    const float arriveVel = magnitude * 3.4f + deadzone * 2.0f;
+    const float capVel = std::min(localMaxVel, arriveVel);
+    m_velYaw = clampf(m_velYaw, -capVel, capVel);
+    m_velPitch = clampf(m_velPitch, -capVel, capVel);
 
     float stepYaw = m_velYaw * h;
     float stepPitch = m_velPitch * h;
@@ -1502,9 +1542,10 @@ void AimAssist::applyTickBudget(float &stepYaw, float &stepPitch,
     if (std::fabs(target) > allowed) {
       const float limited = std::copysign(allowed, target);
       const float next = limited - accum;
-      // Не разворачиваем камеру бюджетом в противоположную сторону.
+      // Не разворачиваем камеру бюджетом резко в противоположную сторону,
+      // но и не обнуляем шаг (обнуление даёт дрожание на высокой скорости).
       if (next * step < 0.0f) {
-        step = 0.0f;
+        step = next * 0.35f;
       } else {
         step = next;
       }
@@ -1561,6 +1602,11 @@ void AimAssist::updateVerticalMotion(float feetY, int64_t now) {
 // скорость отрицательная). Ждём несколько миллисекунд непрерывного
 // падения, чтобы не поймать шум на вершине прыжка.
 bool AimAssist::isFallingForCrit(const Settings &settings, int64_t now) {
+  void *player = m_bridge.getLocalPlayer();
+  if (player && gameecs::hasOnGround(player)) {
+    m_fallingSinceMs = 0;
+    return false;
+  }
   const float minFall = std::max(0.01f, settings.critMinFallSpeed);
   if (m_vertVel > -minFall) {
     m_fallingSinceMs = 0;
@@ -1643,10 +1689,7 @@ Vec3 AimAssist::smoothedPoint(const Target &target,
 }
 
 bool AimAssist::isInvisible(void *actor) const {
-  // В 1.26.60 оффсет flags не заполнен. Если знаешь его — читай здесь
-  // flags и проверяй offsets::kFlagInvisible.
-  (void)actor;
-  return false;
+  return gameecs::isInvisible(actor);
 }
 
 bool AimAssist::isSameTeam(void *, void *) const {

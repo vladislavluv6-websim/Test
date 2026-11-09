@@ -58,6 +58,9 @@ struct Settings {
   TargetBone targetBone = TargetBone::Head;
 
   int stickyTicks = 6;
+  // Target lock: держим одну цель, пока она жива и в радиусе. Переключение
+  // только если прицел стоит точно на другой цели.
+  bool targetLock = false;
   float switchHysteresisDeg = 4.0f;
   // EMA-лаг позиции цели (в кадрах при 120 Гц). Даёт «догоняющее» наведение,
   // как у живой руки, вместо мгновенной привязки к центру хитбокса.
@@ -225,6 +228,7 @@ public:
   void setDeadzone(float deg);
   void setFullSpeedRange(float deg);
   void setStickyTicks(int ticks);
+  void setTargetLock(bool enabled);
   void setTargetGrace(int frames);
   void setPreferClosest(bool preferClosest);
   void setLegitMode(bool legit);

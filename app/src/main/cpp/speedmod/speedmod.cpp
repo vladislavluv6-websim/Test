@@ -11,6 +11,8 @@
 #include <cstring>
 #include <mutex>
 
+#include "GameEcs.hpp"
+#include "CombatState.hpp"
 #include "pl/memory/Hook.hpp"
 #include "pl/memory/Signature.hpp"
 
@@ -70,6 +72,9 @@ constexpr uintptr_t kPacketInputData = 0x88;
 constexpr int kInputSneaking = 8;
 constexpr int kInputSprinting = 20;
 constexpr int kInputStartJumping = 31;
+constexpr int kInputSprintDown = 4;
+constexpr int kInputStartSprinting = 25;
+constexpr int kInputStopSprinting = 26;
 
 // Speed S1 constants from the userscript.
 constexpr float V_GRAVITY = 0.08f;
@@ -260,7 +265,22 @@ void applyPacketBypass(void *packet) {
                          1u) != 0;
   g_sneaking.store(sneaking, std::memory_order_relaxed);
 
-  if (speedOn && autoSprint && !sneaking &&
+  // TriggerBot critical-hit window: the server must see a non-sprinting
+  // player on the attack tick, so strip every sprint bit and emit the stop
+  // edge until the shared window expires.
+  const bool sprintSuppressed = combatstate::sprintSuppressed();
+  if (sprintSuppressed) {
+    auto clearBit = [inputBits](int bit) {
+      inputBits[bit >> 6] &= ~(1ULL << (bit & 63));
+    };
+    clearBit(kInputSprintDown);
+    clearBit(kInputSprinting);
+    clearBit(kInputStartSprinting);
+    inputBits[kInputStopSprinting >> 6] |=
+        1ULL << (kInputStopSprinting & 63);
+  }
+
+  if (speedOn && autoSprint && !sneaking && !sprintSuppressed &&
       g_moving.load(std::memory_order_relaxed)) {
     inputBits[kInputSprinting >> 6] |= 1ULL << (kInputSprinting & 63);
   }
@@ -580,10 +600,20 @@ void applySpeed(void *actor) {
   const float hSpeed = horizontalLength(vx, vz);
   const float moveDist = horizontalLength(dx, dz);
   const bool moving = moveDist > 0.003f || hSpeed > 0.005f;
-  // Ground inference: the tick hook has no OnGround component offset for
-  // 1.26.60, so use the vertical delta/velocity.  Good enough for the
-  // pause/mode checks; the packet hook uses the real InputData bitset.
-  const bool onGround = std::fabs(dy) < 0.0015f && std::fabs(vy) < 0.002f;
+  // Ground: prefer the ECS OnGroundFlagComponent; the vertical-delta heuristic
+  // is only a fallback because at rest Bedrock keeps vy around -0.078 after
+  // the gravity step is applied following the collision resolution.
+  static thread_local int groundStreak = 0;
+  bool onGround = gameecs::hasOnGround(actor);
+  if (onGround) {
+    groundStreak = 3;
+  } else {
+    const bool groundedSample =
+        std::fabs(dy) < 0.0015f && vy <= 0.001f && vy > -0.5f;
+    groundStreak = groundedSample ? groundStreak + 1 : 0;
+    // Two consecutive samples reject the single apex tick of a jump.
+    onGround = groundStreak >= 2;
+  }
 
   g_onGround.store(onGround, std::memory_order_relaxed);
   g_moving.store(moving, std::memory_order_relaxed);
@@ -593,6 +623,16 @@ void applySpeed(void *actor) {
   const bool sneak = g_sneaking.load(std::memory_order_relaxed);
   const bool sneakBlocked =
       g_pauseIfSneaking.load(std::memory_order_relaxed) && sneak;
+
+  // Native sprint request: the packet bit alone does not engage the local
+  // sprint state, so mirror it into MoveInputComponent.
+  if (g_autoSprint.load(std::memory_order_relaxed) && !sneakBlocked &&
+      !combatstate::sprintSuppressed() && moving) {
+    gameecs::MoveInputState input;
+    if (gameecs::readMoveInput(actor, input) && !input.sprinting) {
+      gameecs::setMoveSprinting(actor, true);
+    }
+  }
   const int tick = static_cast<int>(
       g_tickCounter.fetch_add(1, std::memory_order_relaxed) + 1);
 

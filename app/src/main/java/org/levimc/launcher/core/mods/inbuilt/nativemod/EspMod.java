@@ -69,6 +69,14 @@ public final class EspMod {
         if (initialized) nativeSetMobColor(argb);
     }
 
+    public static void setArmoredColor(int argb) {
+        if (initialized) nativeSetArmoredColor(argb);
+    }
+
+    public static void setArmorColors(boolean enabled) {
+        if (initialized) nativeSetArmorColors(enabled);
+    }
+
     public static void setNameTags(boolean enabled) {
         if (initialized) nativeSetNameTags(enabled);
     }
@@ -92,6 +100,8 @@ public final class EspMod {
     private static native void nativeSetRange(float range);
     private static native void nativeSetPlayerColor(int argb);
     private static native void nativeSetMobColor(int argb);
+    private static native void nativeSetArmoredColor(int argb);
+    private static native void nativeSetArmorColors(boolean enabled);
     private static native void nativeSetNameTags(boolean enabled);
     private static native void nativeSetNameTagScreenSize(float width, float height);
     private static native String[] nativeGetNameTags();

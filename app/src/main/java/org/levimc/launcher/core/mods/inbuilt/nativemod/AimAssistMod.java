@@ -91,6 +91,10 @@ public final class AimAssistMod {
         if (initialized) nativeSetStickyTicks(ticks);
     }
 
+    public static void setTargetLock(boolean enabled) {
+        if (initialized) nativeSetTargetLock(enabled);
+    }
+
     public static void setTargetGrace(int frames) {
         if (initialized) nativeSetTargetGrace(frames);
     }
@@ -231,6 +235,7 @@ public final class AimAssistMod {
     private static native void nativeSetDeadzone(float deg);
     private static native void nativeSetFullSpeedRange(float deg);
     private static native void nativeSetStickyTicks(int ticks);
+    private static native void nativeSetTargetLock(boolean enabled);
     private static native void nativeSetTargetGrace(int frames);
     private static native void nativeSetPreferClosest(boolean enabled);
     private static native void nativeSetTriggerBot(boolean enabled);

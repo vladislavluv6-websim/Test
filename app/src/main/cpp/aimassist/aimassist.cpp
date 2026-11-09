@@ -11,6 +11,7 @@
 #include "AimAssist.hpp"
 #include "ClientBridge.hpp"
 #include "Esp.hpp"
+#include "Fullbright.hpp"
 
 namespace {
 
@@ -136,6 +137,12 @@ extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetStickyTicks(
     JNIEnv *, jclass, jint ticks) {
   aimbot::AimAssist::instance().setStickyTicks(ticks);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetLock(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setTargetLock(enabled == JNI_TRUE);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -305,6 +312,18 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetMobColor(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetArmoredColor(
+    JNIEnv *, jclass, jint argb) {
+  aimbot::Esp::instance().setArmoredColor(static_cast<uint32_t>(argb));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetArmorColors(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::Esp::instance().setArmorColors(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetNameTags(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::Esp::instance().setNameTags(enabled == JNI_TRUE);
@@ -347,4 +366,25 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetNameTags(
 
   env->DeleteLocalRef(stringClass);
   return result;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_FullbrightMod_nativeInit(
+    JNIEnv *, jclass) {
+  const bool ok = aimbot::Fullbright::instance().initialize();
+  __android_log_print(ANDROID_LOG_INFO, "AimAssistJni", "fullbrightInit=%d",
+                      ok ? 1 : 0);
+  return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_FullbrightMod_nativeSetEnabled(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::Fullbright::instance().setEnabled(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_FullbrightMod_nativeIsEnabled(
+    JNIEnv *, jclass) {
+  return aimbot::Fullbright::instance().isEnabled() ? JNI_TRUE : JNI_FALSE;
 }

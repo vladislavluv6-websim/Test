@@ -41,6 +41,7 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setStickyTicks(manager.getAimAssistSticky());
         AimAssistMod.setTargetGrace(manager.getAimAssistGrace());
         AimAssistMod.setPreferClosest(manager.isAimAssistPreferClosest());
+        AimAssistMod.setTargetLock(manager.isAimAssistTargetLock());
     }
 
     private boolean isSupportedVersion() {

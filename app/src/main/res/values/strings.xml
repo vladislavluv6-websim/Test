@@ -683,12 +683,18 @@
     <string name="mod_config_esp_range">ESP range (blocks)</string>
     <string name="mod_config_esp_players">Show players</string>
     <string name="mod_config_esp_mobs">Show mobs</string>
-    <string name="mod_config_esp_name_tags">Name tags</string>
+    <string name="mod_config_esp_armor_colors">Armor-based player colors</string>
+    <string name="mod_config_esp_armored_color">Armored player color</string>
     <string name="mod_config_esp_player_color">Player box color</string>
     <string name="mod_config_esp_mob_color">Mob box color</string>
     <string name="esp_mod_unavailable">ESP is unavailable for this game version</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players and mobs under the crosshair</string>
+    <string name="inbuilt_mod_name_tags">Name Tags</string>
+    <string name="inbuilt_mod_name_tags_desc">Shows clean player name tags through walls, including invisible players</string>
+    <string name="inbuilt_mod_fullbright">Fullbright</string>
+    <string name="inbuilt_mod_fullbright_desc">Removes darkness and fog by forcing full world lighting</string>
+    <string name="fullbright_mod_unavailable">Fullbright is unavailable on this Minecraft version</string>
     <string name="mod_config_aim_assist_range">Aim range (blocks)</string>
     <string name="mod_config_aim_assist_strength">Aim strength (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized aim (slower, smoother, less detectable)</string>
@@ -703,6 +709,7 @@
     <string name="mod_config_aim_assist_upper_chest">Upper chest</string>
     <string name="mod_config_aim_assist_lower_chest">Below chest</string>
     <string name="mod_config_aim_assist_prefer_closest">Prefer closest target</string>
+    <string name="mod_config_aim_assist_target_lock">Target lock (stay on one player)</string>
     <string name="mod_config_aim_assist_sticky">Target stickiness (ticks)</string>
     <string name="mod_config_aim_assist_grace">Target grace (frames)</string>
     <string name="mod_config_aim_assist_max_speed">Max turn speed (°/s)</string>

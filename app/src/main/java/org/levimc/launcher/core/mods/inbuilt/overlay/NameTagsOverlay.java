@@ -30,6 +30,9 @@ public class NameTagsOverlay extends View {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint backdropPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint accentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private float density = 1f;
     private boolean attached;
     private boolean showing;
     private boolean moduleEnabled = true;
@@ -56,10 +59,12 @@ public class NameTagsOverlay extends View {
         setElevation(90f);
         textPaint.setColor(Color.WHITE);
         textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         textPaint.setShadowLayer(3f, 0f, 1f, 0xCC000000);
-        float density = activity.getResources().getDisplayMetrics().density;
+        density = activity.getResources().getDisplayMetrics().density;
         textPaint.setTextSize(13f * density);
+        backdropPaint.setColor(0xC012151E);
+        accentPaint.setColor(0xFF4E83FF);
     }
 
     public void show() {
@@ -118,7 +123,7 @@ public class NameTagsOverlay extends View {
         super.onAttachedToWindow();
         attached = true;
         InbuiltModManager manager = InbuiltModManager.getInstance(getContext());
-        moduleEnabled = manager.isEspNameTags();
+        moduleEnabled = manager.isNameTagsEnabled();
         EspMod.initializeAsync(ok -> {
             if (!attached || !ok) return;
             EspMod.setNameTags(moduleEnabled);
@@ -188,9 +193,20 @@ public class NameTagsOverlay extends View {
                 float x = Float.parseFloat(entry.substring(0, first));
                 float y = Float.parseFloat(entry.substring(first + 1, second));
                 String name = entry.substring(second + 1);
-                if (!name.isEmpty()) {
-                    canvas.drawText(name, x, y, textPaint);
-                }
+                if (name.isEmpty()) continue;
+                float textWidth = textPaint.measureText(name);
+                float padX = 6f * density;
+                float padY = 3f * density;
+                float left = x - textWidth * 0.5f - padX;
+                float right = x + textWidth * 0.5f + padX;
+                float top = y - textPaint.getTextSize() - padY;
+                float bottom = y + padY;
+                float radius = 4f * density;
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius,
+                        backdropPaint);
+                canvas.drawRoundRect(left, top, left + 2f * density, bottom,
+                        radius, radius, accentPaint);
+                canvas.drawText(name, x, y, textPaint);
             } catch (NumberFormatException ignored) {
             }
         }

@@ -66,12 +66,14 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_STICKY = "aim_assist_sticky";
     private static final String CFG_AIM_ASSIST_GRACE = "aim_assist_grace";
     private static final String CFG_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
+    private static final String CFG_AIM_ASSIST_TARGET_LOCK = "aim_assist_target_lock";
     private static final String CFG_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String CFG_ESP_SHOW_MOBS = "esp_show_mobs";
     private static final String CFG_ESP_RANGE = "esp_range";
-    private static final String CFG_ESP_NAME_TAGS = "esp_name_tags";
     private static final String CFG_ESP_PLAYER_COLOR = "esp_player_color";
     private static final String CFG_ESP_MOB_COLOR = "esp_mob_color";
+    private static final String CFG_ESP_ARMOR_COLORS = "esp_armor_colors";
+    private static final String CFG_ESP_ARMORED_COLOR = "esp_armored_color";
     private static final String CFG_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String CFG_TRIGGER_BOT_REACTION_JITTER = "trigger_bot_reaction_jitter";
     private static final String CFG_TRIGGER_BOT_RANGE = "trigger_bot_range";
@@ -132,6 +134,12 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.TRIGGER_BOT,
                 R.string.inbuilt_mod_trigger_bot, R.string.inbuilt_mod_trigger_bot_desc,
+                groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.NAME_TAGS,
+                R.string.inbuilt_mod_name_tags, R.string.inbuilt_mod_name_tags_desc,
+                groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.FULLBRIGHT,
+                R.string.inbuilt_mod_fullbright, R.string.inbuilt_mod_fullbright_desc,
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.CHICK_PET,
                 R.string.inbuilt_mod_chick_pet, R.string.inbuilt_mod_chick_pet_desc,
@@ -579,6 +587,11 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "false", "", "",
                     String.valueOf(manager.isAimAssistPreferClosest())));
+            configs.add(config(CFG_AIM_ASSIST_TARGET_LOCK,
+                    context.getString(R.string.mod_config_aim_assist_target_lock),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "false", "", "",
+                    String.valueOf(manager.isAimAssistTargetLock())));
             configs.add(config(CFG_AIM_ASSIST_STICKY,
                     context.getString(R.string.mod_config_aim_assist_sticky),
                     UnifiedMod.ConfigType.SLIDER_INT,
@@ -645,11 +658,11 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "true", "", "",
                     String.valueOf(manager.isEspShowMobs())));
-            configs.add(config(CFG_ESP_NAME_TAGS,
-                    context.getString(R.string.mod_config_esp_name_tags),
+            configs.add(config(CFG_ESP_ARMOR_COLORS,
+                    context.getString(R.string.mod_config_esp_armor_colors),
                     UnifiedMod.ConfigType.TOGGLE,
                     "true", "", "",
-                    String.valueOf(manager.isEspNameTags())));
+                    String.valueOf(manager.isEspArmorColors())));
             configs.add(config(CFG_ESP_PLAYER_COLOR,
                     context.getString(R.string.mod_config_esp_player_color),
                     UnifiedMod.ConfigType.COLOR,
@@ -660,6 +673,11 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.COLOR,
                     formatColor(manager.getEspMobColor()), "", "",
                     formatColor(manager.getEspMobColor())));
+            configs.add(config(CFG_ESP_ARMORED_COLOR,
+                    context.getString(R.string.mod_config_esp_armored_color),
+                    UnifiedMod.ConfigType.COLOR,
+                    formatColor(manager.getEspArmoredColor()), "", "",
+                    formatColor(manager.getEspArmoredColor())));
         } else if (ModIds.TRIGGER_BOT.equals(modId)) {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
@@ -950,6 +968,9 @@ public final class InbuiltModuleProvider {
             case CFG_AIM_ASSIST_PREFER_CLOSEST:
                 manager.setAimAssistPreferClosest(parseBoolean(value));
                 break;
+            case CFG_AIM_ASSIST_TARGET_LOCK:
+                manager.setAimAssistTargetLock(parseBoolean(value));
+                break;
             case CFG_AIM_ASSIST_LEGIT:
                 manager.setAimAssistLegitMode(parseBoolean(value));
                 break;
@@ -962,10 +983,13 @@ public final class InbuiltModuleProvider {
             case CFG_ESP_SHOW_MOBS:
                 manager.setEspShowMobs(parseBoolean(value));
                 break;
-            case CFG_ESP_NAME_TAGS:
-                boolean nameTags = parseBoolean(value);
-                manager.setEspNameTags(nameTags);
-                EspMod.setNameTags(nameTags);
+            case CFG_ESP_ARMOR_COLORS:
+                manager.setEspArmorColors(parseBoolean(value));
+                EspMod.setArmorColors(parseBoolean(value));
+                break;
+            case CFG_ESP_ARMORED_COLOR:
+                manager.setEspArmoredColor(parseColor(value, manager.getEspArmoredColor()));
+                EspMod.setArmoredColor(manager.getEspArmoredColor());
                 break;
             case CFG_ESP_PLAYER_COLOR:
                 manager.setEspPlayerColor(parseColor(value, manager.getEspPlayerColor()));

@@ -690,12 +690,18 @@
     <string name="mod_config_esp_range">Дальность ESP (блоки)</string>
     <string name="mod_config_esp_players">Показывать игроков</string>
     <string name="mod_config_esp_mobs">Показывать мобов</string>
-    <string name="mod_config_esp_name_tags">Ники игроков</string>
+    <string name="mod_config_esp_armor_colors">Цвет игроков по броне</string>
+    <string name="mod_config_esp_armored_color">Цвет игроков в броне</string>
     <string name="mod_config_esp_player_color">Цвет бокса игроков</string>
     <string name="mod_config_esp_mob_color">Цвет бокса мобов</string>
     <string name="esp_mod_unavailable">ESP недоступен для этой версии игры</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Автоматически бьёт игроков и мобов в прицеле</string>
+    <string name="inbuilt_mod_name_tags">Ники игроков</string>
+    <string name="inbuilt_mod_name_tags_desc">Показывает чистые ники игроков сквозь стены, включая невидимых</string>
+    <string name="inbuilt_mod_fullbright">Полная яркость</string>
+    <string name="inbuilt_mod_fullbright_desc">Убирает темноту и туман, принудительно включая полное освещение мира</string>
+    <string name="fullbright_mod_unavailable">Полная яркость недоступна для этой версии Minecraft</string>
     <string name="mod_config_aim_assist_range">Дальность наведения (блоки)</string>
     <string name="mod_config_aim_assist_strength">Сила наведения (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized-наведение (плавнее и менее заметно)</string>
@@ -710,6 +716,7 @@
     <string name="mod_config_aim_assist_upper_chest">Верх груди</string>
     <string name="mod_config_aim_assist_lower_chest">Ниже груди</string>
     <string name="mod_config_aim_assist_prefer_closest">Приоритет ближайшей цели</string>
+    <string name="mod_config_aim_assist_target_lock">Target lock (держать одного игрока)</string>
     <string name="mod_config_aim_assist_sticky">Удержание цели (тики)</string>
     <string name="mod_config_aim_assist_grace">Запас удержания (кадры)</string>
     <string name="mod_config_aim_assist_max_speed">Макс. скорость поворота (°/с)</string>

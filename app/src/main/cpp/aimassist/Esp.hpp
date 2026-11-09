@@ -33,6 +33,8 @@ public:
   void setRange(float range);
   void setPlayerColor(uint32_t argb);
   void setMobColor(uint32_t argb);
+  void setArmoredColor(uint32_t argb);
+  void setArmorColors(bool enabled);
 
   // Name Tags: экранные координаты считает native (game thread), Java
   // overlay только рисует готовые подписи.
@@ -60,6 +62,8 @@ private:
   std::atomic<float> m_range{32.0f};
   std::atomic<uint32_t> m_playerColor{0xFFFF5555u};
   std::atomic<uint32_t> m_mobColor{0xFFFFAA00u};
+  std::atomic<uint32_t> m_armoredColor{0xFF4E83FFu};
+  std::atomic<bool> m_armorColors{true};
   std::atomic<bool> m_nameTags{true};
   std::atomic<float> m_surfaceWidth{0.0f};
   std::atomic<float> m_surfaceHeight{0.0f};

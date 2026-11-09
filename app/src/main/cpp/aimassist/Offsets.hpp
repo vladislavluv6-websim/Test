@@ -72,6 +72,17 @@ inline constexpr const char *kGetFovSignature =
     "? ? ? FC ? ? ? 6D ? ? ? A9 ? ? ? F9 ? ? ? A9 ? ? ? 91 08 40 20 1E "
     "F4 03 01 2A";
 
+// Fullbright: функция, возвращающая уровень освещения (float). Патч
+// возвращает 1000.0f, поэтому затемнение/туман пропадают.
+inline constexpr const char *kFullbrightSignature =
+    "? ? ? A9 FD 03 00 91 ? ? ? F9 ? ? ? 52 ? ? ? F9 00 01 3F D6 ? ? ? A8 "
+    "? ? ? ? ? ? ? A9 ? ? ? F9 FD 03 00 91 ? ? ? F9 F3 03 01 2A ? ? ? 52 "
+    "? ? ? F9 00 01 3F D6 E1 03 13 2A ? ? ? F9 ? ? ? A8 ? ? ? ? ? ? ? A9 "
+    "? ? ? A9";
+
+inline constexpr const char *kFullbrightPatchHex =
+    "40 8F A8 52 00 00 27 1E C0 03 5F D6";
+
 // Actor::getNameTag() — ARM64-сигнатура для 1.26.6X (любезно проверена
 // BedrockTools, тот же Preloader/ABI). Возвращает std::string по значению.
 inline constexpr const char *kActorGetNameTagSignature =
@@ -230,5 +241,11 @@ inline constexpr uintptr_t kClientInstanceFovX = 0x740;
 inline constexpr uintptr_t kClientInstanceFovY = 0x754;
 inline constexpr uintptr_t kLevelRendererSelectionMaterial = 0x10A0;
 inline constexpr uint32_t kMobCategory = 2;
+
+
+// 1.26.60.04: PlayerAuthInputPacket::write (packet id 0x90). Used only for
+// stripping sprint bits during the TriggerBot critical window.
+inline constexpr uintptr_t kPlayerAuthInputWriteFileOffset = 0xdaa4864;
+inline constexpr uintptr_t kPlayerAuthInputInputData = 0x88;
 
 } // namespace aimbot::offsets

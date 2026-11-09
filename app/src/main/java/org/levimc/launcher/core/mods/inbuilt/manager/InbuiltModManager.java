@@ -49,12 +49,15 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_STICKY = "aim_assist_sticky";
     private static final String KEY_AIM_ASSIST_GRACE = "aim_assist_grace";
     private static final String KEY_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
+    private static final String KEY_AIM_ASSIST_TARGET_LOCK = "aim_assist_target_lock";
     private static final String KEY_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String KEY_ESP_SHOW_MOBS = "esp_show_mobs";
     private static final String KEY_ESP_NAME_TAGS = "esp_name_tags";
     private static final String KEY_ESP_RANGE = "esp_range";
     private static final String KEY_ESP_PLAYER_COLOR = "esp_player_color";
     private static final String KEY_ESP_MOB_COLOR = "esp_mob_color";
+    private static final String KEY_ESP_ARMOR_COLORS = "esp_armor_colors";
+    private static final String KEY_ESP_ARMORED_COLOR = "esp_armored_color";
     private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
     private static final String KEY_TRIGGER_BOT_DELAY = "trigger_bot_delay";
     private static final String KEY_TRIGGER_BOT_REACTION_JITTER = "trigger_bot_reaction_jitter";
@@ -140,9 +143,12 @@ public class InbuiltModManager {
     private static final int DEFAULT_AIM_ASSIST_STICKY = 6;
     private static final int DEFAULT_AIM_ASSIST_GRACE = 10;
     private static final boolean DEFAULT_AIM_ASSIST_PREFER_CLOSEST = false;
+    private static final boolean DEFAULT_AIM_ASSIST_TARGET_LOCK = false;
     private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
     private static final boolean DEFAULT_ESP_SHOW_MOBS = true;
-    private static final boolean DEFAULT_ESP_NAME_TAGS = true;
+    private static final boolean DEFAULT_ESP_NAME_TAGS = false;
+    private static final boolean DEFAULT_ESP_ARMOR_COLORS = true;
+    private static final int DEFAULT_ESP_ARMORED_COLOR = 0xFF4E83FF;
     private static final int DEFAULT_ESP_RANGE = 32;
     private static final int DEFAULT_ESP_PLAYER_COLOR = 0xFFFF5555;
     private static final int DEFAULT_ESP_MOB_COLOR = 0xFFFFAA00;
@@ -450,6 +456,14 @@ public class InbuiltModManager {
                 Math.max(0, Math.min(4, bodyPart))).apply();
     }
 
+    public boolean isAimAssistTargetLock() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_TARGET_LOCK, DEFAULT_AIM_ASSIST_TARGET_LOCK);
+    }
+
+    public void setAimAssistTargetLock(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_TARGET_LOCK, enabled).apply();
+    }
+
     public boolean isEspShowPlayers() {
         return prefs.getBoolean(KEY_ESP_SHOW_PLAYERS, DEFAULT_ESP_SHOW_PLAYERS);
     }
@@ -498,6 +512,38 @@ public class InbuiltModManager {
 
     public void setEspMobColor(int argb) {
         prefs.edit().putInt(KEY_ESP_MOB_COLOR, argb).apply();
+    }
+
+    public boolean isEspArmorColors() {
+        return prefs.getBoolean(KEY_ESP_ARMOR_COLORS, DEFAULT_ESP_ARMOR_COLORS);
+    }
+
+    public void setEspArmorColors(boolean enabled) {
+        prefs.edit().putBoolean(KEY_ESP_ARMOR_COLORS, enabled).apply();
+    }
+
+    public int getEspArmoredColor() {
+        return prefs.getInt(KEY_ESP_ARMORED_COLOR, DEFAULT_ESP_ARMORED_COLOR);
+    }
+
+    public void setEspArmoredColor(int argb) {
+        prefs.edit().putInt(KEY_ESP_ARMORED_COLOR, argb).apply();
+    }
+
+    public boolean isNameTagsEnabled() {
+        return resolveInbuiltModEnabled(ModIds.NAME_TAGS, false);
+    }
+
+    public void setNameTagsEnabled(boolean enabled) {
+        setInbuiltModEnabled(ModIds.NAME_TAGS, enabled);
+    }
+
+    public boolean isFullbrightEnabled() {
+        return resolveInbuiltModEnabled(ModIds.FULLBRIGHT, false);
+    }
+
+    public void setFullbrightEnabled(boolean enabled) {
+        setInbuiltModEnabled(ModIds.FULLBRIGHT, enabled);
     }
 
     public int getAimAssistMaxSpeed() {

@@ -153,9 +153,13 @@ public class InbuiltOverlayManager {
 
     public void showEnabledOverlays() {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
-        if (nameTagsOverlay == null) {
-            nameTagsOverlay = new NameTagsOverlay(activity);
-            nameTagsOverlay.show();
+        // Modules without a HUD button are restored regardless of whether the
+        // mod menu itself is enabled.
+        if (manager.resolveInbuiltModEnabled(ModIds.NAME_TAGS, false)) {
+            handleModToggle(ModIds.NAME_TAGS, true);
+        }
+        if (manager.resolveInbuiltModEnabled(ModIds.FULLBRIGHT, false)) {
+            handleModToggle(ModIds.FULLBRIGHT, true);
         }
         if (!manager.isModMenuEnabled()) return;
 
@@ -278,6 +282,7 @@ public class InbuiltOverlayManager {
             case ModIds.SPEED: controller = new SpeedOverlay(activity); break;
             case ModIds.AIM_ASSIST: controller = new AimAssistOverlay(activity); break;
             case ModIds.ESP: controller = new EspOverlay(activity); break;
+            case ModIds.FULLBRIGHT: controller = new FullbrightOverlay(activity); break;
             case ModIds.TRIGGER_BOT: controller = new TriggerBotOverlay(activity); break;
             case ModIds.VIRTUAL_CURSOR: controller = new VirtualCursorOverlay(activity); break;
             case ModIds.ZOOM:
@@ -361,6 +366,19 @@ public class InbuiltOverlayManager {
                 overlays.add(esp);
                 modOverlayMap.put(modId, esp);
                 break;
+            case ModIds.FULLBRIGHT:
+                FullbrightOverlay fullbright =
+                        (FullbrightOverlay) getKeybindController(ModIds.FULLBRIGHT);
+                fullbright.show(savedX, savedY);
+                overlays.add(fullbright);
+                modOverlayMap.put(modId, fullbright);
+                break;
+            case ModIds.NAME_TAGS:
+                if (nameTagsOverlay == null) {
+                    nameTagsOverlay = new NameTagsOverlay(activity);
+                    nameTagsOverlay.show();
+                }
+                break;
             case ModIds.CHICK_PET:
                 if (chickPetOverlay == null) {
                     chickPetOverlay = new ChickPetOverlay(activity);
@@ -431,6 +449,13 @@ public class InbuiltOverlayManager {
                     activity instanceof PojavControlsHost ? (PojavControlsHost) activity : null,
                     false);
             PojavControlsMod.setEnabled(false);
+            return;
+        }
+        if (modId.equals(ModIds.NAME_TAGS)) {
+            if (nameTagsOverlay != null) {
+                nameTagsOverlay.hide();
+                nameTagsOverlay = null;
+            }
             return;
         }
         if (modId.equals(ModIds.CHICK_PET)) {
@@ -1192,7 +1217,7 @@ public class InbuiltOverlayManager {
     public void tick() {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
         if (nameTagsOverlay != null) {
-            nameTagsOverlay.setModuleEnabled(manager.isEspNameTags());
+            nameTagsOverlay.setModuleEnabled(manager.isNameTagsEnabled());
         }
         boolean isPauseOnly = manager.isPauseMenuOnly();
         boolean isPauseOpen = org.levimc.launcher.preloader.PreloaderInput.isPauseMenuOpen();

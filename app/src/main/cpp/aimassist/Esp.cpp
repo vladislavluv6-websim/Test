@@ -8,6 +8,7 @@
 #include <cstring>
 #include <string>
 
+#include "GameEcs.hpp"
 #include "Memory.hpp"
 #include "Offsets.hpp"
 #include "pl/memory/Hook.hpp"
@@ -581,6 +582,14 @@ void Esp::setMobColor(uint32_t argb) {
   m_mobColor.store(argb, std::memory_order_release);
 }
 
+void Esp::setArmoredColor(uint32_t argb) {
+  m_armoredColor.store(argb, std::memory_order_relaxed);
+}
+
+void Esp::setArmorColors(bool enabled) {
+  m_armorColors.store(enabled, std::memory_order_relaxed);
+}
+
 
 void Esp::setNameTags(bool enabled) {
   m_nameTags.store(enabled, std::memory_order_release);
@@ -725,10 +734,9 @@ void Esp::render(void *levelRenderer, void *screenContext) {
   const bool espBoxes = m_enabled.load(std::memory_order_acquire);
   const bool showPlayers = m_showPlayers.load(std::memory_order_relaxed);
   const bool showMobs = m_showMobs.load(std::memory_order_relaxed);
-  const bool nameTags =
-      m_nameTags.load(std::memory_order_relaxed) && showPlayers;
+  const bool nameTags = m_nameTags.load(std::memory_order_relaxed);
   if (!espBoxes && !nameTags) return;
-  if (!showPlayers && !showMobs) return;
+  if (espBoxes && !showPlayers && !showMobs && !nameTags) return;
 
   void *player = m_bridge.getLocalPlayer();
   if (!player) return;
@@ -779,6 +787,9 @@ void Esp::render(void *levelRenderer, void *screenContext) {
 
   const uint32_t playerColor = m_playerColor.load(std::memory_order_relaxed);
   const uint32_t mobColor = m_mobColor.load(std::memory_order_relaxed);
+  const uint32_t armoredColor =
+      m_armoredColor.load(std::memory_order_relaxed);
+  const bool armorColors = m_armorColors.load(std::memory_order_relaxed);
 
   int drawn = 0;
   for (void *actor : m_actors) {
@@ -794,8 +805,13 @@ void Esp::render(void *levelRenderer, void *screenContext) {
 
     Aabb bounds{};
     if (!m_bridge.getActorBounds(actor, bounds)) continue;
+    uint32_t color = mobColor;
+    if (isPlayer) {
+      color = (armorColors && gameecs::hasArmor(actor)) ? armoredColor
+                                                       : playerColor;
+    }
     drawBox(reinterpret_cast<void *>(tessellator), screenContext, material,
-            bounds, camera, isPlayer ? playerColor : mobColor);
+            bounds, camera, color);
     ++drawn;
   }
 

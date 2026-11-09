@@ -20,6 +20,7 @@
 #include "AimAssist.hpp"
 #include "Memory.hpp"
 #include "Offsets.hpp"
+#include "CombatState.hpp"
 #include "pl/memory/Hook.hpp"
 #include "pl/memory/Signature.hpp"
 
@@ -55,6 +56,7 @@ using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
 // Touch-HUD builder: принимает указатель на объект-layout с вектором контролов.
 using ControlBuilderFn = void (*)(void *);
+using PlayerAuthInputWriteFn = void *(*)(void *, void *, void *, void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientUpdateOriginal = nullptr;
@@ -63,6 +65,7 @@ ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
 ControlBuilderFn g_controlBuilderOriginal = nullptr;
+PlayerAuthInputWriteFn g_playerAuthWriteOriginal = nullptr;
 
 std::atomic<void *> g_clientInstance{nullptr};
 std::atomic<void *> g_localPlayer{nullptr};
@@ -75,6 +78,23 @@ std::mutex g_initMutex;
 
 std::chrono::steady_clock::time_point g_lastFrame{};
 std::atomic<ClientBridge::MovePacketSender> g_movePacketSender{nullptr};
+
+void *playerAuthInputWriteDetour(void *packet, void *a1, void *a2, void *a3) {
+  if (packet && combatstate::sprintSuppressed()) {
+    auto *bits = reinterpret_cast<uint64_t *>(
+        static_cast<char *>(packet) + offsets::kPlayerAuthInputInputData);
+    auto clearBit = [bits](int bit) {
+      bits[bit >> 6] &= ~(1ULL << (bit & 63));
+    };
+    clearBit(4);   // SPRINT_DOWN
+    clearBit(20);  // SPRINTING
+    clearBit(25);  // START_SPRINTING
+    bits[26 >> 6] |= 1ULL << (26 & 63);  // STOP_SPRINTING
+  }
+  return g_playerAuthWriteOriginal
+             ? g_playerAuthWriteOriginal(packet, a1, a2, a3)
+             : nullptr;
+}
 
 bool isPlausiblePointer(uintptr_t address) {
   return mem::isPlausiblePointer(address);
@@ -1326,6 +1346,32 @@ bool ClientBridge::initialize() {
       }
     } else {
       aimbot::diagLog(kTag, "attack list hook: maps libStart=0");
+    }
+    // TriggerBot critical window: strip sprint bits from PlayerAuthInput
+    // right before serialisation. Prologue-verified so a version bump simply
+    // disables the feature instead of hijacking a different function.
+    if (maps.libStart != 0) {
+      const uintptr_t authWrite =
+          maps.libStart + offsets::kPlayerAuthInputWriteFileOffset;
+      static const unsigned char kPrologue[16] = {
+          0xfd, 0x7b, 0xbc, 0xa9, 0xf7, 0x0b, 0x00, 0xf9,
+          0xf6, 0x57, 0x02, 0xa9, 0xf4, 0x4f, 0x03, 0xa9};
+      if (std::memcmp(reinterpret_cast<const void *>(authWrite), kPrologue,
+                      sizeof(kPrologue)) == 0) {
+        if (pl::memory::hook(
+                reinterpret_cast<pl::memory::FuncPtr>(authWrite),
+                reinterpret_cast<pl::memory::FuncPtr>(
+                    &playerAuthInputWriteDetour),
+                reinterpret_cast<pl::memory::FuncPtr *>(
+                    &g_playerAuthWriteOriginal)) != 0) {
+          aimbot::diagLog(kTag, "auth input hook failed @0x%zx", authWrite);
+        } else {
+          aimbot::diagLog(kTag, "auth input hooked @0x%zx", authWrite);
+        }
+      } else {
+        aimbot::diagLog(kTag,
+                        "auth input prologue mismatch @0x%zx", authWrite);
+      }
     }
     // Хук реализации удара 0x1009cba4: ловит настоящий GameMode на любом
     // ударе (в т.ч. обычном ударе игрока), не полагаясь на 0xce2c78c.
