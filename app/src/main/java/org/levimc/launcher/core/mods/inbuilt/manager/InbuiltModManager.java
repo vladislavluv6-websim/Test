@@ -143,7 +143,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_AIM_ASSIST_RANGE = 10;
     private static final int DEFAULT_AIM_ASSIST_STRENGTH = 100;
     private static final boolean DEFAULT_AIM_ASSIST_LEGIT = true;
-    private static final int DEFAULT_AIM_ASSIST_FOV = 120;
+    private static final int DEFAULT_AIM_ASSIST_FOV = 360;
     private static final boolean DEFAULT_AIM_ASSIST_WALL_CHECK = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
@@ -194,6 +194,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_GYRO_DEADZONE = 5;
     private static final String KEY_TUNING_REVISION = "tuning_revision";
     private static final int TUNING_REVISION = 2;
+    private static final String KEY_FOV_360_REVISION = "fov_360_revision";
 
     private static volatile InbuiltModManager instance;
     private final SharedPreferences prefs;
@@ -210,6 +211,15 @@ public class InbuiltModManager {
         };
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener);
         migrateTuningDefaults();
+        migrateFov360();
+    }
+
+    private void migrateFov360() {
+        if (prefs.getInt(KEY_FOV_360_REVISION, 0) >= 1) return;
+        prefs.edit()
+                .putInt(KEY_AIM_ASSIST_FOV, 360)
+                .putInt(KEY_FOV_360_REVISION, 1)
+                .apply();
     }
 
     /**
@@ -482,13 +492,13 @@ public class InbuiltModManager {
     }
 
     public int getAimAssistFov() {
-        return Math.max(30, Math.min(120,
+        return Math.max(30, Math.min(360,
                 prefs.getInt(KEY_AIM_ASSIST_FOV, DEFAULT_AIM_ASSIST_FOV)));
     }
 
     public void setAimAssistFov(int fov) {
         prefs.edit().putInt(KEY_AIM_ASSIST_FOV,
-                Math.max(30, Math.min(120, fov))).apply();
+                Math.max(30, Math.min(360, fov))).apply();
     }
 
     public boolean isAimAssistWallCheck() {

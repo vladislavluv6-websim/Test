@@ -225,7 +225,7 @@ void AimAssist::setStrength(float strength) {
 
 void AimAssist::setFov(float fovDeg) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
-  m_settings.fovDeg = clampf(fovDeg, 1.0f, 120.0f);
+  m_settings.fovDeg = clampf(fovDeg, 1.0f, 360.0f);
 }
 
 void AimAssist::setWallCheck(bool enabled) {
@@ -426,7 +426,7 @@ void AimAssist::setAntiCheatMode(bool enabled) {
 
 void AimAssist::setAssistCone(float degrees) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
-  m_settings.assistConeDeg = clampf(degrees, 10.0f, 180.0f);
+  m_settings.assistConeDeg = clampf(degrees, 10.0f, 360.0f);
 }
 
 void AimAssist::setAttackMissChance(float chance) {
@@ -928,7 +928,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
       settings.fastAim
           ? (settings.antiCheatMode
                  ? std::max(60.0f, settings.assistConeDeg)
-                 : std::min(settings.fovDeg, 120.0f))
+                 : settings.fovDeg)
           : (settings.antiCheatMode
                  ? std::min(settings.fovDeg, settings.assistConeDeg)
                  : settings.fovDeg);

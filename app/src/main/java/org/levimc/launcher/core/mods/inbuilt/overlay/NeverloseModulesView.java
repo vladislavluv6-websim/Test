@@ -65,7 +65,9 @@ public class NeverloseModulesView extends View {
 
     private final List<Column> columns = new ArrayList<>();
     private final Map<String, Float> toggleMotion = new HashMap<>();
+    private final Map<String, Float> arrowMotion = new HashMap<>();
     private Listener listener;
+    private Runnable onScrollListener;
 
     private float contentWidth;
     private float contentHeight;
@@ -152,7 +154,11 @@ public class NeverloseModulesView extends View {
     public void setExpandedKey(String key) {
         if (expandedKey == null ? key == null : expandedKey.equals(key)) return;
         expandedKey = key;
-        invalidate();
+        postInvalidateOnAnimation();
+    }
+
+    public void setOnScrollListener(Runnable listener) {
+        onScrollListener = listener;
     }
 
     public void setContent(List<UnifiedMod> mods, Set<String> favoriteKeys) {
@@ -272,6 +278,7 @@ public class NeverloseModulesView extends View {
                 if (!dragging && Math.abs(event.getY() - downY) > touchSlop) {
                     dragging = true;
                     pendingHit = null;
+                    if (onScrollListener != null) onScrollListener.run();
                 }
                 if (dragging) {
                     scrollY -= dy;
@@ -344,6 +351,15 @@ public class NeverloseModulesView extends View {
                 if (Math.abs(next - target) < 0.01f) next = target;
                 else animating = true;
                 toggleMotion.put(row.mod.getStableKey(), next);
+
+                float arrowTarget = expandedKey != null
+                        && expandedKey.equals(row.mod.getStableKey()) ? 1f : 0f;
+                float arrowCurrent = arrowMotion.containsKey(row.mod.getStableKey())
+                        ? arrowMotion.get(row.mod.getStableKey()) : arrowTarget;
+                float arrowNext = arrowCurrent + (arrowTarget - arrowCurrent) * 0.28f;
+                if (Math.abs(arrowNext - arrowTarget) < 0.01f) arrowNext = arrowTarget;
+                else animating = true;
+                arrowMotion.put(row.mod.getStableKey(), arrowNext);
             }
         }
         if (animating) postInvalidateOnAnimation();
@@ -392,10 +408,10 @@ public class NeverloseModulesView extends View {
 
         float arrowX = column.x + column.width - 65f * density;
         float arrowY = top + rowHeight * 0.5f;
-        boolean expanded = expandedKey != null
-                && expandedKey.equals(row.mod.getStableKey());
+        float arrowT = arrowMotion.containsKey(row.mod.getStableKey())
+                ? arrowMotion.get(row.mod.getStableKey()) : 0f;
         canvas.save();
-        canvas.rotate(expanded ? 180f : 0f, arrowX, arrowY);
+        canvas.rotate(arrowT * 180f, arrowX, arrowY);
         path.reset();
         path.moveTo(arrowX - 4f * density, arrowY - 1.7f * density);
         path.lineTo(arrowX, arrowY + 2.3f * density);
@@ -404,7 +420,7 @@ public class NeverloseModulesView extends View {
         paint.setStrokeWidth(1.7f * density);
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND);
-        paint.setColor(expanded ? COLOR_ACCENT : COLOR_TEXT_DIM);
+        paint.setColor(blend(COLOR_TEXT_DIM, COLOR_ACCENT, arrowT));
         canvas.drawPath(path, paint);
         paint.setStrokeCap(Paint.Cap.BUTT);
         paint.setStrokeJoin(Paint.Join.MITER);

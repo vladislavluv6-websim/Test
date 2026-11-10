@@ -535,7 +535,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_AIM_ASSIST_FOV,
                     context.getString(R.string.mod_config_aim_assist_fov),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "120", "30", "120",
+                    "360", "30", "360",
                     String.valueOf(manager.getAimAssistFov())));
             configs.add(config(CFG_AIM_ASSIST_BODY_PART,
                     context.getString(R.string.mod_config_aim_assist_body_part),

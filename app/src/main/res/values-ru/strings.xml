@@ -727,7 +727,8 @@
     <string name="mod_config_swing_snap">Резкая</string>
     <string name="mod_config_swing_twitch">Дёрганая</string>
     <string name="mod_config_swing_speed">Скорость удара</string>
-    <string name="color_palette_primary">Основной</string>
+        <string name="mod_config_inline_hint">НАСТРОЙКИ МОДУЛЯ</string>
+<string name="color_palette_primary">Основной</string>
     <string name="color_palette_secondary">Вторичный</string>
     <string name="color_palette_hex">HEX</string>
     <string name="mod_config_swing_amplitude">Амплитуда удара</string>

@@ -5,7 +5,6 @@ import android.app.AlertDialog;
 import android.content.res.ColorStateList;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.util.Log;
 import android.util.TypedValue;
@@ -27,11 +26,12 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
-import android.widget.PopupWindow;
 import android.widget.SeekBar;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.animation.ValueAnimator;
+import android.view.animation.DecelerateInterpolator;
 
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -141,9 +141,10 @@ public class ModMenuOverlay {
     private int settingsScrollPosition;
     private final Map<String, Integer> legacyConfigScrollPositions = new HashMap<>();
     private boolean restoringLastSection;
-    private PopupWindow inlineConfigPopup;
+    private View inlineConfigCard;
     private String inlineConfigKey;
     private FrameLayout inlineConfigHost;
+    private ValueAnimator inlineConfigAnimator;
     
     private ModMenuCallback callback;
     private ModNotificationManager notificationManager;
@@ -629,6 +630,7 @@ public class ModMenuOverlay {
                     toggleInlineConfig(mod, anchorX, anchorY);
                 }
             });
+            solsticeView.setOnScrollListener(this::dismissInlineConfigImmediate);
         }
         applyCompactModeLayout(compactMode);
     }
@@ -864,30 +866,48 @@ public class ModMenuOverlay {
     private void toggleInlineConfig(UnifiedMod mod, float anchorX, float anchorY) {
         if (mod == null) return;
         String key = mod.getStableKey();
-        boolean same = inlineConfigPopup != null && key != null && key.equals(inlineConfigKey);
-        dismissInlineConfig();
-        if (same) return;
+        if (inlineConfigCard != null && key != null && key.equals(inlineConfigKey)) {
+            dismissInlineConfig();
+            return;
+        }
+        dismissInlineConfigImmediate();
         if (mod.hasCustomConfig()) {
             showConfigSection(mod);
             return;
         }
-        if (solsticeView == null) return;
+        if (!(modulesContainer instanceof ViewGroup)) return;
+        ViewGroup container = (ViewGroup) modulesContainer;
+        int containerW = container.getWidth();
+        int containerH = container.getHeight();
+        if (containerW <= 0 || containerH <= 0) return;
 
-        int width = dp(322);
-        int screenH = activity.getResources().getDisplayMetrics().heightPixels;
-        int height = Math.min(dp(430), Math.max(dp(240), screenH - dp(96)));
+        int margin = dp(12);
+        int cardW = containerW - margin * 2;
+        int desired = Math.min(dp(380), Math.max(dp(220), containerH - dp(24)));
+        int top = Math.round(anchorY) + dp(4);
+        if (top + desired > containerH - dp(8)) {
+            top = Math.round(anchorY) - desired - dp(34);
+        }
+        top = Math.max(dp(8), Math.min(top, containerH - dp(120)));
+        int targetH = Math.min(desired, containerH - top - dp(8));
+        if (targetH < dp(160)) {
+            top = dp(8);
+            targetH = Math.min(desired, containerH - dp(16));
+        }
 
-        FrameLayout host = new FrameLayout(activity);
+        FrameLayout card = new FrameLayout(activity);
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0xFF0D0F16);
         bg.setCornerRadius(dp(12));
         bg.setStroke(dp(1), 0xFF272B36);
-        host.setBackground(bg);
+        card.setBackground(bg);
+        card.setElevation(dp(12));
+        card.setClickable(true);
 
         LinearLayout shell = new LinearLayout(activity);
         shell.setOrientation(LinearLayout.VERTICAL);
         shell.setPadding(dp(4), 0, dp(4), dp(4));
-        host.addView(shell, new FrameLayout.LayoutParams(
+        card.addView(shell, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -915,6 +935,15 @@ public class ModMenuOverlay {
         shell.addView(header, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
 
+        TextView hint = new TextView(activity);
+        hint.setText(R.string.mod_config_inline_hint);
+        hint.setTextColor(0xFF5E6370);
+        hint.setTextSize(8.5f);
+        hint.setLetterSpacing(0.08f);
+        hint.setPadding(dp(12), 0, dp(12), dp(3));
+        shell.addView(hint, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
+
         FrameLayout configHost = new FrameLayout(activity);
         shell.addView(configHost, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -926,49 +955,89 @@ public class ModMenuOverlay {
             }
         });
 
-        PopupWindow popup = new PopupWindow(host, width, height, true);
-        popup.setBackgroundDrawable(new ColorDrawable(0x00000000));
-        popup.setOutsideTouchable(true);
-        popup.setFocusable(true);
-        popup.setElevation(dp(14));
-        popup.setOnDismissListener(() -> {
-            RuntimeConfigView.stop(configHost);
-            if (inlineConfigPopup == popup) {
-                inlineConfigPopup = null;
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(cardW, 0);
+        params.leftMargin = margin;
+        params.topMargin = top;
+        params.gravity = Gravity.TOP;
+        container.addView(card, params);
+
+        card.setAlpha(0f);
+        card.setTranslationY(-dp(10));
+        inlineConfigCard = card;
+        inlineConfigHost = configHost;
+        inlineConfigKey = key;
+        if (solsticeView != null) solsticeView.setExpandedKey(key);
+
+        card.animate().alpha(1f).translationY(0f)
+                .setDuration(190L)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+        ValueAnimator open = ValueAnimator.ofInt(0, targetH);
+        open.setDuration(230L);
+        open.setInterpolator(new DecelerateInterpolator());
+        open.addUpdateListener(a -> {
+            if (inlineConfigCard != card) return;
+            ViewGroup.LayoutParams lp = card.getLayoutParams();
+            lp.height = (int) a.getAnimatedValue();
+            card.setLayoutParams(lp);
+        });
+        inlineConfigAnimator = open;
+        open.start();
+    }
+
+    private void dismissInlineConfig() {
+        dismissInlineConfig(true);
+    }
+
+    private void dismissInlineConfigImmediate() {
+        dismissInlineConfig(false);
+    }
+
+    private void dismissInlineConfig(boolean animate) {
+        ValueAnimator animator = inlineConfigAnimator;
+        inlineConfigAnimator = null;
+        if (animator != null) animator.cancel();
+
+        View card = inlineConfigCard;
+        FrameLayout host = inlineConfigHost;
+        if (card == null) {
+            inlineConfigKey = null;
+            if (solsticeView != null) solsticeView.setExpandedKey(null);
+            return;
+        }
+
+        Runnable cleanup = () -> {
+            if (card.getParent() instanceof ViewGroup) {
+                ((ViewGroup) card.getParent()).removeView(card);
+            }
+            RuntimeConfigView.stop(host);
+            if (inlineConfigCard == card) {
+                inlineConfigCard = null;
                 inlineConfigHost = null;
                 inlineConfigKey = null;
                 if (solsticeView != null) solsticeView.setExpandedKey(null);
             }
+        };
+
+        if (!animate) {
+            cleanup.run();
+            return;
+        }
+
+        card.animate().alpha(0f).translationY(-dp(8))
+                .setDuration(150L)
+                .withEndAction(cleanup)
+                .start();
+        ValueAnimator close = ValueAnimator.ofInt(card.getHeight(), 0);
+        close.setDuration(200L);
+        close.setInterpolator(new DecelerateInterpolator());
+        close.addUpdateListener(a -> {
+            ViewGroup.LayoutParams lp = card.getLayoutParams();
+            lp.height = (int) a.getAnimatedValue();
+            card.setLayoutParams(lp);
         });
-
-        inlineConfigPopup = popup;
-        inlineConfigHost = configHost;
-        inlineConfigKey = key;
-
-        int[] location = new int[2];
-        solsticeView.getLocationOnScreen(location);
-        int screenW = activity.getResources().getDisplayMetrics().widthPixels;
-        int x = location[0] + Math.round(anchorX) - dp(18);
-        int y = location[1] + Math.round(anchorY) + dp(4);
-        if (x + width > screenW - dp(8)) x = screenW - width - dp(8);
-        if (x < dp(8)) x = dp(8);
-        if (y + height > screenH - dp(8)) {
-            y = location[1] + Math.round(anchorY) - height - dp(34);
-        }
-        if (y < dp(8)) y = dp(8);
-        popup.showAtLocation(solsticeView, Gravity.NO_GRAVITY, x, y);
-        solsticeView.setExpandedKey(key);
-    }
-
-    private void dismissInlineConfig() {
-        PopupWindow popup = inlineConfigPopup;
-        inlineConfigPopup = null;
-        inlineConfigHost = null;
-        inlineConfigKey = null;
-        if (popup != null && popup.isShowing()) {
-            popup.dismiss();
-        }
-        if (solsticeView != null) solsticeView.setExpandedKey(null);
+        inlineConfigAnimator = close;
+        close.start();
     }
 
     private void setupHudEditorDragHandle(View handle, View tools) {

@@ -720,7 +720,8 @@
     <string name="mod_config_swing_snap">Snap</string>
     <string name="mod_config_swing_twitch">Twitch</string>
     <string name="mod_config_swing_speed">Swing speed</string>
-    <string name="color_palette_primary">Primary</string>
+        <string name="mod_config_inline_hint">MODULE SETTINGS</string>
+<string name="color_palette_primary">Primary</string>
     <string name="color_palette_secondary">Secondary</string>
     <string name="color_palette_hex">HEX</string>
     <string name="mod_config_swing_amplitude">Swing amplitude</string>
