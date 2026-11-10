@@ -7,6 +7,7 @@ import android.widget.Toast;
 
 import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.ModManager;
+import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.FullbrightMod;
 import org.levimc.launcher.core.versions.GameVersion;
