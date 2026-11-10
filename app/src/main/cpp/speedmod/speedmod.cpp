@@ -969,6 +969,12 @@ bool inReadable(const LibSegments &lib, uintptr_t address, size_t size) {
   return rangeContains(lib.readable, lib.readableCount, address, size);
 }
 
+bool readableInMinecraft(uintptr_t address, size_t size) {
+  LibSegments lib;
+  dl_iterate_phdr(collectLibSegments, &lib);
+  return inReadable(lib, address, size);
+}
+
 bool resolvePredictionHandle(uintptr_t &handle, uintptr_t &slotAddress) {
   LibSegments lib;
   dl_iterate_phdr(collectLibSegments, &lib);
@@ -1078,6 +1084,10 @@ bool installPacketHook(uintptr_t gameBase) {
   static const unsigned char kPrologue[16] = {
       0xfd, 0x7b, 0xbc, 0xa9, 0xf7, 0x0b, 0x00, 0xf9,
       0xf6, 0x57, 0x02, 0xa9, 0xf4, 0x4f, 0x03, 0xa9};
+  if (!readableInMinecraft(address, sizeof(kPrologue))) {
+    logWarning("PlayerAuthInput::write address is not readable");
+    return false;
+  }
   if (std::memcmp(reinterpret_cast<const void *>(address), kPrologue,
                   sizeof(kPrologue)) != 0) {
     __android_log_print(
