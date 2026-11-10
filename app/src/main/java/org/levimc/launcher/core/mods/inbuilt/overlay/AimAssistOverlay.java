@@ -42,6 +42,9 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setTargetGrace(manager.getAimAssistGrace());
         AimAssistMod.setPreferClosest(manager.isAimAssistPreferClosest());
         AimAssistMod.setTargetLock(manager.isAimAssistTargetLock());
+        AimAssistMod.setFastAim(manager.isAimAssistFastAim());
+        AimAssistMod.setFastAimTime(manager.getAimAssistFastAimTime());
+        AimAssistMod.setFastAimMaxSpeed(manager.getAimAssistFastAimMaxSpeed());
     }
 
     private boolean isSupportedVersion() {

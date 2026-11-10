@@ -65,6 +65,9 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_GRACE = "aim_assist_grace";
     private static final String CFG_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
     private static final String CFG_AIM_ASSIST_TARGET_LOCK = "aim_assist_target_lock";
+    private static final String CFG_AIM_ASSIST_FAST_AIM = "aim_assist_fast_aim";
+    private static final String CFG_AIM_ASSIST_FAST_AIM_TIME = "aim_assist_fast_aim_time";
+    private static final String CFG_AIM_ASSIST_FAST_AIM_MAX_SPEED = "aim_assist_fast_aim_max_speed";
     private static final String CFG_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String CFG_ESP_SHOW_MOBS = "esp_show_mobs";
     private static final String CFG_ESP_RANGE = "esp_range";
@@ -274,7 +277,10 @@ public final class InbuiltModuleProvider {
     }
 
     private static boolean isAimMotionKey(String key) {
-        return CFG_AIM_ASSIST_STRENGTH.equals(key)
+        return CFG_AIM_ASSIST_FAST_AIM.equals(key)
+                || CFG_AIM_ASSIST_FAST_AIM_TIME.equals(key)
+                || CFG_AIM_ASSIST_FAST_AIM_MAX_SPEED.equals(key)
+                || CFG_AIM_ASSIST_STRENGTH.equals(key)
                 || CFG_AIM_ASSIST_MAX_SPEED.equals(key)
                 || CFG_AIM_ASSIST_SMOOTHING.equals(key)
                 || CFG_AIM_ASSIST_ACCEL.equals(key)
@@ -559,6 +565,21 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "6", "0", "30",
                     String.valueOf(manager.getAimAssistGrace())));
+            configs.add(config(CFG_AIM_ASSIST_FAST_AIM,
+                    context.getString(R.string.mod_config_aim_assist_fast_aim),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "false", "", "",
+                    String.valueOf(manager.isAimAssistFastAim())));
+            configs.add(config(CFG_AIM_ASSIST_FAST_AIM_TIME,
+                    context.getString(R.string.mod_config_aim_assist_fast_aim_time),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "60", "20", "200",
+                    String.valueOf(manager.getAimAssistFastAimTime())));
+            configs.add(config(CFG_AIM_ASSIST_FAST_AIM_MAX_SPEED,
+                    context.getString(R.string.mod_config_aim_assist_fast_aim_speed),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "1800", "300", "4000",
+                    String.valueOf(manager.getAimAssistFastAimMaxSpeed())));
             configs.add(config(CFG_AIM_ASSIST_MAX_SPEED,
                     context.getString(R.string.mod_config_aim_assist_max_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
@@ -942,6 +963,15 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_TARGET_LOCK:
                 manager.setAimAssistTargetLock(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_FAST_AIM:
+                manager.setAimAssistFastAim(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_FAST_AIM_TIME:
+                manager.setAimAssistFastAimTime(parseInt(value, manager.getAimAssistFastAimTime()));
+                break;
+            case CFG_AIM_ASSIST_FAST_AIM_MAX_SPEED:
+                manager.setAimAssistFastAimMaxSpeed(parseInt(value, manager.getAimAssistFastAimMaxSpeed()));
                 break;
             case CFG_AIM_ASSIST_LEGIT:
                 manager.setAimAssistLegitMode(parseBoolean(value));

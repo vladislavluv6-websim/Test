@@ -146,6 +146,24 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTarge
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetFastAim(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setFastAim(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetFastAimTime(
+    JNIEnv *, jclass, jfloat timeMs) {
+  aimbot::AimAssist::instance().setFastAimTime(timeMs);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetFastAimMaxSpeed(
+    JNIEnv *, jclass, jfloat degPerSecond) {
+  aimbot::AimAssist::instance().setFastAimMaxSpeed(degPerSecond);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetGrace(
     JNIEnv *, jclass, jint frames) {
   aimbot::AimAssist::instance().setTargetGrace(frames);

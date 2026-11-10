@@ -99,6 +99,18 @@ public final class AimAssistMod {
         if (initialized) nativeSetTargetGrace(frames);
     }
 
+    public static void setFastAim(boolean enabled) {
+        if (initialized) nativeSetFastAim(enabled);
+    }
+
+    public static void setFastAimTime(float timeMs) {
+        if (initialized) nativeSetFastAimTime(timeMs);
+    }
+
+    public static void setFastAimMaxSpeed(float degPerSecond) {
+        if (initialized) nativeSetFastAimMaxSpeed(degPerSecond);
+    }
+
     public static void setPreferClosest(boolean enabled) {
         if (initialized) nativeSetPreferClosest(enabled);
     }
@@ -237,6 +249,9 @@ public final class AimAssistMod {
     private static native void nativeSetStickyTicks(int ticks);
     private static native void nativeSetTargetLock(boolean enabled);
     private static native void nativeSetTargetGrace(int frames);
+    private static native void nativeSetFastAim(boolean enabled);
+    private static native void nativeSetFastAimTime(float timeMs);
+    private static native void nativeSetFastAimMaxSpeed(float degPerSecond);
     private static native void nativeSetPreferClosest(boolean enabled);
     private static native void nativeSetTriggerBot(boolean enabled);
     private static native void nativeSetTriggerDelay(int delayMs);

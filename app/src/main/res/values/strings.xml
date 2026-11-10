@@ -720,6 +720,9 @@
     <string name="mod_config_aim_assist_prefer_closest">Prefer closest target</string>
     <string name="mod_config_aim_assist_target_lock">Target lock (stay on one player)</string>
     <string name="mod_config_aim_assist_sticky">Target stickiness (ticks)</string>
+    <string name="mod_config_aim_assist_fast_aim">Fast aim</string>
+    <string name="mod_config_aim_assist_fast_aim_time">Fast aim time (ms)</string>
+    <string name="mod_config_aim_assist_fast_aim_speed">Fast aim speed (°/s)</string>
     <string name="mod_config_aim_assist_grace">Target grace (frames)</string>
     <string name="mod_config_aim_assist_max_speed">Max turn speed (°/s)</string>
     <string name="mod_config_aim_assist_smoothing">Smoothing (1 = sharp, 40 = silky)</string>

@@ -50,6 +50,9 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_GRACE = "aim_assist_grace";
     private static final String KEY_AIM_ASSIST_PREFER_CLOSEST = "aim_assist_prefer_closest";
     private static final String KEY_AIM_ASSIST_TARGET_LOCK = "aim_assist_target_lock";
+    private static final String KEY_AIM_ASSIST_FAST_AIM = "aim_assist_fast_aim";
+    private static final String KEY_AIM_ASSIST_FAST_AIM_TIME = "aim_assist_fast_aim_time";
+    private static final String KEY_AIM_ASSIST_FAST_AIM_MAX_SPEED = "aim_assist_fast_aim_max_speed";
     private static final String KEY_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String KEY_ESP_SHOW_MOBS = "esp_show_mobs";
     private static final String KEY_ESP_NAME_TAGS = "esp_name_tags";
@@ -147,6 +150,9 @@ public class InbuiltModManager {
     private static final int DEFAULT_AIM_ASSIST_GRACE = 6;
     private static final boolean DEFAULT_AIM_ASSIST_PREFER_CLOSEST = false;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_LOCK = false;
+    private static final boolean DEFAULT_AIM_ASSIST_FAST_AIM = false;
+    private static final int DEFAULT_AIM_ASSIST_FAST_AIM_TIME = 60;
+    private static final int DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED = 1800;
     private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
     private static final boolean DEFAULT_ESP_SHOW_MOBS = true;
     private static final boolean DEFAULT_ESP_NAME_TAGS = false;
@@ -512,6 +518,35 @@ public class InbuiltModManager {
 
     public void setAimAssistTargetLock(boolean enabled) {
         prefs.edit().putBoolean(KEY_AIM_ASSIST_TARGET_LOCK, enabled).apply();
+    }
+
+    public boolean isAimAssistFastAim() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_FAST_AIM, DEFAULT_AIM_ASSIST_FAST_AIM);
+    }
+
+    public void setAimAssistFastAim(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_FAST_AIM, enabled).apply();
+    }
+
+    public int getAimAssistFastAimTime() {
+        return Math.max(20, Math.min(200,
+                prefs.getInt(KEY_AIM_ASSIST_FAST_AIM_TIME, DEFAULT_AIM_ASSIST_FAST_AIM_TIME)));
+    }
+
+    public void setAimAssistFastAimTime(int timeMs) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_FAST_AIM_TIME,
+                Math.max(20, Math.min(200, timeMs))).apply();
+    }
+
+    public int getAimAssistFastAimMaxSpeed() {
+        return Math.max(120, Math.min(4000,
+                prefs.getInt(KEY_AIM_ASSIST_FAST_AIM_MAX_SPEED,
+                        DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED)));
+    }
+
+    public void setAimAssistFastAimMaxSpeed(int degPerSecond) {
+        prefs.edit().putInt(KEY_AIM_ASSIST_FAST_AIM_MAX_SPEED,
+                Math.max(120, Math.min(4000, degPerSecond))).apply();
     }
 
     public boolean isEspShowPlayers() {

@@ -727,6 +727,9 @@
     <string name="mod_config_aim_assist_prefer_closest">Приоритет ближайшей цели</string>
     <string name="mod_config_aim_assist_target_lock">Target lock (держать одного игрока)</string>
     <string name="mod_config_aim_assist_sticky">Удержание цели (тики)</string>
+    <string name="mod_config_aim_assist_fast_aim">Быстрое наведение</string>
+    <string name="mod_config_aim_assist_fast_aim_time">Время быстрого наведения (мс)</string>
+    <string name="mod_config_aim_assist_fast_aim_speed">Скорость быстрого наведения (°/с)</string>
     <string name="mod_config_aim_assist_grace">Запас удержания (кадры)</string>
     <string name="mod_config_aim_assist_max_speed">Макс. скорость поворота (°/с)</string>
     <string name="mod_config_aim_assist_smoothing">Плавность (1 = резко, 40 = мягко)</string>

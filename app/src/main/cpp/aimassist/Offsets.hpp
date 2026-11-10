@@ -184,12 +184,12 @@ inline constexpr int kActorTypeAll = -1;
 // Рост глаз игрока над низом хитбокса.
 inline constexpr float kEyeHeight = 1.62f;
 // Точка прицеливания как доля высоты хитбокса (от низа).
-inline constexpr float kHeadFraction = 0.88f;
+inline constexpr float kHeadFraction = 0.90f;
 // Верх груди / шея: между грудью (0.62) и головой (0.88).
 inline constexpr float kUpperChestFraction = 0.78f;
-inline constexpr float kChestFraction = 0.62f;
+inline constexpr float kChestFraction = 0.65f;
 // Чуть ниже груди (нижняя часть грудной клетки / солнечное сплетение).
-inline constexpr float kLowerChestFraction = 0.56f;
+inline constexpr float kLowerChestFraction = 0.55f;
 inline constexpr float kLegsFraction = 0.25f;
 
 // ============================================================

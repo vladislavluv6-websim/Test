@@ -61,6 +61,11 @@ struct Settings {
   // Target lock: держим одну цель, пока она жива и в радиусе. Переключение
   // только если прицел стоит точно на другой цели.
   bool targetLock = false;
+  // Fast aim: довод по экспоненте за fastAimTimeMs, без шума/overshoot/
+  // deadzone/бюджета. Всегда ближайшая цель и lock до смерти/выхода из range.
+  bool fastAim = false;
+  float fastAimTimeMs = 60.0f;
+  float fastAimMaxSpeed = 1800.0f;
   float switchHysteresisDeg = 4.0f;
   // EMA-лаг позиции цели (в кадрах при 120 Гц). Даёт «догоняющее» наведение,
   // как у живой руки, вместо мгновенной привязки к центру хитбокса.
@@ -229,6 +234,9 @@ public:
   void setFullSpeedRange(float deg);
   void setStickyTicks(int ticks);
   void setTargetLock(bool enabled);
+  void setFastAim(bool enabled);
+  void setFastAimTime(float timeMs);
+  void setFastAimMaxSpeed(float degPerSecond);
   void setTargetGrace(int frames);
   void setPreferClosest(bool preferClosest);
   void setLegitMode(bool legit);
@@ -381,6 +389,9 @@ private:
   float m_lastFactor = 0.0f;
   float m_lastDt = 0.0f;
   bool m_deadzoneHit = false;
+  // Fast aim сам вызывает applyTurnDelta; внешний onTick не должен
+  // применять тот же шаг второй раз.
+  bool m_fastAimTurnApplied = false;
 
   mutable Vec3 m_eye{};
   std::minstd_rand m_rng{0x5EED1234u};

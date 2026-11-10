@@ -143,10 +143,17 @@ void AimAssist::onEnable() {
   m_vertVel = 0.0f;
   m_fallingSinceMs = 0;
   resetHumanProfile();
+  m_fastAimTurnApplied = false;
   m_onTarget.store(false, std::memory_order_release);
   // Release-публикация после сброса состояния: render-поток увидит
   // согласованные поля, а не полу-инициализированные.
   m_enabled.store(true, std::memory_order_release);
+  // Fast aim стартует разворот в тот же кадр, без ожидания тика поиска.
+  const Settings bootSettings = getSettings();
+  if (bootSettings.fastAim) {
+    void *player = m_bridge.getLocalPlayer();
+    if (player) findTargetInternal(player, bootSettings);
+  }
   aimbot::diagLog(kTag, "module enabled");
 }
 
@@ -288,6 +295,32 @@ void AimAssist::setTargetLock(bool enabled) {
   if (!enabled) {
     m_stickyLeft = 0;
   }
+}
+
+void AimAssist::setFastAim(bool enabled) {
+  {
+    std::lock_guard<std::mutex> lock(m_settingsMutex);
+    m_settings.fastAim = enabled;
+    if (enabled) {
+      // Fast aim всегда ведёт ближайшую цель.
+      m_settings.targetPriority = TargetPriority::Distance;
+    }
+  }
+  if (enabled && m_enabled.load(std::memory_order_acquire)) {
+    // Не ждём следующего кадра: захватываем цель сразу.
+    void *player = m_bridge.getLocalPlayer();
+    if (player) findTargetInternal(player, getSettings());
+  }
+}
+
+void AimAssist::setFastAimTime(float timeMs) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.fastAimTimeMs = clampf(timeMs, 20.0f, 200.0f);
+}
+
+void AimAssist::setFastAimMaxSpeed(float degPerSecond) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.fastAimMaxSpeed = clampf(degPerSecond, 120.0f, 4000.0f);
 }
 
 void AimAssist::setTargetGrace(int frames) {
@@ -606,6 +639,39 @@ void AimAssist::updateVisual(float dt) {
 
   const int64_t aimNow = nowMs();
 
+  // Target ESP живёт на валидной цели AimAssist, а не только на ударе:
+  // иначе без TriggerBot модуль всегда пустой.
+  Esp::instance().markTargetEspHit(m_target.actor);
+
+  // Fast aim: без человеческого профиля, EMA позиции, шума, overshoot,
+  // мёртвой зоны и сетевого бюджета. Чистая экспонента + лимит скорости.
+  if (settings.fastAim) {
+    m_lastAimActor = m_target.actor;
+    m_targetLockMs = aimNow;
+    m_aimEngageAtMs = 0;
+    m_velYaw = 0.0f;
+    m_velPitch = 0.0f;
+    m_fastAimTurnApplied = false;
+    const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
+    const float beforePitch = m_localPitch.load(std::memory_order_relaxed);
+    applySmoothRotationInternal(m_target.yaw, m_target.pitch, dt, settings);
+    const float afterYaw = m_localYaw.load(std::memory_order_relaxed);
+    const float afterPitch = m_localPitch.load(std::memory_order_relaxed);
+    m_lastStepYaw = shortestDelta(beforeYaw, afterYaw);
+    m_lastStepPitch = afterPitch - beforePitch;
+    m_lastDelta = std::sqrt(m_lastStepYaw * m_lastStepYaw +
+                            m_lastStepPitch * m_lastStepPitch);
+    m_lastFactor = 1.0f;
+    if (settings.debugOverlay) {
+      aimbot::diagLog(kTag,
+          "fast aim target=%p step=(p %.3f y %.3f) dt=%.4f",
+          m_target.actor, static_cast<double>(m_lastStepPitch),
+          static_cast<double>(m_lastStepYaw),
+          static_cast<double>(m_lastDt));
+    }
+    return;
+  }
+
   // Человеческая реакция: на новую цель камера выходит не мгновенно.
   // Триггер от этого не зависит и продолжает работать во время задержки.
   if (settings.humanize) {
@@ -844,9 +910,12 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
 
   // Жёсткий конус захвата даже при FOV=360. Развороты на 90-180° —
   // самый явный маркер aimbot/aimassist для серверных эвристик.
-  const float assistFov =
-      settings.antiCheatMode ? std::min(settings.fovDeg, settings.assistConeDeg)
-                             : settings.fovDeg;
+  // Fast aim игнорирует конус анти-чита: цель всегда ближайшая.
+  const float assistFov = settings.fastAim
+      ? 360.0f
+      : (settings.antiCheatMode
+             ? std::min(settings.fovDeg, settings.assistConeDeg)
+             : settings.fovDeg);
 
   Target current = m_target;
   bool currentStillValid = false;
@@ -854,7 +923,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   // Актёр, в чей хитбокс сейчас упирается прицел (посчитан updateTrigger).
   // Его aim assist обязан вести первым: иначе доводка утащит камеру с
   // хитбокса и триггер перестанет бить.
-  void *hitActor = settings.triggerBot
+  void *hitActor = (settings.triggerBot && !settings.fastAim)
                        ? m_triggerActor.load(std::memory_order_acquire)
                        : nullptr;
   Target triggerTarget{};
@@ -915,7 +984,8 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     }
   }
 
-  Target chosen = (settings.targetPriority == TargetPriority::Angle)
+  Target chosen = (!settings.fastAim &&
+                   settings.targetPriority == TargetPriority::Angle)
                       ? bestAngle
                       : bestDistance;
 
@@ -927,7 +997,8 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
 
   // Target lock: удерживаем выбранную цель, пока она валидна. Быстрое
   // переключение остаётся только когда прицел стоит точно на другой цели.
-  if (settings.targetLock && currentStillValid && !triggerOverride) {
+  if ((settings.targetLock || settings.fastAim) && currentStillValid &&
+      !triggerOverride) {
     chosen = current;
     if (bestAngle.valid && bestAngle.actor != current.actor &&
         bestAngle.angle <= 1.2f) {
@@ -950,7 +1021,8 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     // Минимальное время удержания цели. Без него assist перескакивает
     // между двумя близкими целями каждый кадр (multi-aura паттерн).
     const int64_t switchNow = nowMs();
-    if (!directHit && settings.switchDelayMs > 0 && m_lastSwitchMs != 0 &&
+    if (!settings.fastAim && !directHit && settings.switchDelayMs > 0 &&
+        m_lastSwitchMs != 0 &&
         switchNow - m_lastSwitchMs < settings.switchDelayMs) {
       better = false;
     }
@@ -1344,6 +1416,63 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
   // Один шаг на кадр: applyTurnDelta нельзя вызывать несколько раз за кадр,
   // иначе камера получает несколько мелких рывков и дрожит.
   const float h = dt;
+
+  // ------------------------------------------------------------
+  // Fast aim: чистая экспонента, без шума/overshoot/deadzone/бюджета.
+  // step = err * (1 - exp(-dt*1000/timeMs)), затем limit по скорости.
+  // ------------------------------------------------------------
+  if (settings.fastAim) {
+    const float curYaw = m_localYaw.load(std::memory_order_relaxed);
+    const float curPitch = m_localPitch.load(std::memory_order_relaxed);
+
+    // dt зажимаем строго в [0.001, 0.05], чтобы exp не давал скачки
+    // на первом кадре после лага.
+    const float fastDt = clampf(dt, 0.001f, 0.05f);
+    const float timeMs = clampf(settings.fastAimTimeMs, 20.0f, 200.0f);
+    const float alpha =
+        1.0f - std::exp(-fastDt * 1000.0f / timeMs);
+
+    float errYaw = shortestDelta(curYaw, targetYaw);
+    float errPitch = targetPitch - curPitch;
+    const float errMag = std::sqrt(errYaw * errYaw + errPitch * errPitch);
+
+    float stepYaw = errYaw * alpha;
+    float stepPitch = errPitch * alpha;
+
+    // Лимит длины шага: сохраняем направление, режем модуль.
+    const float maxSpeed = clampf(settings.fastAimMaxSpeed, 120.0f, 4000.0f);
+    const float maxStep = maxSpeed * fastDt;
+    const float stepMag = std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
+    if (stepMag > maxStep && stepMag > 1e-6f) {
+      const float scale = maxStep / stepMag;
+      stepYaw *= scale;
+      stepPitch *= scale;
+    }
+
+    // Доводим остаток точно, чтобы не «зудеть» у нуля.
+    if (errMag < 0.05f) {
+      stepYaw = errYaw;
+      stepPitch = errPitch;
+    }
+
+    const float newYaw = normalizeYaw(curYaw + stepYaw);
+    const float newPitch = clampf(curPitch + stepPitch, -89.9f, 89.9f);
+    m_localYaw.store(newYaw, std::memory_order_relaxed);
+    m_localPitch.store(newPitch, std::memory_order_relaxed);
+
+    m_lastDelta = errMag;
+    m_lastFactor = 1.0f;
+    m_lastDt = fastDt;
+    m_deadzoneHit = false;
+
+    void *player = m_bridge.getLocalPlayer();
+    if (player && (std::fabs(stepYaw) > 0.00005f ||
+                   std::fabs(stepPitch) > 0.00005f)) {
+      m_bridge.applyTurnDelta(player, -stepPitch, stepYaw);
+      m_fastAimTurnApplied = true;
+    }
+    return;
+  }
 
   // strength 0..100 масштабирует скорость, не меняя форму кривой.
   const float strengthScale = clampf(settings.strength / 100.0f, 0.0f, 1.0f);
