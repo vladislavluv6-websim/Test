@@ -740,6 +740,9 @@
     <string name="mod_config_target_esp_hold">Видимость после удара (мс)</string>
     <string name="inbuilt_mod_name_tags">Ники игроков</string>
     <string name="inbuilt_mod_name_tags_desc">Показывает чистые ники игроков сквозь стены, включая невидимых</string>
+    <string name="inbuilt_mod_friend">Друзья</string>
+    <string name="inbuilt_mod_friend_desc">Игроки из списка игнорируются AimAssist и TriggerBot и подсвечиваются зелёным в ESP</string>
+    <string name="mod_config_friend_names">Ники друзей (через запятую)</string>
     <string name="inbuilt_mod_fullbright">Полная яркость</string>
     <string name="inbuilt_mod_fullbright_desc">Убирает темноту и туман, принудительно включая полное освещение мира</string>
     <string name="fullbright_mod_unavailable">Полная яркость недоступна для этой версии Minecraft</string>

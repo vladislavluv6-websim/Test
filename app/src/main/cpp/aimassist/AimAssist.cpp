@@ -950,6 +950,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     if (playerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
     if (settings.ignoreInvisible && isInvisible(actor)) continue;
     if (settings.teamCheck && isSameTeam(player, actor)) continue;
+    if (playerActor && Esp::instance().isFriend(actor)) continue;
 
     Vec3 targetPosition{};
     if (!m_bridge.getPosition(actor, targetPosition)) continue;
@@ -1134,6 +1135,7 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     if (playerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
     if (settings.ignoreInvisible && isInvisible(actor)) continue;
     if (settings.teamCheck && isSameTeam(player, actor)) continue;
+    if (playerActor && Esp::instance().isFriend(actor)) continue;
 
     Aabb bounds{};
     if (!m_bridge.getActorBounds(actor, bounds)) {

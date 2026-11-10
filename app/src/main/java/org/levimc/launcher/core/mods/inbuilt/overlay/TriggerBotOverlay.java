@@ -16,6 +16,7 @@ import org.levimc.launcher.core.mods.ModManager;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod;
+import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.core.versions.GameVersion;
 import org.levimc.launcher.preloader.PreloaderInput;
 
@@ -135,6 +136,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setTargetLock(manager.isAimAssistTargetLock());
         AimAssistMod.setAttackMissChance(skipChancePercent / 100.0f);
         AimAssistMod.setTriggerBot(true);
+        EspMod.setFriendNames(manager.isFriendModuleEnabled()
+                ? manager.getFriendNames() : "");
         nativeTriggerEnabled = true;
     }
 

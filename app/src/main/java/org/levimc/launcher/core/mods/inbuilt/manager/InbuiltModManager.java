@@ -195,6 +195,8 @@ public class InbuiltModManager {
     private static final String KEY_TUNING_REVISION = "tuning_revision";
     private static final int TUNING_REVISION = 2;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
+    private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
+    private static final String KEY_FRIEND_NAMES = "friend_names";
 
     private static volatile InbuiltModManager instance;
     private final SharedPreferences prefs;
@@ -212,6 +214,19 @@ public class InbuiltModManager {
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener);
         migrateTuningDefaults();
         migrateFov360();
+        migrateShortcutVisibility();
+    }
+
+    private void migrateShortcutVisibility() {
+        if (prefs.getInt(KEY_SHORTCUT_REVISION, 0) >= 1) return;
+        SharedPreferences.Editor editor = prefs.edit();
+        for (String modId : new String[]{
+                ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.ESP,
+                ModIds.FULLBRIGHT, ModIds.TRIGGER_BOT, ModIds.SWING,
+                ModIds.NAME_TAGS, ModIds.TARGET_ESP, ModIds.FRIEND}) {
+            editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
+        }
+        editor.putInt(KEY_SHORTCUT_REVISION, 1).apply();
     }
 
     private void migrateFov360() {
@@ -604,6 +619,18 @@ public class InbuiltModManager {
     public void setEspRange(int range) {
         prefs.edit().putInt(KEY_ESP_RANGE,
                 Math.max(4, Math.min(512, range))).apply();
+    }
+
+    public String getFriendNames() {
+        return prefs.getString(KEY_FRIEND_NAMES, "");
+    }
+
+    public void setFriendNames(String names) {
+        prefs.edit().putString(KEY_FRIEND_NAMES, names == null ? "" : names).apply();
+    }
+
+    public boolean isFriendModuleEnabled() {
+        return resolveInbuiltModEnabled(ModIds.FRIEND, false);
     }
 
     public int getEspPlayerColor() {
@@ -1000,25 +1027,7 @@ public class InbuiltModManager {
 
     public boolean isOverlayShortcutVisible(String modId) {
         if (modId == null || modId.isEmpty()) return true;
-        return prefs.getBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId,
-                !isShortcutDefaultOff(modId));
-    }
-
-    private static boolean isShortcutDefaultOff(String modId) {
-        switch (modId) {
-            case ModIds.AUTO_SPRINT:
-            case ModIds.SPEED:
-            case ModIds.AIM_ASSIST:
-            case ModIds.ESP:
-            case ModIds.FULLBRIGHT:
-            case ModIds.TRIGGER_BOT:
-            case ModIds.SWING:
-            case ModIds.NAME_TAGS:
-            case ModIds.TARGET_ESP:
-                return true;
-            default:
-                return false;
-        }
+        return prefs.getBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
     }
 
     public void setOverlayShortcutVisible(String modId, boolean visible) {
@@ -1058,14 +1067,6 @@ public class InbuiltModManager {
     public void resetAllToDefaults() {
         SharedPreferences.Editor editor = prefs.edit();
         editor.clear();
-        String[] shortcutMods = {
-                ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.ESP,
-                ModIds.FULLBRIGHT, ModIds.TRIGGER_BOT, ModIds.SWING,
-                ModIds.NAME_TAGS, ModIds.TARGET_ESP
-        };
-        for (String modId : shortcutMods) {
-            editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, false);
-        }
         editor.commit();
         overlayVisibilityRevision.incrementAndGet();
     }

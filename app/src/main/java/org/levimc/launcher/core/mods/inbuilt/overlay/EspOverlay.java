@@ -46,6 +46,8 @@ public class EspOverlay extends BaseOverlayButton {
         EspMod.setArmorColors(manager.isEspArmorColors());
         EspMod.setArmoredColor(manager.getEspArmoredColor());
         EspMod.setEspBoxStyle(manager.getEspBoxStyle());
+        EspMod.setFriendNames(manager.isFriendModuleEnabled()
+                ? manager.getFriendNames() : "");
     }
 
     // Native init сканирует libminecraftpe.so несколько секунд, поэтому

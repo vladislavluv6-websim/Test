@@ -82,6 +82,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_SWING_STYLE = "swing_style";
     private static final String CFG_SWING_SPEED = "swing_speed";
     private static final String CFG_SWING_AMPLITUDE = "swing_amplitude";
+    private static final String CFG_FRIEND_NAMES = "friend_names";
     private static final String CFG_TARGET_ESP_STYLE = "target_esp_style";
     private static final String CFG_TARGET_ESP_COLOR = "target_esp_color";
     private static final String CFG_TARGET_ESP_HOLD = "target_esp_hold_ms";
@@ -146,6 +147,9 @@ public final class InbuiltModuleProvider {
         mods.add(create(activity, manager, overlayManager, ModIds.NAME_TAGS,
                 R.string.inbuilt_mod_name_tags, R.string.inbuilt_mod_name_tags_desc,
                 groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.FRIEND,
+                R.string.inbuilt_mod_friend, R.string.inbuilt_mod_friend_desc,
+                groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.FULLBRIGHT,
                 R.string.inbuilt_mod_fullbright, R.string.inbuilt_mod_fullbright_desc,
                 groupName));
@@ -156,9 +160,11 @@ public final class InbuiltModuleProvider {
     private static UnifiedMod create(Activity activity, InbuiltModManager manager,
                                      InbuiltOverlayManager overlayManager, String id,
                                      int nameRes, int descRes, String groupName) {
-        boolean active = overlayManager != null
-                ? overlayManager.isModActive(id)
-                : manager.resolveInbuiltModEnabled(id, false);
+        boolean active = ModIds.FRIEND.equals(id)
+                ? manager.resolveInbuiltModEnabled(id, false)
+                : (overlayManager != null
+                        ? overlayManager.isModActive(id)
+                        : manager.resolveInbuiltModEnabled(id, false));
         boolean customConfig = ModIds.MORE_BUTTONS.equals(id);
         UnifiedMod result = new UnifiedMod(
                 id,
@@ -322,6 +328,7 @@ public final class InbuiltModuleProvider {
             case BUTTON: type = "button"; break;
             case RADIO: type = "choice"; break;
             case COLOR: type = "color"; break;
+            case TEXT: type = "text"; break;
             case SLIDER_FLOAT: type = "slider_float"; break;
             default: type = "slider_int"; break;
         }
@@ -359,20 +366,16 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.BUTTON, "", "", "", ""));
             return configs;
         }
-        if (!ModIds.CHICK_PET.equals(modId)) {
-            if (!ModIds.HOTBAR_SLOT.equals(modId)) {
-                configs.add(config(CFG_OVERLAY_SIZE,
-                        context.getString(ModIds.FPS_DISPLAY.equals(modId) || ModIds.CPS_DISPLAY.equals(modId)
-                                ? R.string.mod_config_display_size_dp : R.string.mod_config_overlay_button_size_dp),
-                        UnifiedMod.ConfigType.SLIDER_INT,
-                        "56", "20", "100",
-                        String.valueOf(manager.getOverlayButtonSize(modId))));
-                configs.add(config(CFG_OVERLAY_OPACITY,
-                        context.getString(R.string.mod_config_overlay_opacity_percent),
-                        UnifiedMod.ConfigType.SLIDER_INT,
-                        "100", "0", "100",
-                        String.valueOf(manager.getOverlayOpacity(modId))));
-            }
+        if (ModIds.AUTO_SPRINT.equals(modId) || ModIds.SPEED.equals(modId)
+                || ModIds.AIM_ASSIST.equals(modId) || ModIds.ESP.equals(modId)
+                || ModIds.FULLBRIGHT.equals(modId) || ModIds.TRIGGER_BOT.equals(modId)
+                || ModIds.SWING.equals(modId) || ModIds.NAME_TAGS.equals(modId)
+                || ModIds.TARGET_ESP.equals(modId)) {
+            configs.add(config(CFG_OVERLAY_SHORTCUT,
+                    context.getString(R.string.mod_config_overlay_shortcut),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isOverlayShortcutVisible(modId))));
         }
 
         if (ModIds.TOGGLE_HUD.equals(modId)) {
@@ -852,10 +855,22 @@ public final class InbuiltModuleProvider {
                     "5", "0", "100",
                     String.valueOf(manager.getGyroDeadzone())));
         }
-        if (!ModIds.CHICK_PET.equals(modId) && !ModIds.AUTO_SPRINT.equals(modId) && !ModIds.ZOOM.equals(modId)) {
+        if (ModIds.FRIEND.equals(modId)) {
+            configs.add(config(CFG_FRIEND_NAMES,
+                    context.getString(R.string.mod_config_friend_names),
+                    UnifiedMod.ConfigType.TEXT, "", "", "",
+                    manager.getFriendNames()));
+        }
+        if (!ModIds.CHICK_PET.equals(modId) && !ModIds.AUTO_SPRINT.equals(modId)
+                && !ModIds.ZOOM.equals(modId) && !ModIds.FRIEND.equals(modId)) {
             configs.add(activationKeybind(context, manager, modId));
         }
         return configs;
+    }
+
+    private static void applyFriendNames(InbuiltModManager manager) {
+        EspMod.setFriendNames(manager.isFriendModuleEnabled()
+                ? manager.getFriendNames() : "");
     }
 
     private static UnifiedMod.ConfigEntry activationKeybind(Context context, InbuiltModManager manager, String modId) {
@@ -890,6 +905,7 @@ public final class InbuiltModuleProvider {
 
     private static void setEnabled(InbuiltModManager manager, UnifiedMod mod, boolean enabled) {
         manager.setInbuiltModEnabled(mod.getId(), enabled);
+        if (ModIds.FRIEND.equals(mod.getId())) applyFriendNames(manager);
         InbuiltOverlayManager overlayManager = InbuiltOverlayManager.getInstance();
         if (overlayManager != null) {
             overlayManager.handleModToggle(mod.getId(), enabled);
@@ -900,6 +916,10 @@ public final class InbuiltModuleProvider {
                                   String value) {
         if (ModIds.HOTBAR_SLOT.equals(mod.getId()) && setHotbarSlotConfig(manager, config.key, value)) return;
         switch (config.key) {
+            case CFG_FRIEND_NAMES:
+                manager.setFriendNames(value);
+                applyFriendNames(manager);
+                break;
             case CFG_ACTIVATION_KEYBIND:
                 manager.setInbuiltModKeybind(mod.getId(), parseInt(value, manager.getInbuiltModKeybind(mod.getId())));
                 break;

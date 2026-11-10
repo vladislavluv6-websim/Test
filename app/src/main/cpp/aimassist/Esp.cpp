@@ -23,6 +23,8 @@ constexpr const char *kTag = "AimAssistEsp";
 constexpr int kPrimitiveQuadList = 1;
 constexpr int kPrimitiveLineList = 4;
 
+constexpr uint32_t kFriendColor = 0xFF55FF66u;
+
 // Прозрачность заливки относительно альфы выбранного цвета.
 constexpr float kFillAlpha = 0.38f;
 // Чуть раздуваем бокс, чтобы заливка не мерцала на модели.
@@ -681,6 +683,60 @@ TargetEspState Esp::copyTargetEsp() const {
   return m_targetEspSnapshot;
 }
 
+namespace {
+std::string normalizeFriendName(std::string name) {
+  name = cleanPlayerName(std::move(name));
+  size_t begin = 0;
+  size_t end = name.size();
+  while (begin < end &&
+         (name[begin] == ' ' || name[begin] == '\t' ||
+          name[begin] == '\r' || name[begin] == '\n')) {
+    ++begin;
+  }
+  while (end > begin &&
+         (name[end - 1] == ' ' || name[end - 1] == '\t' ||
+          name[end - 1] == '\r' || name[end - 1] == '\n')) {
+    --end;
+  }
+  std::string out = name.substr(begin, end - begin);
+  for (char &c : out) {
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  }
+  return out;
+}
+}  // namespace
+
+void Esp::setFriendNames(const std::string &names) {
+  std::unordered_set<std::string> parsed;
+  size_t start = 0;
+  for (size_t i = 0; i <= names.size(); ++i) {
+    const bool end = i == names.size();
+    const char c = end ? ',' : names[i];
+    if (!end && c != ',' && c != ';' && c != '\n' && c != '\r' &&
+        c != '\t') {
+      continue;
+    }
+    std::string entry = normalizeFriendName(names.substr(start, i - start));
+    if (!entry.empty()) parsed.insert(std::move(entry));
+    start = i + 1;
+  }
+  std::lock_guard<std::mutex> lock(m_friendMutex);
+  m_friends = std::move(parsed);
+}
+
+bool Esp::isFriend(void *actor) {
+  if (!actor) return false;
+  {
+    std::lock_guard<std::mutex> lock(m_friendMutex);
+    if (m_friends.empty()) return false;
+  }
+  const std::string name =
+      normalizeFriendName(actorName(actor, std::chrono::steady_clock::now()));
+  if (name.empty()) return false;
+  std::lock_guard<std::mutex> lock(m_friendMutex);
+  return m_friends.find(name) != m_friends.end();
+}
+
 std::string Esp::actorName(void *actor,
                            std::chrono::steady_clock::time_point now) {
   {
@@ -888,10 +944,11 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
         maxY < -32.0f || minY > height + 32.0f) {
       continue;
     }
-    const uint32_t color =
+    uint32_t color =
         (isPlayer && armorColors && gameecs::hasArmor(actor))
             ? armoredColor
             : (isPlayer ? playerColor : mobColor);
+    if (isPlayer && isFriend(actor)) color = kFriendColor;
     boxes.push_back({minX, minY, maxX - minX, maxY - minY, color});
     if (boxes.size() >= 256) break;
   }
@@ -1104,6 +1161,7 @@ void Esp::render(void *levelRenderer, void *screenContext) {
     if (isPlayer) {
       color = (armorColors && gameecs::hasArmor(actor)) ? armoredColor
                                                        : playerColor;
+      if (isFriend(actor)) color = kFriendColor;
     }
     drawBox(reinterpret_cast<void *>(tessellator), screenContext, material,
             bounds, camera, color);

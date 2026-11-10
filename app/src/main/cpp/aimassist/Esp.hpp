@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "ClientBridge.hpp"
@@ -74,6 +75,9 @@ public:
   void markTargetEspHit(void *actor);
   TargetEspState copyTargetEsp() const;
 
+  void setFriendNames(const std::string &names);
+  bool isFriend(void *actor);
+
   // Called from the LevelRenderer::renderLevel detour.
   void render(void *levelRenderer, void *screenContext);
 
@@ -106,6 +110,8 @@ private:
   std::vector<void *> m_actors;
   std::chrono::steady_clock::time_point m_lastLog{};
   mutable std::mutex m_nameMutex;
+  mutable std::mutex m_friendMutex;
+  std::unordered_set<std::string> m_friends;
   std::vector<NameTagLabel> m_nameSnapshot;
   mutable std::mutex m_boxMutex;
   std::vector<EspBoxLabel> m_boxSnapshot;

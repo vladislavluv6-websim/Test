@@ -208,6 +208,7 @@ public class NeverloseModulesView extends View {
             case "trigger_bot":
             case "target_esp":
             case "swing":
+            case "friend":
                 return "COMBAT";
             case "esp":
             case "name_tags":

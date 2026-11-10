@@ -105,6 +105,10 @@ public final class EspMod {
         if (initialized) nativeSetTargetEspHold(holdMs);
     }
 
+    public static void setFriendNames(String names) {
+        if (initialized) nativeSetFriendNames(names == null ? "" : names);
+    }
+
     public static String getTargetEsp() {
         return initialized ? nativeGetTargetEsp() : null;
     }
@@ -129,5 +133,6 @@ public final class EspMod {
     private static native String[] nativeGetNameTags();
     private static native void nativeSetTargetEsp(boolean enabled);
     private static native void nativeSetTargetEspHold(int holdMs);
+    private static native void nativeSetFriendNames(String names);
     private static native String nativeGetTargetEsp();
 }

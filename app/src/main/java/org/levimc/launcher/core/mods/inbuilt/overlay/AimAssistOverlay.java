@@ -10,6 +10,7 @@ import org.levimc.launcher.core.mods.ModManager;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod;
+import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.core.versions.GameVersion;
 
 public class AimAssistOverlay extends BaseOverlayButton {
@@ -45,6 +46,8 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setFastAim(manager.isAimAssistFastAim());
         AimAssistMod.setFastAimTime(manager.getAimAssistFastAimTime());
         AimAssistMod.setFastAimMaxSpeed(manager.getAimAssistFastAimMaxSpeed());
+        EspMod.setFriendNames(manager.isFriendModuleEnabled()
+                ? manager.getFriendNames() : "");
     }
 
     private boolean isSupportedVersion() {

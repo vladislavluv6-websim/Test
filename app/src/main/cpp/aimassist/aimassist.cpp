@@ -455,6 +455,20 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetTargetEspHo
   aimbot::Esp::instance().setTargetEspHoldMs(static_cast<int>(holdMs));
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetFriendNames(
+    JNIEnv *env, jclass, jstring names) {
+  if (!names) {
+    aimbot::Esp::instance().setFriendNames("");
+    return;
+  }
+  const char *chars = env->GetStringUTFChars(names, nullptr);
+  if (chars) {
+    aimbot::Esp::instance().setFriendNames(chars);
+    env->ReleaseStringUTFChars(names, chars);
+  }
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetTargetEsp(
     JNIEnv *env, jclass) {

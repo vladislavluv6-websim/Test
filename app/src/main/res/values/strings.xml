@@ -733,6 +733,9 @@
     <string name="mod_config_target_esp_hold">Visible after hit (ms)</string>
     <string name="inbuilt_mod_name_tags">Name Tags</string>
     <string name="inbuilt_mod_name_tags_desc">Shows clean player name tags through walls, including invisible players</string>
+    <string name="inbuilt_mod_friend">Friend</string>
+    <string name="inbuilt_mod_friend_desc">Players in this list are ignored by AimAssist and TriggerBot and highlighted green by ESP</string>
+    <string name="mod_config_friend_names">Friend names (comma separated)</string>
     <string name="inbuilt_mod_fullbright">Fullbright</string>
     <string name="inbuilt_mod_fullbright_desc">Removes darkness and fog by forcing full world lighting</string>
     <string name="fullbright_mod_unavailable">Fullbright is unavailable on this Minecraft version</string>

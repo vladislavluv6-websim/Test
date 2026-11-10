@@ -6,6 +6,7 @@
 #include <link.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 
 #include <atomic>
 #include <chrono>
@@ -967,7 +968,7 @@ bool inReadable(const LibSegments &lib, uintptr_t address, size_t size) {
   return rangeContains(lib.readable, lib.readableCount, address, size);
 }
 
-bool resolvePredictionHandle(uintptr_t &handle) {
+bool resolvePredictionHandle(uintptr_t &handle, uintptr_t &slotAddress) {
   LibSegments lib;
   dl_iterate_phdr(collectLibSegments, &lib);
   if (lib.readableCount == 0 || lib.writableCount == 0) return false;
@@ -1009,10 +1010,12 @@ bool resolvePredictionHandle(uintptr_t &handle) {
       if (*reinterpret_cast<uintptr_t *>(field) != typeInfo) continue;
       const uintptr_t vtable = field + sizeof(uintptr_t);
       if (!inWritable(lib, vtable, 3 * sizeof(uintptr_t))) continue;
+      const uintptr_t candidateSlot = vtable + 2 * sizeof(uintptr_t);
       const uintptr_t slot =
-          *reinterpret_cast<uintptr_t *>(vtable + 2 * sizeof(uintptr_t));
+          *reinterpret_cast<uintptr_t *>(candidateSlot);
       if (!inReadable(lib, slot, 4) || !isMinecraftAddress(slot)) continue;
       handle = slot;
+      slotAddress = candidateSlot;
       return true;
     }
   }
@@ -1033,21 +1036,35 @@ void *predictionHandleDetour(void *a1, void *a2, void *a3, void *a4) {
 bool installPredictionHook() {
   if (g_predictionHookInstalled) return true;
   uintptr_t handle = 0;
-  if (!resolvePredictionHandle(handle)) {
+  uintptr_t slotAddress = 0;
+  if (!resolvePredictionHandle(handle, slotAddress)) {
     logWarning("CorrectPlayerMovePrediction dispatcher not found");
     return false;
   }
-  if (pl::memory::hook(reinterpret_cast<pl::memory::FuncPtr>(handle),
-                       reinterpret_cast<pl::memory::FuncPtr>(
-                           predictionHandleDetour),
-                       reinterpret_cast<pl::memory::FuncPtr *>(
-                           &g_predictionHandleOriginal)) != 0) {
-    logWarning("Unable to hook CorrectPlayerMovePrediction dispatcher");
+
+  const long pageSize = sysconf(_SC_PAGESIZE);
+  if (pageSize <= 0) return false;
+  const uintptr_t page = slotAddress & ~static_cast<uintptr_t>(pageSize - 1);
+  const size_t span = static_cast<size_t>(slotAddress - page) + sizeof(void *);
+  if (mprotect(reinterpret_cast<void *>(page), span,
+               PROT_READ | PROT_WRITE) != 0) {
+    logWarning("Unable to unprotect CorrectPlayerMovePrediction vtable");
     return false;
   }
+  auto *slot = reinterpret_cast<void **>(slotAddress);
+  g_predictionHandleOriginal =
+      reinterpret_cast<PredictionHandleFn>(*slot);
+  *slot = reinterpret_cast<void *>(predictionHandleDetour);
+  __builtin___clear_cache(reinterpret_cast<char *>(slotAddress),
+                          reinterpret_cast<char *>(slotAddress +
+                                                   sizeof(void *)));
+  mprotect(reinterpret_cast<void *>(page), span, PROT_READ);
+
   g_predictionHookInstalled = true;
   __android_log_print(ANDROID_LOG_INFO, kTag,
-                      "CorrectPlayerMovePrediction dispatcher hooked at %p",
+                      "CorrectPlayerMovePrediction vtable patched at %p "
+                      "(handler %p)",
+                      reinterpret_cast<void *>(slotAddress),
                       reinterpret_cast<void *>(handle));
   return true;
 }
