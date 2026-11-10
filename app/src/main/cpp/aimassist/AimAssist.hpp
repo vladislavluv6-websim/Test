@@ -46,7 +46,7 @@ struct Settings {
   ActivationMode activationMode = ActivationMode::Always;
   int activationKey = 0;
 
-  float fovDeg = 90.0f;
+  float fovDeg = 120.0f;
   float range = 8.0f;
   float smoothingSpeed = 38.0f;
   float maxDegPerSecond = 1100.0f;
@@ -124,7 +124,7 @@ struct Settings {
   // разворачивается на цель за спиной: снапы на 90-180° — главный маркер
   // aim-эвристик.
   bool antiCheatMode = true;
-  float assistConeDeg = 90.0f;
+  float assistConeDeg = 120.0f;
   // Шум сопровождения (Gauss-Markov / OU): плавно «плавает» вокруг цели,
   // из-за чего траектория не является точной функцией угла до цели.
   float trackingNoiseDeg = 0.14f;

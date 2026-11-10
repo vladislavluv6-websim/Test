@@ -39,6 +39,8 @@ public class NameTagsOverlay extends View {
     private final Paint backdropPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint accentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint distancePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint statPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.Path heartPath = new android.graphics.Path();
     private float density = 1f;
     private boolean attached;
     private boolean showing;
@@ -76,6 +78,10 @@ public class NameTagsOverlay extends View {
         distancePaint.setTextAlign(Paint.Align.CENTER);
         distancePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         distancePaint.setTextSize(9f * density);
+        statPaint.setColor(0xFFD9DBE2);
+        statPaint.setTextAlign(Paint.Align.LEFT);
+        statPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        statPaint.setTextSize(8.5f * density);
         backdropPaint.setColor(0xE012151E);
         accentPaint.setStyle(Paint.Style.STROKE);
         applySettings();
@@ -212,80 +218,92 @@ public class NameTagsOverlay extends View {
         if (!moduleEnabled || labels.length == 0) return;
         for (String entry : labels) {
             if (entry == null) continue;
-            int first = entry.indexOf('\t');
-            if (first < 0) continue;
-            int second = entry.indexOf('\t', first + 1);
-            if (second < 0) continue;
-            int third = entry.indexOf('\t', second + 1);
-            int fourth = third >= 0 ? entry.indexOf('\t', third + 1) : -1;
-            String name;
-            float distance;
-            boolean armored;
+            String[] parts = entry.split("\t", -1);
+            if (parts.length < 3) continue;
             try {
-                float x = Float.parseFloat(entry.substring(0, first));
-                float y = Float.parseFloat(entry.substring(first + 1, second));
-                if (third >= 0 && fourth >= 0) {
-                    distance = Float.parseFloat(entry.substring(second + 1, third));
-                    armored = "1".equals(entry.substring(third + 1, fourth).trim());
-                    name = entry.substring(fourth + 1);
+                float x = Float.parseFloat(parts[0]);
+                float y = Float.parseFloat(parts[1]);
+                float distance = Float.parseFloat(parts[2]);
+                int armorPieces = 0;
+                float health = 20f;
+                String name;
+                if (parts.length >= 6) {
+                    armorPieces = Math.max(0,
+                            Math.min(4, Integer.parseInt(parts[3].trim())));
+                    health = Float.parseFloat(parts[4]);
+                    name = parts[5];
+                } else if (parts.length == 5) {
+                    armorPieces = "1".equals(parts[3].trim()) ? 4 : 0;
+                    name = parts[4];
                 } else {
-                    distance = 0f;
-                    armored = false;
-                    name = entry.substring(second + 1);
+                    name = parts.length >= 4 ? parts[3] : "";
                 }
                 if (name.isEmpty()) continue;
-                drawLabel(canvas, x, y, name, distance, armored);
+                drawLabel(canvas, x, y, name, distance, armorPieces, health);
             } catch (NumberFormatException ignored) {
             }
         }
     }
 
     private void drawLabel(Canvas canvas, float x, float y, String name,
-                           float distance, boolean armored) {
+                           float distance, int armorPieces, float health) {
+        String hpText = String.format(java.util.Locale.US, "%.1f", health);
         String distanceText = distance > 0f
                 ? String.format(java.util.Locale.US, "%.0f m", distance)
                 : "";
+        float nameSize = 13f * density;
+        textPaint.setTextSize(nameSize);
         float nameWidth = textPaint.measureText(name);
+
+        float heartSize = 8f * density;
+        float hpWidth = statPaint.measureText(hpText);
+        float pipWidth = 4f * dp(3.6f);
+        float armorWidth = 4 * dp(3.6f) + 3 * dp(1.5f);
         float distanceWidth = distanceText.isEmpty()
                 ? 0f : distancePaint.measureText(distanceText);
-        float armorWidth = armored ? 8f * density : 0f;
-        float textWidth = Math.max(nameWidth, distanceWidth + armorWidth
-                + (armored ? 4f * density : 0f));
-        float padX = 7f * density;
-        float padY = 4f * density;
+        float gap = dp(5f);
+        float statWidth = heartSize + dp(2f) + hpWidth + gap
+                + armorWidth + (distanceText.isEmpty() ? 0f : gap + distanceWidth);
+        float textWidth = Math.max(nameWidth, statWidth);
+
+        float padX = 9f * density;
+        float padY = 5f * density;
         float left = x - textWidth * 0.5f - padX;
         float right = x + textWidth * 0.5f + padX;
         float nameHeight = textPaint.getTextSize();
-        float distHeight = distanceText.isEmpty() ? 0f : distancePaint.getTextSize();
-        float gap = distanceText.isEmpty() ? 0f : 1f * density;
-        float top = y - nameHeight - gap - distHeight - padY * 1.5f;
+        float statHeight = statPaint.getTextSize();
+        float top = y - nameHeight - statHeight - padY * 2.1f;
         float bottom = y + padY * 0.5f;
         float radius = 5f * density;
         float nameBaseline = top + padY + nameHeight * 0.82f;
-        float distBaseline = bottom - padY * 0.9f;
+        float statBaseline = bottom - padY * 0.95f;
 
         switch (style) {
             case STYLE_GLASS:
-                backdropPaint.setColor(0x7A0D1018);
+                backdropPaint.setColor(0x8A0D1018);
                 canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                accentPaint.setStyle(Paint.Style.STROKE);
                 accentPaint.setStrokeWidth(1f * density);
                 accentPaint.setColor(0x66FFFFFF);
                 canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
                 break;
             case STYLE_NEON:
-                backdropPaint.setColor(0x4A0A0C12);
+                backdropPaint.setColor(0x660A0C12);
                 canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                accentPaint.setStyle(Paint.Style.STROKE);
                 accentPaint.setStrokeWidth(1.5f * density);
                 accentPaint.setColor(accent);
                 canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
                 break;
             case STYLE_MINIMAL:
+                accentPaint.setStyle(Paint.Style.STROKE);
                 accentPaint.setStrokeWidth(1.5f * density);
                 accentPaint.setColor(accent);
                 canvas.drawLine(left, bottom, right, bottom, accentPaint);
                 break;
             case STYLE_BRACKET: {
                 float arm = Math.min(9f * density, (bottom - top) * 0.45f);
+                accentPaint.setStyle(Paint.Style.STROKE);
                 accentPaint.setStrokeWidth(1.8f * density);
                 accentPaint.setColor(accent);
                 canvas.drawLine(left, top, left + arm, top, accentPaint);
@@ -300,34 +318,73 @@ public class NameTagsOverlay extends View {
             }
             case STYLE_PLATE:
             default:
-                backdropPaint.setColor(0xE012151E);
+                backdropPaint.setColor(0xF00B0E15);
                 canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                accentPaint.setStyle(Paint.Style.STROKE);
                 accentPaint.setStrokeWidth(1f * density);
                 accentPaint.setColor(0xFF20232E);
                 canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
-                accentPaint.setStrokeWidth(2f * density);
-                accentPaint.setColor(accent);
-                canvas.drawLine(left + radius * 0.4f, top + 2f * density,
-                        left + radius * 0.4f, bottom - 2f * density, accentPaint);
                 break;
         }
 
         textPaint.setColor(style == STYLE_NEON ? accent : Color.WHITE);
+        textPaint.setTextAlign(Paint.Align.CENTER);
         canvas.drawText(name, x, nameBaseline, textPaint);
-        if (!distanceText.isEmpty()) {
-            distancePaint.setColor(style == STYLE_NEON ? accent : 0xFF9296A2);
-            float dx = x - (distanceWidth + armorWidth
-                    + (armored ? 4f * density : 0f)) * 0.5f + distanceWidth * 0.5f;
-            canvas.drawText(distanceText, dx, distBaseline, distancePaint);
-            if (armored) {
-                float ax = dx + distanceWidth * 0.5f + 4f * density;
-                float ay = distBaseline - distancePaint.getTextSize() * 0.72f;
+
+        float statLeft = x - statWidth * 0.5f;
+        float iconTop = statBaseline - statHeight * 0.92f;
+        drawHeart(canvas, statLeft, iconTop, heartSize, 0xFF3DDC84);
+        statPaint.setColor(style == STYLE_NEON ? accent : 0xFFD9DBE2);
+        statPaint.setTextAlign(Paint.Align.LEFT);
+        float cursor = statLeft + heartSize + dp(2f);
+        canvas.drawText(hpText, cursor, statBaseline, statPaint);
+        cursor += hpWidth + gap;
+
+        for (int i = 0; i < 4; i++) {
+            float pipW = dp(3.6f);
+            float pipH = dp(5f);
+            float pipTop = statBaseline - pipH;
+            if (i < armorPieces) {
                 accentPaint.setStyle(Paint.Style.FILL);
-                accentPaint.setColor(accent);
-                canvas.drawRoundRect(ax, ay, ax + 6f * density,
-                        ay + 6f * density, 1.5f * density, 1.5f * density, accentPaint);
-                accentPaint.setStyle(Paint.Style.STROKE);
+                accentPaint.setColor(0xFF58A6FF);
+                canvas.drawRoundRect(cursor, pipTop, cursor + pipW,
+                        pipTop + pipH, dp(1f), dp(1f), accentPaint);
+            } else {
+                accentPaint.setStyle(Paint.Style.FILL);
+                accentPaint.setColor(0xFF303643);
+                canvas.drawRoundRect(cursor, pipTop, cursor + pipW,
+                        pipTop + pipH, dp(1f), dp(1f), accentPaint);
             }
+            cursor += pipW + dp(1.5f);
         }
+
+        if (!distanceText.isEmpty()) {
+            cursor += gap - dp(1.5f);
+            distancePaint.setColor(style == STYLE_NEON ? accent : 0xFF9296A2);
+            distancePaint.setTextAlign(Paint.Align.LEFT);
+            canvas.drawText(distanceText, cursor, statBaseline, distancePaint);
+        }
+    }
+
+    private float dp(float value) {
+        return value * density;
+    }
+
+    private void drawHeart(Canvas canvas, float left, float top, float size, int color) {
+        float right = left + size;
+        float centerX = left + size * 0.5f;
+        float bottom = top + size;
+        heartPath.reset();
+        heartPath.moveTo(centerX, bottom);
+        heartPath.cubicTo(left - size * 0.08f, top + size * 0.55f,
+                left + size * 0.06f, top - size * 0.05f,
+                centerX, top + size * 0.27f);
+        heartPath.cubicTo(right - size * 0.06f, top - size * 0.05f,
+                right + size * 0.08f, top + size * 0.55f,
+                centerX, bottom);
+        heartPath.close();
+        accentPaint.setStyle(Paint.Style.FILL);
+        accentPaint.setColor(color);
+        canvas.drawPath(heartPath, accentPaint);
     }
 }

@@ -719,6 +719,11 @@
     <string name="mod_config_swing_heavy">Heavy</string>
     <string name="mod_config_swing_snap">Snap</string>
     <string name="mod_config_swing_twitch">Twitch</string>
+    <string name="mod_config_swing_speed">Swing speed</string>
+    <string name="color_palette_primary">Primary</string>
+    <string name="color_palette_secondary">Secondary</string>
+    <string name="color_palette_hex">HEX</string>
+    <string name="mod_config_swing_amplitude">Swing amplitude</string>
     <string name="mod_config_target_esp_ghost">Ghost</string>
     <string name="mod_config_target_esp_square">Square</string>
     <string name="mod_config_target_esp_circle">Circle</string>
@@ -1227,9 +1232,10 @@
     <string name="mod_menu_all_modules">All modules</string>
     <string name="mod_menu_details_empty">Select a module to open its settings.</string>
     <string name="mod_menu_category_combat">Combat</string>
-    <string name="mod_menu_category_visuals">Render</string>
+    <string name="mod_menu_category_visuals">Visuals</string>
     <string name="mod_menu_category_movement">Movement</string>
     <string name="mod_menu_category_build">Build</string>
     <string name="mod_menu_category_targets">Targets</string>
     <string name="mod_menu_category_misc">Misc</string>
+    <string name="mod_menu_category_external">External</string>
 </resources>

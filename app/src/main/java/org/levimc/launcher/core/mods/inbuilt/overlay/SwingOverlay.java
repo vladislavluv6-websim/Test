@@ -33,8 +33,10 @@ public class SwingOverlay extends BaseOverlayButton {
     }
 
     private void applyNativeSettings() {
-        AimAssistMod.setSwingStyle(
-                InbuiltModManager.getInstance(activity).getSwingStyle());
+        InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+        AimAssistMod.setSwingStyle(manager.getSwingStyle());
+        AimAssistMod.setSwingSpeed(manager.getSwingSpeed());
+        AimAssistMod.setSwingAmplitude(manager.getSwingAmplitude());
     }
 
     private void requestActivate(boolean fromClick) {

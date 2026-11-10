@@ -16,7 +16,8 @@ struct NameTagLabel {
   float x = 0.0f;
   float y = 0.0f;
   float distance = 0.0f;
-  bool armored = false;
+  int armorPieces = 0;
+  float health = 20.0f;
   std::string name;
 };
 

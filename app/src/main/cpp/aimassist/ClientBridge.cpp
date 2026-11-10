@@ -71,6 +71,10 @@ std::atomic<void *> g_clientInstance{nullptr};
 std::atomic<void *> g_localPlayer{nullptr};
 std::atomic<int> g_swingStyle{0};
 std::atomic<int> g_swingArmTicks{0};
+// Swing tuning in percent: speed stretches/compresses the curve, amplitude
+// scales the easing deviation from the vanilla linear progress.
+std::atomic<int> g_swingSpeed{100};
+std::atomic<int> g_swingAmplitude{100};
 std::atomic<uintptr_t> g_attackControl{0};
 std::atomic<uintptr_t> g_controlLayout{0};
 std::atomic<bool> g_ctlScanStarted{false};
@@ -1241,16 +1245,22 @@ void applySwingStyle(void *actor) {
   float time = 0.0f;
   if (!safeRead(base + offsets::kPlayerSwingTime, time)) return;
   if (!std::isfinite(time)) return;
-  const float p = std::clamp(time, 0.0f, 1.0f);
-  float out = p;
+  const int speedPct = g_swingSpeed.load(std::memory_order_relaxed);
+  const int amplitudePct = g_swingAmplitude.load(std::memory_order_relaxed);
+  const float p = std::clamp(time * (static_cast<float>(speedPct) / 100.0f),
+                             0.0f, 1.0f);
+  float eased = p;
   switch (style) {
-    case 1: out = std::pow(p, 1.55f); break;
-    case 2: out = std::pow(p, 0.65f); break;
-    case 3: out = std::pow(p, 2.2f); break;
-    case 4: out = 1.0f - std::pow(1.0f - p, 2.4f); break;
-    case 5: out = std::clamp(p + 0.07f * std::sin(p * 18.849556f), 0.0f, 1.0f); break;
+    case 1: eased = std::pow(p, 1.55f); break;
+    case 2: eased = std::pow(p, 0.65f); break;
+    case 3: eased = std::pow(p, 2.2f); break;
+    case 4: eased = 1.0f - std::pow(1.0f - p, 2.4f); break;
+    case 5: eased = std::clamp(p + 0.07f * std::sin(p * 18.849556f), 0.0f, 1.0f); break;
     default: return;
   }
+  const float amount = std::clamp(static_cast<float>(amplitudePct) / 100.0f,
+                                  0.0f, 1.5f);
+  const float out = std::clamp(p + (eased - p) * amount, 0.0f, 1.0f);
   float prev = 0.0f;
   if (safeRead(base + offsets::kPlayerSwingTimePrev, prev) && prev > out) {
     safeWrite(base + offsets::kPlayerSwingTimePrev, out);
@@ -1896,6 +1906,18 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     safeRead(p + offsets::kPlayerSwingTicks, counterAfter);
     safeRead(p + offsets::kPlayerSwingState, stateAfter);
 
+    // Some client builds reject the native start call (wrong source arg or a
+    // gated handler). Seed the swing state directly so the module still
+    // animates instead of silently doing nothing.
+    if (started <= 0 || (stateAfter & 0x100u) == 0) {
+      safeWrite(p + offsets::kPlayerSwingTicks, static_cast<int32_t>(-1));
+      safeWrite(p + offsets::kPlayerSwingState, static_cast<uint16_t>(0x100));
+      safeWrite(p + offsets::kPlayerSwingTime, 0.0f);
+      safeWrite(p + offsets::kPlayerSwingTimePrev, 0.0f);
+      safeRead(p + offsets::kPlayerSwingTicks, counterAfter);
+      safeRead(p + offsets::kPlayerSwingState, stateAfter);
+    }
+
     g_lastSwingTick.store(g_tickCount.load(std::memory_order_relaxed),
                           std::memory_order_relaxed);
     const int n = g_swingTriggers.fetch_add(1, std::memory_order_relaxed) + 1;
@@ -1938,6 +1960,15 @@ void ClientBridge::setSwingStyle(int style) {
   if (style <= 0) {
     g_swingArmTicks.store(0, std::memory_order_relaxed);
   }
+}
+
+void ClientBridge::setSwingSpeed(int percent) {
+  g_swingSpeed.store(std::clamp(percent, 50, 200), std::memory_order_relaxed);
+}
+
+void ClientBridge::setSwingAmplitude(int percent) {
+  g_swingAmplitude.store(std::clamp(percent, 0, 150),
+                         std::memory_order_relaxed);
 }
 
 void ClientBridge::armSwing() {

@@ -1,185 +1,381 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
+import androidx.appcompat.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
-import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.text.InputType;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.SeekBar;
 
-import java.util.ArrayList;
-import java.util.List;
+import org.levimc.launcher.R;
 
-/** Circular colour palette styled like desktop cheat menus. */
+import java.util.Locale;
+
+/** Desktop-cheat style HSV palette: saturation/value field, hue and alpha bars. */
 public final class ColorPalette {
     public interface Listener {
         void onColorChanged(int color);
     }
 
-    private static final int[] PRESETS = {
-            0xFFFFFFFF, 0xFFE8EAF1, 0xFF9AA0AE, 0xFF5B6270, 0xFF232833, 0xFF000000,
-            0xFFFF4D4D, 0xFFFF7A00, 0xFFFFC94D, 0xFFFFFF4D, 0xFF7CFF4D, 0xFF00E676,
-            0xFF00E5FF, 0xFF4E83FF, 0xFF7C4DFF, 0xFFE040FB, 0xFFFF4081, 0xFFFF8A80
-    };
-
     private ColorPalette() {}
 
     public static View create(Context context, int initial, boolean withAlpha, Listener listener) {
-        float density = context.getResources().getDisplayMetrics().density;
-        LinearLayout root = new LinearLayout(context);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(0, (int) (6 * density), 0, (int) (2 * density));
-
-        int[] current = {initial};
-        List<SwatchView> circles = new ArrayList<>();
-        List<Integer> colors = new ArrayList<>();
-
-        for (int start = 0; start < PRESETS.length; start += 6) {
-            LinearLayout row = new LinearLayout(context);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            for (int i = start; i < Math.min(PRESETS.length, start + 6); i++) {
-                int preset = PRESETS[i];
-                SwatchView swatch = new SwatchView(context, preset);
-                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                        0, (int) (42 * density), 1f);
-                swatch.setLayoutParams(params);
-                swatch.setOnClickListener(v -> {
-                    current[0] = Color.argb(Color.alpha(current[0]),
-                            Color.red(preset), Color.green(preset), Color.blue(preset));
-                    paint(circles, colors, current[0], density);
-                    listener.onColorChanged(current[0]);
-                });
-                circles.add(swatch);
-                colors.add(preset);
-                row.addView(swatch);
-            }
-            root.addView(row, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT));
-        }
-        paint(circles, colors, initial, density);
-
-        if (withAlpha) {
-            LinearLayout alphaRow = new LinearLayout(context);
-            alphaRow.setOrientation(LinearLayout.HORIZONTAL);
-            alphaRow.setGravity(Gravity.CENTER_VERTICAL);
-            alphaRow.setPadding((int) (6 * density), (int) (10 * density),
-                    (int) (6 * density), 0);
-            android.widget.TextView alphaLabel = new android.widget.TextView(context);
-            alphaLabel.setText("A");
-            alphaLabel.setTextColor(0xFF9296A2);
-            alphaLabel.setTextSize(12);
-            alphaLabel.setPadding(0, 0, (int) (10 * density), 0);
-            SeekBar alpha = new SeekBar(context);
-            alpha.setMax(255);
-            alpha.setProgress(Color.alpha(initial));
-            alpha.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                    if (!fromUser) return;
-                    current[0] = Color.argb(progress, Color.red(current[0]),
-                            Color.green(current[0]), Color.blue(current[0]));
-                    listener.onColorChanged(current[0]);
-                }
-                @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-                @Override public void onStopTrackingTouch(SeekBar seekBar) {}
-            });
-            alphaRow.addView(alphaLabel);
-            alphaRow.addView(alpha, new LinearLayout.LayoutParams(0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-            root.addView(alphaRow);
-        }
-        return root;
+        PickerView picker = new PickerView(context, initial, withAlpha, listener);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        picker.setLayoutParams(params);
+        return picker;
     }
 
-    private static void paint(List<SwatchView> circles, List<Integer> colors,
-                              int selected, float density) {
-        for (int i = 0; i < circles.size(); i++) {
-            int base = colors.get(i);
-            boolean match = Color.red(base) == Color.red(selected)
-                    && Color.green(base) == Color.green(selected)
-                    && Color.blue(base) == Color.blue(selected);
-            circles.get(i).setChosen(match);
-        }
-    }
+    private static final class PickerView extends View {
+        private static final int REGION_NONE = 0;
+        private static final int REGION_SV = 1;
+        private static final int REGION_HUE = 2;
+        private static final int REGION_ALPHA = 3;
 
-    private static final class SwatchView extends View {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint checkPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF oval = new RectF();
-        private final int color;
-        private boolean selected;
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint small = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF svRect = new RectF();
+        private final RectF hueRect = new RectF();
+        private final RectF alphaRect = new RectF();
+        private final RectF tabRect = new RectF();
+        private final RectF hexRect = new RectF();
+        private final float density;
 
-        SwatchView(Context context, int color) {
+        private final boolean withAlpha;
+        private final Listener listener;
+        private final float[] hsv = new float[]{0f, 0f, 1f};
+        private int alpha;
+        private int color;
+        private int secondary;
+        private int activeRegion = REGION_NONE;
+
+        PickerView(Context context, int initial, boolean withAlpha, Listener listener) {
             super(context);
-            this.color = color;
-            ringPaint.setStyle(Paint.Style.STROKE);
-            checkPaint.setStyle(Paint.Style.STROKE);
-            checkPaint.setStrokeCap(Paint.Cap.ROUND);
+            this.withAlpha = withAlpha;
+            this.listener = listener != null ? listener : value -> {};
+            this.density = context.getResources().getDisplayMetrics().density;
+            Color.colorToHSV(initial, hsv);
+            alpha = Color.alpha(initial);
+            secondary = Color.HSVToColor(alpha,
+                    new float[]{(hsv[0] + 180f) % 360f, 0.72f, Math.max(0.55f, hsv[2])});
+            color = initial;
+            stroke.setStyle(Paint.Style.STROKE);
+            text.setColor(0xFFD9DBE2);
+            text.setTextSize(12f * context.getResources().getDisplayMetrics().scaledDensity);
+            text.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
+                    android.graphics.Typeface.NORMAL));
+            small.setColor(0xFF9296A2);
+            small.setTextSize(9f * context.getResources().getDisplayMetrics().scaledDensity);
+            small.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
+                    android.graphics.Typeface.NORMAL));
             setClickable(true);
         }
 
-        void setChosen(boolean selected) {
-            this.selected = selected;
-            invalidate();
+        private float dp(float value) {
+            return value * density;
+        }
+
+        private float contentHeight(int width) {
+            float pad = dp(10);
+            float size = Math.min(width - pad * 2f, dp(205));
+            float y = pad + dp(38) + size + dp(18) + dp(11);
+            if (withAlpha) y += dp(16) + dp(11);
+            y += dp(20) + dp(34) + pad;
+            return y;
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            int width = MeasureSpec.getSize(widthMeasureSpec);
+            if (width <= 0) width = (int) dp(300);
+            setMeasuredDimension(width, (int) contentHeight(width));
+        }
+
+        private void layoutRects() {
+            float pad = dp(10);
+            float top = pad + dp(38);
+            float size = Math.min(getWidth() - pad * 2f, dp(205));
+            svRect.set(pad, top, pad + size, top + size);
+            float y = svRect.bottom + dp(18);
+            hueRect.set(pad, y, getWidth() - pad, y + dp(11));
+            y = hueRect.bottom + dp(16);
+            if (withAlpha) {
+                alphaRect.set(pad, y, getWidth() - pad, y + dp(11));
+            } else {
+                alphaRect.set(0, 0, 0, 0);
+            }
+            float hexTop = (withAlpha ? alphaRect.bottom : hueRect.bottom) + dp(20);
+            hexRect.set(pad, hexTop, getWidth() - pad, hexTop + dp(34));
+            tabRect.set(pad, dp(8), pad + dp(150), dp(8) + dp(28));
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
-            float cx = getWidth() * 0.5f;
-            float cy = getHeight() * 0.5f;
-            float radius = Math.min(getWidth(), getHeight()) * 0.34f;
-            if (selected) {
-                ringPaint.setStrokeWidth(dp(2.2f));
-                ringPaint.setColor(0xFFFFFFFF);
-                canvas.drawCircle(cx, cy, radius + dp(4f), ringPaint);
+            super.onDraw(canvas);
+            layoutRects();
+            float pad = dp(10);
+
+            drawTabs(canvas, pad);
+            drawSv(canvas);
+            drawHue(canvas);
+            if (withAlpha) drawAlpha(canvas);
+            drawHex(canvas);
+        }
+
+        private void drawTabs(Canvas canvas, float pad) {
+            fill.setStyle(Paint.Style.FILL);
+            fill.setColor(0xFF181B25);
+            canvas.drawRoundRect(tabRect, dp(7), dp(7), fill);
+            stroke.setStrokeWidth(dp(1));
+            stroke.setColor(0xFF272B36);
+            canvas.drawRoundRect(tabRect, dp(7), dp(7), stroke);
+
+            float sw = dp(16);
+            float sx = tabRect.left + dp(7);
+            float sy = tabRect.centerY() - sw * 0.5f;
+            fill.setColor(color);
+            canvas.drawRoundRect(sx, sy, sx + sw, sy + sw, dp(4), dp(4), fill);
+            stroke.setStrokeWidth(dp(1));
+            stroke.setColor(0x55FFFFFF);
+            canvas.drawRoundRect(sx, sy, sx + sw, sy + sw, dp(4), dp(4), stroke);
+
+            text.setColor(0xFFD9DBE2);
+            text.setTextAlign(Paint.Align.LEFT);
+            float baseline = tabRect.centerY() - (text.descent() + text.ascent()) * 0.5f;
+            canvas.drawText(getContext().getString(R.string.color_palette_primary),
+                    sx + sw + dp(8), baseline, text);
+
+            float radius = dp(11);
+            float cx = tabRect.right + dp(18);
+            fill.setColor(secondary);
+            canvas.drawCircle(cx, tabRect.centerY(), radius, fill);
+            stroke.setStrokeWidth(dp(1));
+            stroke.setColor(0x33FFFFFF);
+            canvas.drawCircle(cx, tabRect.centerY(), radius, stroke);
+
+            small.setTextAlign(Paint.Align.LEFT);
+            float labelX = cx + radius + dp(6);
+            if (labelX + small.measureText(
+                    getContext().getString(R.string.color_palette_secondary)) < getWidth() - pad) {
+                float sb = tabRect.centerY() - (small.descent() + small.ascent()) * 0.5f;
+                canvas.drawText(getContext().getString(R.string.color_palette_secondary),
+                        labelX, sb, small);
             }
-            paint.setShader(new RadialGradient(cx - radius * 0.35f, cy - radius * 0.4f,
-                    radius * 1.55f,
-                    new int[]{lighten(color), color, darken(color)},
-                    new float[]{0f, 0.58f, 1f}, Shader.TileMode.CLAMP));
-            canvas.drawCircle(cx, cy, radius, paint);
-            paint.setShader(null);
-            ringPaint.setStrokeWidth(dp(1f));
-            ringPaint.setColor(0x33FFFFFF);
-            canvas.drawCircle(cx, cy, radius, ringPaint);
-            if (selected) {
-                boolean dark = luminance(color) < 0.55f;
-                checkPaint.setStrokeWidth(dp(2.6f));
-                checkPaint.setColor(dark ? 0xFFFFFFFF : 0xFF12151E);
-                float s = radius * 0.48f;
-                canvas.drawLine(cx - s, cy, cx - s * 0.15f, cy + s * 0.7f, checkPaint);
-                canvas.drawLine(cx - s * 0.15f, cy + s * 0.7f, cx + s, cy - s * 0.65f, checkPaint);
+        }
+
+        private void drawSv(Canvas canvas) {
+            int hueColor = Color.HSVToColor(new float[]{hsv[0], 1f, 1f});
+            fill.setShader(new LinearGradient(svRect.left, 0f, svRect.right, 0f,
+                    Color.WHITE, hueColor, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(svRect, dp(8), dp(8), fill);
+            fill.setShader(new LinearGradient(0f, svRect.top, 0f, svRect.bottom,
+                    Color.TRANSPARENT, Color.BLACK, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(svRect, dp(8), dp(8), fill);
+            fill.setShader(null);
+
+            float mx = svRect.left + hsv[1] * svRect.width();
+            float my = svRect.bottom - hsv[2] * svRect.height();
+            stroke.setStrokeWidth(dp(2.2f));
+            stroke.setColor(0xFF000000);
+            canvas.drawCircle(mx, my, dp(7), stroke);
+            stroke.setStrokeWidth(dp(1.4f));
+            stroke.setColor(0xFFFFFFFF);
+            canvas.drawCircle(mx, my, dp(7), stroke);
+        }
+
+        private void drawHue(Canvas canvas) {
+            int[] colors = new int[]{
+                    0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
+                    0xFF0000FF, 0xFFFF00FF, 0xFFFF0000};
+            fill.setShader(new LinearGradient(hueRect.left, 0f, hueRect.right, 0f,
+                    colors, null, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(hueRect, hueRect.height() * 0.5f,
+                    hueRect.height() * 0.5f, fill);
+            fill.setShader(null);
+            drawBarThumb(canvas, hueRect, hsv[0] / 360f);
+        }
+
+        private void drawAlpha(Canvas canvas) {
+            float cell = dp(5);
+            for (float x = alphaRect.left; x < alphaRect.right; x += cell) {
+                for (float y = alphaRect.top; y < alphaRect.bottom; y += cell) {
+                    boolean light = ((int) ((x - alphaRect.left) / cell)
+                            + (int) ((y - alphaRect.top) / cell)) % 2 == 0;
+                    fill.setColor(light ? 0xFF3A3F4B : 0xFF232833);
+                    canvas.drawRect(x, y, Math.min(x + cell, alphaRect.right),
+                            Math.min(y + cell, alphaRect.bottom), fill);
+                }
             }
+            int solid = Color.HSVToColor(255, hsv);
+            int clear = Color.HSVToColor(0, hsv);
+            fill.setShader(new LinearGradient(alphaRect.left, 0f, alphaRect.right, 0f,
+                    clear, solid, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(alphaRect, alphaRect.height() * 0.5f,
+                    alphaRect.height() * 0.5f, fill);
+            fill.setShader(null);
+            drawBarThumb(canvas, alphaRect, alpha / 255f);
         }
 
-        private float dp(float value) {
-            return value * getResources().getDisplayMetrics().density;
+        private void drawBarThumb(Canvas canvas, RectF rect, float fraction) {
+            float cx = rect.left + Math.max(0f, Math.min(1f, fraction)) * rect.width();
+            float cy = rect.centerY();
+            stroke.setStrokeWidth(dp(2));
+            stroke.setColor(0xFF000000);
+            canvas.drawCircle(cx, cy, dp(7), stroke);
+            stroke.setStrokeWidth(dp(1.4f));
+            stroke.setColor(0xFFFFFFFF);
+            canvas.drawCircle(cx, cy, dp(7), stroke);
         }
 
-        private static int lighten(int c) {
-            return Color.argb(Color.alpha(c),
-                    Math.min(255, Color.red(c) + 44),
-                    Math.min(255, Color.green(c) + 44),
-                    Math.min(255, Color.blue(c) + 44));
+        private void drawHex(Canvas canvas) {
+            small.setColor(0xFF5E6370);
+            small.setTextAlign(Paint.Align.LEFT);
+            float baseline = hexRect.centerY() - (small.descent() + small.ascent()) * 0.5f;
+            canvas.drawText(getContext().getString(R.string.color_palette_hex),
+                    hexRect.left + dp(2), baseline, small);
+
+            String value = String.format(Locale.US, "#%08X", color);
+            float pad = dp(10);
+            text.setColor(0xFFD9DBE2);
+            text.setTextAlign(Paint.Align.LEFT);
+            float w = text.measureText(value) + pad * 2f;
+            float left = hexRect.right - w;
+            fill.setStyle(Paint.Style.FILL);
+            fill.setColor(0xFF181B25);
+            float top = hexRect.top + dp(3);
+            canvas.drawRoundRect(left, top, hexRect.right, hexRect.bottom - dp(3),
+                    dp(6), dp(6), fill);
+            fill.setColor(color);
+            canvas.drawRoundRect(left + dp(5), top + dp(5), left + dp(15),
+                    hexRect.bottom - dp(8), dp(3), dp(3), fill);
+            float tb = hexRect.centerY() - (text.descent() + text.ascent()) * 0.5f;
+            canvas.drawText(value, left + dp(20), tb, text);
         }
 
-        private static int darken(int c) {
-            return Color.argb(Color.alpha(c),
-                    (int) (Color.red(c) * 0.62f),
-                    (int) (Color.green(c) * 0.62f),
-                    (int) (Color.blue(c) * 0.62f));
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    if (tabRect.contains(event.getX(), event.getY())) {
+                        if (event.getX() > tabRect.right + dp(4)) {
+                            int old = color;
+                            color = secondary;
+                            secondary = old;
+                            Color.colorToHSV(color, hsv);
+                            alpha = Color.alpha(color);
+                            invalidate();
+                            listener.onColorChanged(color);
+                        }
+                        return true;
+                    }
+                    if (hexRect.contains(event.getX(), event.getY())) {
+                        showHexDialog();
+                        return true;
+                    }
+                    activeRegion = regionAt(event.getX(), event.getY());
+                    if (activeRegion != REGION_NONE) {
+                        updateFromTouch(event.getX(), event.getY());
+                        return true;
+                    }
+                    return super.onTouchEvent(event);
+                case MotionEvent.ACTION_MOVE:
+                    if (activeRegion != REGION_NONE) {
+                        updateFromTouch(event.getX(), event.getY());
+                        return true;
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (activeRegion != REGION_NONE) {
+                        activeRegion = REGION_NONE;
+                        return true;
+                    }
+                    break;
+            }
+            return super.onTouchEvent(event);
         }
 
-        private static float luminance(int c) {
-            return (0.2126f * Color.red(c) + 0.7152f * Color.green(c)
-                    + 0.0722f * Color.blue(c)) / 255f;
+        private int regionAt(float x, float y) {
+            if (svRect.contains(x, y)) return REGION_SV;
+            if (hueRect.contains(x, y)) return REGION_HUE;
+            if (withAlpha && alphaRect.contains(x, y)) return REGION_ALPHA;
+            return REGION_NONE;
+        }
+
+        private void updateFromTouch(float x, float y) {
+            if (activeRegion == REGION_SV) {
+                hsv[1] = clamp01((x - svRect.left) / Math.max(1f, svRect.width()));
+                hsv[2] = 1f - clamp01((y - svRect.top) / Math.max(1f, svRect.height()));
+            } else if (activeRegion == REGION_HUE) {
+                hsv[0] = clamp01((x - hueRect.left) / Math.max(1f, hueRect.width())) * 360f;
+                if (hsv[0] >= 360f) hsv[0] = 359.9f;
+            } else if (activeRegion == REGION_ALPHA) {
+                alpha = Math.round(clamp01((x - alphaRect.left)
+                        / Math.max(1f, alphaRect.width())) * 255f);
+            }
+            color = Color.HSVToColor(alpha, hsv);
+            invalidate();
+            listener.onColorChanged(color);
+        }
+
+        private float clamp01(float value) {
+            return Math.max(0f, Math.min(1f, value));
+        }
+
+        private void showHexDialog() {
+            EditText input = new EditText(getContext());
+            input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+            input.setSingleLine(true);
+            input.setText(String.format(Locale.US, "#%08X", color));
+            input.setSelection(input.getText().length());
+            input.setGravity(Gravity.CENTER_VERTICAL);
+
+            AlertDialog dialog = new AlertDialog.Builder(getContext())
+                    .setTitle(R.string.color_palette_hex)
+                    .setView(input)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(android.R.string.ok, (d, which) -> {
+                        String raw = input.getText().toString().trim();
+                        if (!raw.startsWith("#")) raw = "#" + raw;
+                        try {
+                            int parsed;
+                            if (raw.length() == 9) {
+                                parsed = Color.parseColor(raw);
+                            } else if (raw.length() == 7) {
+                                parsed = Color.parseColor(raw) | 0xFF000000;
+                            } else {
+                                return;
+                            }
+                            color = parsed;
+                            alpha = Color.alpha(color);
+                            Color.colorToHSV(color, hsv);
+                            invalidate();
+                            listener.onColorChanged(color);
+                        } catch (IllegalArgumentException ignored) {
+                        }
+                    })
+                    .create();
+            dialog.setOnShowListener(d -> {
+                input.requestFocus();
+                InputMethodManager imm = (InputMethodManager) getContext()
+                        .getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
+            });
+            dialog.show();
         }
     }
 }

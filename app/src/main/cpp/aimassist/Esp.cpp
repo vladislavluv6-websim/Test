@@ -784,8 +784,8 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
 
       std::string name = actorName(actor, now);
       if (name.empty()) continue;
-      const bool armored = gameecs::hasArmor(actor);
-      labels.push_back({labelX, labelY, depth, armored, std::move(name)});
+      const int armorPieces = gameecs::armorPieceCount(actor);
+      labels.push_back({labelX, labelY, depth, armorPieces, 20.0f, std::move(name)});
       if (labels.size() >= 256) break;
     }
   }

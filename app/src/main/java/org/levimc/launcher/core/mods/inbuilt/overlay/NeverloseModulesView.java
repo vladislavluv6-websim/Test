@@ -32,7 +32,7 @@ public class NeverloseModulesView extends View {
 
     public interface Listener {
         void onToggle(UnifiedMod mod, boolean enabled);
-        void onConfig(UnifiedMod mod);
+        void onConfig(UnifiedMod mod, float anchorX, float anchorY);
     }
 
     private static final int COLOR_CARD = 0xE011131B;
@@ -72,6 +72,8 @@ public class NeverloseModulesView extends View {
     private float scrollY;
     private float maxScroll;
 
+    private String expandedKey;
+
     private float downX;
     private float downY;
     private float lastY;
@@ -101,10 +103,15 @@ public class NeverloseModulesView extends View {
         final UnifiedMod mod;
         final boolean config;
         final RectF bounds;
-        Hit(UnifiedMod mod, boolean config, RectF bounds) {
+        final float anchorX;
+        final float anchorY;
+        Hit(UnifiedMod mod, boolean config, RectF bounds,
+            float anchorX, float anchorY) {
             this.mod = mod;
             this.config = config;
             this.bounds = bounds;
+            this.anchorX = anchorX;
+            this.anchorY = anchorY;
         }
     }
 
@@ -140,6 +147,12 @@ public class NeverloseModulesView extends View {
 
     public void setListener(Listener listener) {
         this.listener = listener;
+    }
+
+    public void setExpandedKey(String key) {
+        if (expandedKey == null ? key == null : expandedKey.equals(key)) return;
+        expandedKey = key;
+        invalidate();
     }
 
     public void setContent(List<UnifiedMod> mods, Set<String> favoriteKeys) {
@@ -193,10 +206,14 @@ public class NeverloseModulesView extends View {
             case "esp":
             case "name_tags":
             case "fullbright":
+            case "toggle_hud":
+            case "fps_display":
+            case "cps_display":
                 return "VISUALS";
             case "speed":
             case "auto_sprint":
             case "zoom":
+            case "snaplook":
             case "gyro":
             case "virtual_cursor":
             case "pojav_controls":
@@ -267,7 +284,9 @@ public class NeverloseModulesView extends View {
                 if (!dragging && pendingHit != null) {
                     Hit hit = pendingHit;
                     if (hit.config) {
-                        if (listener != null) listener.onConfig(hit.mod);
+                        if (listener != null) {
+                            listener.onConfig(hit.mod, hit.anchorX, hit.anchorY);
+                        }
                     } else {
                         boolean enabled = !hit.mod.isEnabled();
                         hit.mod.applyEnabled(enabled);
@@ -296,11 +315,11 @@ public class NeverloseModulesView extends View {
             if (rowIndex < 0 || rowIndex >= column.rows.size()) return null;
             Row row = column.rows.get(rowIndex);
             float rowTop = top + rowIndex * rowHeight;
-            float configLeft = column.x + column.width - 78f * density;
-            float configRight = column.x + column.width - 58f * density;
-            boolean config = x >= configLeft && x <= configRight;
+            float configCenter = column.x + column.width - 65f * density;
+            boolean config = Math.abs(x - configCenter) <= 13f * density;
             return new Hit(row.mod, config, new RectF(
-                    column.x, rowTop, column.x + column.width, rowTop + rowHeight));
+                    column.x, rowTop, column.x + column.width, rowTop + rowHeight),
+                    configCenter, rowTop + rowHeight);
         }
         return null;
     }
@@ -371,11 +390,25 @@ public class NeverloseModulesView extends View {
         }
         canvas.drawText(name, column.x + 13f * density, textY, textPaint);
 
-        float dotsX = column.x + column.width - 70f * density;
-        float dotsY = top + rowHeight * 0.5f;
-        for (int i = 0; i < 3; i++) {
-            canvas.drawCircle(dotsX + i * 4f * density, dotsY, 1.25f * density, dotPaint);
-        }
+        float arrowX = column.x + column.width - 65f * density;
+        float arrowY = top + rowHeight * 0.5f;
+        boolean expanded = expandedKey != null
+                && expandedKey.equals(row.mod.getStableKey());
+        canvas.save();
+        canvas.rotate(expanded ? 180f : 0f, arrowX, arrowY);
+        path.reset();
+        path.moveTo(arrowX - 4f * density, arrowY - 1.7f * density);
+        path.lineTo(arrowX, arrowY + 2.3f * density);
+        path.lineTo(arrowX + 4f * density, arrowY - 1.7f * density);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(1.7f * density);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        paint.setColor(expanded ? COLOR_ACCENT : COLOR_TEXT_DIM);
+        canvas.drawPath(path, paint);
+        paint.setStrokeCap(Paint.Cap.BUTT);
+        paint.setStrokeJoin(Paint.Join.MITER);
+        canvas.restore();
 
         float motion = toggleMotion.containsKey(row.mod.getStableKey())
                 ? toggleMotion.get(row.mod.getStableKey())

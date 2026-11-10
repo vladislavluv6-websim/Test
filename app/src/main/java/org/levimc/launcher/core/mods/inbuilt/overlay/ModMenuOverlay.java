@@ -5,6 +5,8 @@ import android.app.AlertDialog;
 import android.content.res.ColorStateList;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.util.Log;
 import android.util.TypedValue;
 import android.os.Handler;
@@ -25,6 +27,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.PopupWindow;
 import android.widget.SeekBar;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -87,23 +90,21 @@ public class ModMenuOverlay {
     private TextView modSectionTitle;
     private View detailsPanel;
     private final java.util.Map<String, TextView> categoryNavViews = new java.util.LinkedHashMap<>();
-    private String activeCategory = null;
-    private static final String[] CATEGORY_KEYS = {"combat", "render", "movement", "build", "targets", "misc"};
+    private String activeCategory = "combat";
+    private static final String[] CATEGORY_KEYS = {"combat", "movement", "misc", "visuals", "external"};
     private static final int[] CATEGORY_LABELS = {
         R.string.mod_menu_category_combat,
-        R.string.mod_menu_category_visuals,
         R.string.mod_menu_category_movement,
-        R.string.mod_menu_category_build,
-        R.string.mod_menu_category_targets,
-        R.string.mod_menu_category_misc
+        R.string.mod_menu_category_misc,
+        R.string.mod_menu_category_visuals,
+        R.string.mod_menu_category_external
     };
     private static final int[] CATEGORY_ICONS = {
         R.drawable.ic_aimassist_normal,
-        R.drawable.ic_esp_normal,
         R.drawable.ic_speed_normal,
-        R.drawable.ic_modules,
-        R.drawable.ic_trigger_bot_normal,
-        R.drawable.ic_settings
+        R.drawable.ic_settings,
+        R.drawable.ic_esp_normal,
+        R.drawable.ic_modules
     };
     private View settingsContainer;
     private View modulesContainer;
@@ -140,6 +141,9 @@ public class ModMenuOverlay {
     private int settingsScrollPosition;
     private final Map<String, Integer> legacyConfigScrollPositions = new HashMap<>();
     private boolean restoringLastSection;
+    private PopupWindow inlineConfigPopup;
+    private String inlineConfigKey;
+    private FrameLayout inlineConfigHost;
     
     private ModMenuCallback callback;
     private ModNotificationManager notificationManager;
@@ -621,8 +625,8 @@ public class ModMenuOverlay {
                 }
 
                 @Override
-                public void onConfig(UnifiedMod mod) {
-                    showConfigSection(mod);
+                public void onConfig(UnifiedMod mod, float anchorX, float anchorY) {
+                    toggleInlineConfig(mod, anchorX, anchorY);
                 }
             });
         }
@@ -757,6 +761,7 @@ public class ModMenuOverlay {
     }
     
     private void showSettingsSection() {
+        dismissInlineConfig();
         saveVisibleScrollPosition();
         activeSection = MenuSection.SETTINGS;
         updateNavigationItem(navSettings, compactNavSettings, true);
@@ -797,6 +802,7 @@ public class ModMenuOverlay {
     }
     
     private void showConfigSection(UnifiedMod mod) {
+        dismissInlineConfig();
         saveVisibleScrollPosition();
         if (mod.openCustomConfig()) {
             hide();
@@ -853,6 +859,116 @@ public class ModMenuOverlay {
                 }
             }
         }
+    }
+
+    private void toggleInlineConfig(UnifiedMod mod, float anchorX, float anchorY) {
+        if (mod == null) return;
+        String key = mod.getStableKey();
+        boolean same = inlineConfigPopup != null && key != null && key.equals(inlineConfigKey);
+        dismissInlineConfig();
+        if (same) return;
+        if (mod.hasCustomConfig()) {
+            showConfigSection(mod);
+            return;
+        }
+        if (solsticeView == null) return;
+
+        int width = dp(322);
+        int screenH = activity.getResources().getDisplayMetrics().heightPixels;
+        int height = Math.min(dp(430), Math.max(dp(240), screenH - dp(96)));
+
+        FrameLayout host = new FrameLayout(activity);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xFF0D0F16);
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), 0xFF272B36);
+        host.setBackground(bg);
+
+        LinearLayout shell = new LinearLayout(activity);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(4), 0, dp(4), dp(4));
+        host.addView(shell, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout header = new LinearLayout(activity);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(12), 0, dp(6), 0);
+        TextView title = new TextView(activity);
+        title.setText(mod.getName());
+        title.setTextColor(0xFFD9DBE2);
+        title.setTextSize(13f);
+        title.setSingleLine(true);
+        title.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
+                android.graphics.Typeface.BOLD));
+        header.addView(title, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView close = new TextView(activity);
+        close.setText("×");
+        close.setTextColor(0xFF9296A2);
+        close.setTextSize(20f);
+        close.setGravity(Gravity.CENTER);
+        close.setPadding(dp(10), 0, dp(10), dp(2));
+        close.setOnClickListener(v -> dismissInlineConfig());
+        header.addView(close, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        shell.addView(header, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+
+        FrameLayout configHost = new FrameLayout(activity);
+        shell.addView(configHost, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        ModConfigView.render(activity, configHost, mod, compactMode, () -> {
+            InbuiltOverlayManager overlayManager = InbuiltOverlayManager.getInstance();
+            if (overlayManager != null) {
+                overlayManager.applyConfigurationChanges(mod.getId());
+            }
+        });
+
+        PopupWindow popup = new PopupWindow(host, width, height, true);
+        popup.setBackgroundDrawable(new ColorDrawable(0x00000000));
+        popup.setOutsideTouchable(true);
+        popup.setFocusable(true);
+        popup.setElevation(dp(14));
+        popup.setOnDismissListener(() -> {
+            RuntimeConfigView.stop(configHost);
+            if (inlineConfigPopup == popup) {
+                inlineConfigPopup = null;
+                inlineConfigHost = null;
+                inlineConfigKey = null;
+                if (solsticeView != null) solsticeView.setExpandedKey(null);
+            }
+        });
+
+        inlineConfigPopup = popup;
+        inlineConfigHost = configHost;
+        inlineConfigKey = key;
+
+        int[] location = new int[2];
+        solsticeView.getLocationOnScreen(location);
+        int screenW = activity.getResources().getDisplayMetrics().widthPixels;
+        int x = location[0] + Math.round(anchorX) - dp(18);
+        int y = location[1] + Math.round(anchorY) + dp(4);
+        if (x + width > screenW - dp(8)) x = screenW - width - dp(8);
+        if (x < dp(8)) x = dp(8);
+        if (y + height > screenH - dp(8)) {
+            y = location[1] + Math.round(anchorY) - height - dp(34);
+        }
+        if (y < dp(8)) y = dp(8);
+        popup.showAtLocation(solsticeView, Gravity.NO_GRAVITY, x, y);
+        solsticeView.setExpandedKey(key);
+    }
+
+    private void dismissInlineConfig() {
+        PopupWindow popup = inlineConfigPopup;
+        inlineConfigPopup = null;
+        inlineConfigHost = null;
+        inlineConfigKey = null;
+        if (popup != null && popup.isShowing()) {
+            popup.dismiss();
+        }
+        if (solsticeView != null) solsticeView.setExpandedKey(null);
     }
 
     private void setupHudEditorDragHandle(View handle, View tools) {
@@ -1132,6 +1248,8 @@ public class ModMenuOverlay {
         }
 
         setNavigationMode(navModules, compactNavModules, R.string.mod_menu_all_modules, compact);
+        if (navModules != null) navModules.setVisibility(View.GONE);
+        if (compactNavModules != null) compactNavModules.setVisibility(View.GONE);
         setNavigationMode(navHudEditor, compactNavHudEditor, R.string.mod_menu_hud_editor, compact);
         setNavigationMode(navSettings, compactNavSettings, R.string.settings, compact);
 
@@ -1271,16 +1389,21 @@ public class ModMenuOverlay {
     }
 
     private String categoryKeyFor(UnifiedMod mod) {
+        if (mod.getSource() == UnifiedMod.Source.EXTERNAL) return "external";
         String id = safeString(mod.getId()).toLowerCase(Locale.ROOT);
         switch (id) {
             case "aim_assist":
             case "trigger_bot":
+            case "target_esp":
+            case "swing":
                 return "combat";
             case "esp":
+            case "name_tags":
+            case "fullbright":
             case "toggle_hud":
             case "fps_display":
             case "cps_display":
-                return "render";
+                return "visuals";
             case "auto_sprint":
             case "speed":
             case "zoom":
@@ -1289,12 +1412,6 @@ public class ModMenuOverlay {
             case "virtual_cursor":
             case "pojav_controls":
                 return "movement";
-            case "quick_drop":
-            case "chick_pet":
-            case "more_buttons":
-            case "hotbar_slot":
-            case "camera_perspective":
-                return "misc";
             default:
                 return "misc";
         }
@@ -1302,15 +1419,41 @@ public class ModMenuOverlay {
 
     private boolean matchesCategory(UnifiedMod mod) {
         if (activeCategory == null) return true;
+        if (searchInput != null && searchInput.getText().length() > 0) return true;
         return activeCategory.equals(categoryKeyFor(mod));
     }
 
     private void rebuildCategories() {
-        if (navCategories != null) navCategories.setVisibility(View.GONE);
-        return;
+        if (navCategories == null) return;
+        navCategories.removeAllViews();
+        categoryNavViews.clear();
+        for (int i = 0; i < CATEGORY_KEYS.length; i++) {
+            final String key = CATEGORY_KEYS[i];
+            TextView item = new TextView(activity);
+            item.setText(CATEGORY_LABELS[i]);
+            item.setTextSize(13f);
+            item.setTextColor(0xFF9296A2);
+            item.setSingleLine(true);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            item.setPadding(dp(11), 0, dp(8), 0);
+            item.setBackgroundResource(R.drawable.bg_zenix_nav);
+            item.setCompoundDrawablesWithIntrinsicBounds(CATEGORY_ICONS[i], 0, 0, 0);
+            item.setCompoundDrawablePadding(dp(9));
+            item.setCompoundDrawableTintList(ColorStateList.valueOf(0xFF9296A2));
+            item.setDefaultFocusHighlightEnabled(false);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(30));
+            params.setMargins(0, dp(1), 0, dp(1));
+            item.setLayoutParams(params);
+            item.setOnClickListener(v -> selectCategory(key));
+            navCategories.addView(item);
+            categoryNavViews.put(key, item);
+        }
+        navCategories.setVisibility(compactMode ? View.GONE : View.VISIBLE);
     }
 
     private void selectCategory(String key) {
+        dismissInlineConfig();
         activeCategory = key;
         activeFilter = ModuleFilter.ALL;
         updateFilterButtons();
@@ -1324,8 +1467,6 @@ public class ModMenuOverlay {
     }
 
     private void updateCategorySelection() {
-        updateNavigationItem(navModules, compactNavModules, activeCategory == null
-            && activeSection == MenuSection.MODULES);
         for (java.util.Map.Entry<String, TextView> entry : categoryNavViews.entrySet()) {
             boolean selected = entry.getKey().equals(activeCategory)
                 && activeSection == MenuSection.MODULES;
@@ -1338,6 +1479,8 @@ public class ModMenuOverlay {
                 selected ? 0xFF4E83FF : 0xFF9296A2);
             view.setCompoundDrawableTintList(tint);
         }
+        if (navModules != null) navModules.setVisibility(View.GONE);
+        if (compactNavModules != null) compactNavModules.setVisibility(View.GONE);
         if (navCategories != null) {
             navCategories.setVisibility(compactMode ? View.GONE : View.VISIBLE);
         }
@@ -1460,6 +1603,7 @@ public class ModMenuOverlay {
     }
 
     private void loadMods() {
+        if (activeCategory == null) activeCategory = "combat";
         allMods.clear();
 
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
@@ -1508,6 +1652,7 @@ public class ModMenuOverlay {
     
     public void hide() {
         if (!isShowing || overlayView == null) return;
+        dismissInlineConfig();
         saveVisibleScrollPosition();
         searchHandler.removeCallbacks(searchRunnable);
         RuntimeConfigView.stop(overlayView.findViewById(R.id.mod_config_content));

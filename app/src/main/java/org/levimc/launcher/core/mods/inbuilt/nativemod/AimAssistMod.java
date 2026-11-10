@@ -115,6 +115,14 @@ public final class AimAssistMod {
         if (initialized) nativeSetSwingStyle(Math.max(0, Math.min(5, style)));
     }
 
+    public static void setSwingSpeed(int percent) {
+        if (initialized) nativeSetSwingSpeed(Math.max(50, Math.min(200, percent)));
+    }
+
+    public static void setSwingAmplitude(int percent) {
+        if (initialized) nativeSetSwingAmplitude(Math.max(0, Math.min(150, percent)));
+    }
+
     public static void setPreferClosest(boolean enabled) {
         if (initialized) nativeSetPreferClosest(enabled);
     }
@@ -257,6 +265,8 @@ public final class AimAssistMod {
     private static native void nativeSetFastAimTime(float timeMs);
     private static native void nativeSetFastAimMaxSpeed(float degPerSecond);
     private static native void nativeSetSwingStyle(int style);
+    private static native void nativeSetSwingSpeed(int percent);
+    private static native void nativeSetSwingAmplitude(int percent);
     private static native void nativeSetPreferClosest(boolean enabled);
     private static native void nativeSetTriggerBot(boolean enabled);
     private static native void nativeSetTriggerDelay(int delayMs);

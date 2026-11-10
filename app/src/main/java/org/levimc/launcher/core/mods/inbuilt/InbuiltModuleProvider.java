@@ -80,6 +80,8 @@ public final class InbuiltModuleProvider {
     private static final String CFG_NAME_TAG_STYLE = "name_tag_style";
     private static final String CFG_NAME_TAG_COLOR = "name_tag_color";
     private static final String CFG_SWING_STYLE = "swing_style";
+    private static final String CFG_SWING_SPEED = "swing_speed";
+    private static final String CFG_SWING_AMPLITUDE = "swing_amplitude";
     private static final String CFG_TARGET_ESP_STYLE = "target_esp_style";
     private static final String CFG_TARGET_ESP_COLOR = "target_esp_color";
     private static final String CFG_TARGET_ESP_HOLD = "target_esp_hold_ms";
@@ -345,30 +347,6 @@ public final class InbuiltModuleProvider {
         return node;
     }
 
-    private static boolean hasOverlayShortcut(String modId) {
-        switch (modId) {
-            case ModIds.QUICK_DROP:
-            case ModIds.CAMERA_PERSPECTIVE:
-            case ModIds.TOGGLE_HUD:
-            case ModIds.AUTO_SPRINT:
-            case ModIds.SPEED:
-            case ModIds.AIM_ASSIST:
-            case ModIds.ESP:
-            case ModIds.FULLBRIGHT:
-            case ModIds.TRIGGER_BOT:
-            case ModIds.SWING:
-            case ModIds.ZOOM:
-            case ModIds.SNAPLOOK:
-            case ModIds.VIRTUAL_CURSOR:
-            case ModIds.GYRO:
-            case ModIds.NAME_TAGS:
-            case ModIds.TARGET_ESP:
-                return true;
-            default:
-                return false;
-        }
-    }
-
     private static List<UnifiedMod.ConfigEntry> createConfigs(Context context,
                                                               InbuiltModManager manager,
                                                               String modId) {
@@ -394,13 +372,6 @@ public final class InbuiltModuleProvider {
                         UnifiedMod.ConfigType.SLIDER_INT,
                         "100", "0", "100",
                         String.valueOf(manager.getOverlayOpacity(modId))));
-                if (hasOverlayShortcut(modId)) {
-                    configs.add(config(CFG_OVERLAY_SHORTCUT,
-                            context.getString(R.string.mod_config_overlay_shortcut),
-                            UnifiedMod.ConfigType.TOGGLE,
-                            "false", "", "",
-                            String.valueOf(manager.isOverlayShortcutVisible(modId))));
-                }
             }
         }
 
@@ -564,7 +535,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_AIM_ASSIST_FOV,
                     context.getString(R.string.mod_config_aim_assist_fov),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "360", "30", "360",
+                    "120", "30", "120",
                     String.valueOf(manager.getAimAssistFov())));
             configs.add(config(CFG_AIM_ASSIST_BODY_PART,
                     context.getString(R.string.mod_config_aim_assist_body_part),
@@ -722,6 +693,16 @@ public final class InbuiltModuleProvider {
                             + context.getString(R.string.mod_config_swing_twitch),
                     "",
                     String.valueOf(manager.getSwingStyle())));
+            configs.add(config(CFG_SWING_SPEED,
+                    context.getString(R.string.mod_config_swing_speed),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "100", "50", "200",
+                    String.valueOf(manager.getSwingSpeed())));
+            configs.add(config(CFG_SWING_AMPLITUDE,
+                    context.getString(R.string.mod_config_swing_amplitude),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "100", "0", "150",
+                    String.valueOf(manager.getSwingAmplitude())));
         } else if (ModIds.NAME_TAGS.equals(modId)) {
             configs.add(config(CFG_NAME_TAG_STYLE,
                     context.getString(R.string.mod_config_name_tag_style),
@@ -1105,6 +1086,12 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_SWING_STYLE:
                 manager.setSwingStyle(parseInt(value, manager.getSwingStyle()));
+                break;
+            case CFG_SWING_SPEED:
+                manager.setSwingSpeed(parseInt(value, manager.getSwingSpeed()));
+                break;
+            case CFG_SWING_AMPLITUDE:
+                manager.setSwingAmplitude(parseInt(value, manager.getSwingAmplitude()));
                 break;
             case CFG_TARGET_ESP_STYLE:
                 manager.setTargetEspStyle(parseInt(value, manager.getTargetEspStyle()));

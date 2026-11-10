@@ -188,37 +188,42 @@ bool setMoveJumping(void *actor, bool value) {
   return true;
 }
 
-bool hasArmor(void *actor) {
+int armorPieceCount(void *actor) {
   void *equipment = componentFor(actor, kHashEquipment);
-  if (!equipment) return false;
+  if (!equipment) return 0;
   const auto base = reinterpret_cast<uintptr_t>(equipment);
   uintptr_t container = 0;
   if (!readValue(base + kEquipmentArmorContainer, container) ||
       container < 0x1000) {
-    return false;
+    return 0;
   }
   uintptr_t begin = 0;
   uintptr_t end = 0;
   if (!readValue(container + kContainerItems, begin) ||
       !readValue(container + kContainerItems + sizeof(void *), end)) {
-    return false;
+    return 0;
   }
-  if (begin < 0x1000 || end < begin) return false;
+  if (begin < 0x1000 || end < begin) return 0;
   const size_t bytes = end - begin;
-  if (bytes == 0 || bytes % kStackSize != 0) return false;
+  if (bytes == 0 || bytes % kStackSize != 0) return 0;
   size_t slots = bytes / kStackSize;
   if (slots > 4) slots = 4;
+  int pieces = 0;
   for (size_t slot = 0; slot < slots; ++slot) {
     // FillingContainer stores ItemStack objects inline; the item data starts
     // at the stack address itself (see BedrockTools armorhud.cpp).
     const uintptr_t stack = begin + slot * kStackSize;
     uint8_t count = 0;
     uint8_t valid = 0;
-    if (readValue(stack + kStackCount, count) && count > 0) return true;
-    if (readValue(stack + kStackCount + 1, valid) && valid != 0) return true;
+    if ((readValue(stack + kStackCount, count) && count > 0) ||
+        (readValue(stack + kStackCount + 1, valid) && valid != 0)) {
+      ++pieces;
+    }
   }
-  return false;
+  return pieces;
 }
+
+bool hasArmor(void *actor) { return armorPieceCount(actor) > 0; }
 
 bool isInvisible(void *actor) {
   return readBit64(componentFor(actor, kHashActorData), 5);

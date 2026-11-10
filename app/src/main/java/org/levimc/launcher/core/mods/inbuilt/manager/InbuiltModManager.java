@@ -66,6 +66,8 @@ public class InbuiltModManager {
     private static final String KEY_NAME_TAG_STYLE = "name_tag_style";
     private static final String KEY_NAME_TAG_COLOR = "name_tag_color";
     private static final String KEY_SWING_STYLE = "swing_style";
+    private static final String KEY_SWING_SPEED = "swing_speed";
+    private static final String KEY_SWING_AMPLITUDE = "swing_amplitude";
     private static final String KEY_TARGET_ESP_COLOR = "target_esp_color";
     private static final String KEY_TARGET_ESP_HOLD = "target_esp_hold_ms";
     private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
@@ -141,7 +143,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_AIM_ASSIST_RANGE = 10;
     private static final int DEFAULT_AIM_ASSIST_STRENGTH = 100;
     private static final boolean DEFAULT_AIM_ASSIST_LEGIT = true;
-    private static final int DEFAULT_AIM_ASSIST_FOV = 90;
+    private static final int DEFAULT_AIM_ASSIST_FOV = 120;
     private static final boolean DEFAULT_AIM_ASSIST_WALL_CHECK = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
@@ -173,6 +175,8 @@ public class InbuiltModManager {
     private static final int DEFAULT_NAME_TAG_STYLE = 0;
     private static final int DEFAULT_NAME_TAG_COLOR = 0xFF4E83FF;
     private static final int DEFAULT_SWING_STYLE = 1;
+    private static final int DEFAULT_SWING_SPEED = 100;
+    private static final int DEFAULT_SWING_AMPLITUDE = 100;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
     private static final int DEFAULT_TRIGGER_BOT_DELAY = 90;
     private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 40;
@@ -478,13 +482,13 @@ public class InbuiltModManager {
     }
 
     public int getAimAssistFov() {
-        return Math.max(30, Math.min(360,
+        return Math.max(30, Math.min(120,
                 prefs.getInt(KEY_AIM_ASSIST_FOV, DEFAULT_AIM_ASSIST_FOV)));
     }
 
     public void setAimAssistFov(int fov) {
         prefs.edit().putInt(KEY_AIM_ASSIST_FOV,
-                Math.max(30, Math.min(360, fov))).apply();
+                Math.max(30, Math.min(120, fov))).apply();
     }
 
     public boolean isAimAssistWallCheck() {
@@ -678,6 +682,26 @@ public class InbuiltModManager {
     public void setSwingStyle(int style) {
         prefs.edit().putInt(KEY_SWING_STYLE,
                 Math.max(0, Math.min(5, style))).apply();
+    }
+
+    public int getSwingSpeed() {
+        return Math.max(50, Math.min(200,
+                prefs.getInt(KEY_SWING_SPEED, DEFAULT_SWING_SPEED)));
+    }
+
+    public void setSwingSpeed(int percent) {
+        prefs.edit().putInt(KEY_SWING_SPEED,
+                Math.max(50, Math.min(200, percent))).apply();
+    }
+
+    public int getSwingAmplitude() {
+        return Math.max(0, Math.min(150,
+                prefs.getInt(KEY_SWING_AMPLITUDE, DEFAULT_SWING_AMPLITUDE)));
+    }
+
+    public void setSwingAmplitude(int percent) {
+        prefs.edit().putInt(KEY_SWING_AMPLITUDE,
+                Math.max(0, Math.min(150, percent))).apply();
     }
 
     public int getNameTagColor() {

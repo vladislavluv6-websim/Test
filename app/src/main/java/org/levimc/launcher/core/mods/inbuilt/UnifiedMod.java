@@ -123,6 +123,10 @@ public class UnifiedMod {
     public long getRuntimeConfigSchemaRevision() { return runtimeConfigSchemaRevision; }
     public void setRuntimeConfigSchemaRevision(long revision) { runtimeConfigSchemaRevision = Math.max(0L, revision); }
 
+    public boolean hasCustomConfig() {
+        return configOpenHandler != null;
+    }
+
     public boolean openCustomConfig() {
         if (configOpenHandler == null) return false;
         configOpenHandler.onOpenConfig(this);
