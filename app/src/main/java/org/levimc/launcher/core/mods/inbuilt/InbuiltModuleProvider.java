@@ -11,6 +11,7 @@ import org.json.JSONObject;
 import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
+import org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.core.mods.inbuilt.overlay.InbuiltOverlayManager;
 import org.levimc.launcher.core.mods.inbuilt.overlay.MoreButtonsEditor;
