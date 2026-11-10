@@ -23,6 +23,7 @@ public class InbuiltModManager {
     private static final String KEY_SPEED_MAX_RESET_TICKS = "speed_max_reset_ticks";
     private static final String KEY_SPEED_HOP_ENABLED = "speed_hop_enabled";
     private static final String KEY_SPEED_HOP_HEIGHT = "speed_hop_height";
+    private static final String KEY_SPEED_HOP_HEIGHT_EXACT = "speed_hop_height_exact";
     private static final String KEY_SPEED_HOP_INTERVAL = "speed_hop_interval";
     private static final String KEY_SPEED_MASK_Y = "speed_mask_y";
     private static final String KEY_SPEED_PHANTOM_HOLD = "speed_phantom_hold";
@@ -123,19 +124,20 @@ public class InbuiltModManager {
     private static final int DEFAULT_SPEED_MULTIPLIER = 200;
     private static final boolean DEFAULT_SPEED_S1_ENABLED = true;
     private static final int DEFAULT_SPEED_MODE = 2;
-    private static final int DEFAULT_SPEED_MOTION_BOOST = 15;
-    private static final int DEFAULT_SPEED_MAX_SPEED = 50;
-    private static final int DEFAULT_SPEED_GAP_MAX = 40;
+    private static final int DEFAULT_SPEED_MOTION_BOOST = 24;
+    private static final int DEFAULT_SPEED_MAX_SPEED = 68;
+    private static final int DEFAULT_SPEED_GAP_MAX = 45;
     private static final int DEFAULT_SPEED_RESET_INTERVAL = 2500;
     private static final int DEFAULT_SPEED_MAX_RESET_TICKS = 6;
     private static final boolean DEFAULT_SPEED_HOP_ENABLED = true;
-    private static final int DEFAULT_SPEED_HOP_HEIGHT = 0;
-    private static final int DEFAULT_SPEED_HOP_INTERVAL = 1;
+    private static final int DEFAULT_SPEED_HOP_HEIGHT = 128;
+    private static final float DEFAULT_SPEED_HOP_HEIGHT_EXACT = 0.12824392f;
+    private static final int DEFAULT_SPEED_HOP_INTERVAL = 0;
     private static final boolean DEFAULT_SPEED_MASK_Y = true;
     private static final int DEFAULT_SPEED_PHANTOM_HOLD = 3;
     private static final int DEFAULT_SPEED_FAKE_JUMP_TICKS = 4;
     private static final boolean DEFAULT_SPEED_CANCEL_CORRECTIONS = true;
-    private static final boolean DEFAULT_SPEED_PAUSE_ON_FALL = true;
+    private static final boolean DEFAULT_SPEED_PAUSE_ON_FALL = false;
     private static final boolean DEFAULT_SPEED_PAUSE_IF_SNEAKING = true;
     private static final boolean DEFAULT_SPEED_PAUSE_IF_NOT_MOVING = true;
     private static final boolean DEFAULT_SPEED_AUTO_SPRINT = true;
@@ -148,18 +150,18 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
     private static final int DEFAULT_AIM_ASSIST_BODY_PART = 0;
-    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 1600;
-    private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 55;
-    private static final int DEFAULT_AIM_ASSIST_ACCEL = 9000;
-    private static final int DEFAULT_AIM_ASSIST_DEADZONE = 2;
-    private static final int DEFAULT_AIM_ASSIST_FULL_RANGE = 45;
+    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 2200;
+    private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 60;
+    private static final int DEFAULT_AIM_ASSIST_ACCEL = 12000;
+    private static final int DEFAULT_AIM_ASSIST_DEADZONE = 0;
+    private static final int DEFAULT_AIM_ASSIST_FULL_RANGE = 60;
     private static final int DEFAULT_AIM_ASSIST_STICKY = 0;
-    private static final int DEFAULT_AIM_ASSIST_GRACE = 6;
+    private static final int DEFAULT_AIM_ASSIST_GRACE = 3;
     private static final boolean DEFAULT_AIM_ASSIST_PREFER_CLOSEST = false;
-    private static final boolean DEFAULT_AIM_ASSIST_TARGET_LOCK = false;
-    private static final boolean DEFAULT_AIM_ASSIST_FAST_AIM = false;
-    private static final int DEFAULT_AIM_ASSIST_FAST_AIM_TIME = 60;
-    private static final int DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED = 1800;
+    private static final boolean DEFAULT_AIM_ASSIST_TARGET_LOCK = true;
+    private static final boolean DEFAULT_AIM_ASSIST_FAST_AIM = true;
+    private static final int DEFAULT_AIM_ASSIST_FAST_AIM_TIME = 35;
+    private static final int DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED = 2600;
     private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
     private static final boolean DEFAULT_ESP_SHOW_MOBS = true;
     private static final boolean DEFAULT_ESP_NAME_TAGS = false;
@@ -193,7 +195,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
     private static final String KEY_TUNING_REVISION = "tuning_revision";
-    private static final int TUNING_REVISION = 3;
+    private static final int TUNING_REVISION = 4;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
     private static final String KEY_FRIEND_NAMES = "friend_names";
@@ -218,7 +220,7 @@ public class InbuiltModManager {
     }
 
     private void migrateShortcutVisibility() {
-        if (prefs.getInt(KEY_SHORTCUT_REVISION, 0) >= 1) return;
+        if (prefs.getInt(KEY_SHORTCUT_REVISION, 0) >= 2) return;
         SharedPreferences.Editor editor = prefs.edit();
         for (String modId : new String[]{
                 ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.ESP,
@@ -226,7 +228,7 @@ public class InbuiltModManager {
                 ModIds.NAME_TAGS, ModIds.TARGET_ESP, ModIds.FRIEND}) {
             editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
         }
-        editor.putInt(KEY_SHORTCUT_REVISION, 1).apply();
+        editor.putInt(KEY_SHORTCUT_REVISION, 2).apply();
     }
 
     private void migrateFov360() {
@@ -251,6 +253,13 @@ public class InbuiltModManager {
                 .putInt(KEY_AIM_ASSIST_FULL_RANGE, DEFAULT_AIM_ASSIST_FULL_RANGE)
                 .putInt(KEY_AIM_ASSIST_STICKY, DEFAULT_AIM_ASSIST_STICKY)
                 .putInt(KEY_AIM_ASSIST_GRACE, DEFAULT_AIM_ASSIST_GRACE)
+                .putBoolean(KEY_AIM_ASSIST_TARGET_LOCK,
+                        DEFAULT_AIM_ASSIST_TARGET_LOCK)
+                .putBoolean(KEY_AIM_ASSIST_FAST_AIM, DEFAULT_AIM_ASSIST_FAST_AIM)
+                .putInt(KEY_AIM_ASSIST_FAST_AIM_TIME,
+                        DEFAULT_AIM_ASSIST_FAST_AIM_TIME)
+                .putInt(KEY_AIM_ASSIST_FAST_AIM_MAX_SPEED,
+                        DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED)
                 .putInt(KEY_TRIGGER_BOT_DELAY, DEFAULT_TRIGGER_BOT_DELAY)
                 .putInt(KEY_TRIGGER_BOT_REACTION_JITTER, DEFAULT_TRIGGER_BOT_REACTION_JITTER)
                 .putInt(KEY_TRIGGER_BOT_TOLERANCE, DEFAULT_TRIGGER_BOT_TOLERANCE)
@@ -265,6 +274,7 @@ public class InbuiltModManager {
                 .putInt(KEY_SPEED_MAX_RESET_TICKS, DEFAULT_SPEED_MAX_RESET_TICKS)
                 .putBoolean(KEY_SPEED_HOP_ENABLED, DEFAULT_SPEED_HOP_ENABLED)
                 .putInt(KEY_SPEED_HOP_HEIGHT, DEFAULT_SPEED_HOP_HEIGHT)
+                .putFloat(KEY_SPEED_HOP_HEIGHT_EXACT, DEFAULT_SPEED_HOP_HEIGHT_EXACT)
                 .putInt(KEY_SPEED_HOP_INTERVAL, DEFAULT_SPEED_HOP_INTERVAL)
                 .putBoolean(KEY_SPEED_MASK_Y, DEFAULT_SPEED_MASK_Y)
                 .putInt(KEY_SPEED_PHANTOM_HOLD, DEFAULT_SPEED_PHANTOM_HOLD)
@@ -400,14 +410,26 @@ public class InbuiltModManager {
     }
 
     public float getSpeedHopHeight() {
-        final float h = getSpeedHopHeightRaw() / 1000f;
-        // 0 means the "fake" sub-centimetre hop from the original script.
-        return h <= 0.0f ? 0.0000000000001f : h;
+        if (prefs.contains(KEY_SPEED_HOP_HEIGHT_EXACT)) {
+            return Math.max(0.10f, Math.min(0.42f,
+                    prefs.getFloat(KEY_SPEED_HOP_HEIGHT_EXACT,
+                            DEFAULT_SPEED_HOP_HEIGHT_EXACT)));
+        }
+        final int raw = getSpeedHopHeightRaw();
+        if (raw > 0) return raw / 1000f;
+        return DEFAULT_SPEED_HOP_HEIGHT_EXACT;
+    }
+
+    public void setSpeedHopHeight(float height) {
+        prefs.edit().putFloat(KEY_SPEED_HOP_HEIGHT_EXACT,
+                Math.max(0.10f, Math.min(0.42f, height))).apply();
     }
 
     public void setSpeedHopHeightRaw(int value) {
         prefs.edit().putInt(KEY_SPEED_HOP_HEIGHT,
-                Math.max(0, Math.min(420, value))).apply();
+                Math.max(0, Math.min(420, value)))
+                .remove(KEY_SPEED_HOP_HEIGHT_EXACT)
+                .apply();
     }
 
     public int getSpeedHopInterval() {
@@ -692,13 +714,13 @@ public class InbuiltModManager {
     }
 
     public int getTargetEspStyle() {
-        return Math.max(0, Math.min(4,
+        return Math.max(0, Math.min(7,
                 prefs.getInt(KEY_TARGET_ESP_STYLE, DEFAULT_TARGET_ESP_STYLE)));
     }
 
     public void setTargetEspStyle(int style) {
         prefs.edit().putInt(KEY_TARGET_ESP_STYLE,
-                Math.max(0, Math.min(4, style))).apply();
+                Math.max(0, Math.min(7, style))).apply();
     }
 
     public int getNameTagStyle() {
@@ -776,33 +798,33 @@ public class InbuiltModManager {
     }
 
     public int getAimAssistMaxSpeed() {
-        return Math.max(100, Math.min(1500,
+        return Math.max(100, Math.min(3000,
                 prefs.getInt(KEY_AIM_ASSIST_MAX_SPEED, DEFAULT_AIM_ASSIST_MAX_SPEED)));
     }
 
     public void setAimAssistMaxSpeed(int degPerSecond) {
         prefs.edit().putInt(KEY_AIM_ASSIST_MAX_SPEED,
-                Math.max(100, Math.min(1500, degPerSecond))).apply();
+                Math.max(100, Math.min(3000, degPerSecond))).apply();
     }
 
     public int getAimAssistSmoothing() {
-        return Math.max(1, Math.min(40,
+        return Math.max(1, Math.min(100,
                 prefs.getInt(KEY_AIM_ASSIST_SMOOTHING, DEFAULT_AIM_ASSIST_SMOOTHING)));
     }
 
     public void setAimAssistSmoothing(int value) {
         prefs.edit().putInt(KEY_AIM_ASSIST_SMOOTHING,
-                Math.max(1, Math.min(40, value))).apply();
+                Math.max(1, Math.min(100, value))).apply();
     }
 
     public int getAimAssistAcceleration() {
-        return Math.max(200, Math.min(10000,
+        return Math.max(200, Math.min(20000,
                 prefs.getInt(KEY_AIM_ASSIST_ACCEL, DEFAULT_AIM_ASSIST_ACCEL)));
     }
 
     public void setAimAssistAcceleration(int value) {
         prefs.edit().putInt(KEY_AIM_ASSIST_ACCEL,
-                Math.max(200, Math.min(10000, value))).apply();
+                Math.max(200, Math.min(20000, value))).apply();
     }
 
     public int getAimAssistDeadzone() {
@@ -816,13 +838,13 @@ public class InbuiltModManager {
     }
 
     public int getAimAssistFullRange() {
-        return Math.max(1, Math.min(45,
+        return Math.max(1, Math.min(90,
                 prefs.getInt(KEY_AIM_ASSIST_FULL_RANGE, DEFAULT_AIM_ASSIST_FULL_RANGE)));
     }
 
     public void setAimAssistFullRange(int deg) {
         prefs.edit().putInt(KEY_AIM_ASSIST_FULL_RANGE,
-                Math.max(1, Math.min(45, deg))).apply();
+                Math.max(1, Math.min(90, deg))).apply();
     }
 
     public int getAimAssistSticky() {

@@ -342,18 +342,18 @@ void AimAssist::setLegitMode(bool legit) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.legit = legit;
   if (legit) {
-    m_settings.smoothingSpeed = 55.0f;
-    m_settings.maxDegPerSecond = 1600.0f;
-    m_settings.maxAccelDegPerSecond2 = 9000.0f;
-    m_settings.deadzoneDeg = 0.02f;
-    m_settings.fullSpeedRangeDeg = 45.0f;
+    m_settings.smoothingSpeed = 60.0f;
+    m_settings.maxDegPerSecond = 2200.0f;
+    m_settings.maxAccelDegPerSecond2 = 12000.0f;
+    m_settings.deadzoneDeg = 0.0f;
+    m_settings.fullSpeedRangeDeg = 60.0f;
     m_settings.targetSmoothFrames = 0;
   } else {
-    m_settings.smoothingSpeed = 65.0f;
-    m_settings.maxDegPerSecond = 2000.0f;
-    m_settings.maxAccelDegPerSecond2 = 12000.0f;
-    m_settings.deadzoneDeg = 0.01f;
-    m_settings.fullSpeedRangeDeg = 50.0f;
+    m_settings.smoothingSpeed = 70.0f;
+    m_settings.maxDegPerSecond = 2800.0f;
+    m_settings.maxAccelDegPerSecond2 = 16000.0f;
+    m_settings.deadzoneDeg = 0.0f;
+    m_settings.fullSpeedRangeDeg = 70.0f;
     m_settings.targetSmoothFrames = 0;
   }
 }
@@ -1515,8 +1515,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
       std::sqrt(errYaw * errYaw + errPitch * errPitch);
 
   const float timeMs = clampf(
-      2200.0f / std::max(1.0f, settings.smoothingSpeed) / strengthScale,
-      12.0f, 250.0f);
+      1800.0f / std::max(1.0f, settings.smoothingSpeed) / strengthScale,
+      10.0f, 200.0f);
   const float alpha = 1.0f - std::exp(-h * 1000.0f / timeMs);
   float stepYaw = errYaw * alpha;
   float stepPitch = errPitch * alpha;

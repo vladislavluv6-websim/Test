@@ -27,6 +27,7 @@ public class EspBoxesOverlay extends View {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pipPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
     private float density = 1f;
     private boolean attached;
@@ -59,6 +60,7 @@ public class EspBoxesOverlay extends View {
         paint.setStrokeWidth(1.6f * density);
         glowPaint.setStyle(Paint.Style.STROKE);
         glowPaint.setStrokeWidth(6f * density);
+        pipPaint.setStyle(Paint.Style.FILL);
         applySettings();
     }
 
@@ -163,7 +165,7 @@ public class EspBoxesOverlay extends View {
 
     private void poll() {
         String[] next = new String[0];
-        if (moduleEnabled && style > 0 && gameplayVisible() && EspMod.isInitialized()) {
+        if (moduleEnabled && gameplayVisible() && EspMod.isInitialized()) {
             String[] nativeBoxes = EspMod.getEspBoxes();
             if (nativeBoxes != null) next = nativeBoxes;
         }
@@ -187,9 +189,35 @@ public class EspBoxesOverlay extends View {
                 float w = Float.parseFloat(parts[2]);
                 float h = Float.parseFloat(parts[3]);
                 int color = (int) Long.parseLong(parts[4].trim());
-                drawBox(canvas, x, y, w, h, color);
+                int armorPieces = 0;
+                if (parts.length >= 6) {
+                    try {
+                        armorPieces = Integer.parseInt(parts[5].trim());
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                if (style > 0) drawBox(canvas, x, y, w, h, color);
+                if (armorPieces > 0) {
+                    drawArmorPips(canvas, x, y, w, armorPieces);
+                }
             } catch (NumberFormatException ignored) {
             }
+        }
+    }
+
+    private void drawArmorPips(Canvas canvas, float x, float y, float w,
+                               int armorPieces) {
+        float pipW = 4f * density;
+        float pipH = 6f * density;
+        float gap = 1.5f * density;
+        float total = 4 * pipW + 3 * gap;
+        float left = x + (w - total) * 0.5f;
+        float top = y - pipH - 4f * density;
+        for (int i = 0; i < 4; i++) {
+            pipPaint.setColor(i < armorPieces ? 0xFF58A6FF : 0xFF303643);
+            float px = left + i * (pipW + gap);
+            canvas.drawRoundRect(px, top, px + pipW, top + pipH,
+                    density, density, pipPaint);
         }
     }
 

@@ -651,7 +651,7 @@
     <string name="inbuilt_mod_autosprint">Auto Sprint</string>
     <string name="inbuilt_mod_autosprint_desc">Toggle sprint on/off</string>
     <string name="inbuilt_mod_speed">Speed Hack</string>
-    <string name="inbuilt_mod_speed_desc">Move faster than normal (experimental)</string>
+    <string name="inbuilt_mod_speed_desc">Speeds up with a chain of fast mini-jumps and packet masking</string>
     <string name="mod_config_speed_multiplier">Speed multiplier (%)</string>
     <string name="mod_config_speed_s1_enabled">Speed S1 bypass (packet desync)</string>
     <string name="mod_config_speed_mode">Where to accelerate</string>
@@ -664,7 +664,7 @@
     <string name="mod_config_speed_reset_interval">Reset interval (ms)</string>
     <string name="mod_config_speed_max_reset_ticks">Max reset ticks</string>
     <string name="mod_config_speed_hop_enabled">Low hop</string>
-    <string name="mod_config_speed_hop_height">Hop height (mm, 0 = fake)</string>
+    <string name="mod_config_speed_hop_height">Mini-jump height (blocks)</string>
     <string name="mod_config_speed_hop_interval">Hop interval (ticks)</string>
     <string name="mod_config_speed_mask_y">Mask Y (phantom)</string>
     <string name="mod_config_speed_phantom_hold">Phantom hold (ticks)</string>
@@ -697,9 +697,9 @@
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players and mobs under the crosshair</string>
     <string name="inbuilt_mod_swing">Hit Animation</string>
-    <string name="inbuilt_mod_swing_desc">Changes the sword swing animation for TriggerBot hits</string>
+    <string name="inbuilt_mod_swing_desc">Changes the swing animation for every hit</string>
     <string name="inbuilt_mod_target_esp">Target ESP</string>
-    <string name="inbuilt_mod_target_esp_desc">Highlights the current AimAssist target with a ghost, square, circle or crystal model</string>
+    <string name="inbuilt_mod_target_esp_desc">Highlights the current AimAssist target with one of 8 models: crystal, prism, rune, nova, pulse, hex, orbit, lock</string>
     <string name="mod_config_target_esp_style">Model</string>
     <string name="mod_config_target_esp_prism">Prism</string>
     <string name="mod_config_target_esp_rune">Rune</string>
@@ -1242,4 +1242,11 @@
     <string name="mod_menu_category_targets">Targets</string>
     <string name="mod_menu_category_misc">Misc</string>
     <string name="mod_menu_category_external">External</string>
+    <string name="mod_friend_add">Add</string>
+    <string name="mod_friend_add_hint">Player nickname</string>
+    <string name="mod_friend_empty">No friends yet. Add a nickname above.</string>
+    <string name="mod_friend_remove">Remove %1$s</string>
+    <string name="mod_config_target_esp_hex">Hex</string>
+    <string name="mod_config_target_esp_orbit">Orbit</string>
+    <string name="mod_config_target_esp_lock">Lock</string>
 </resources>

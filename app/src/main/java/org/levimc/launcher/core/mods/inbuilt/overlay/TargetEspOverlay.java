@@ -29,6 +29,9 @@ public class TargetEspOverlay extends View {
     public static final int STYLE_RUNE = 2;
     public static final int STYLE_NOVA = 3;
     public static final int STYLE_PULSE = 4;
+    public static final int STYLE_HEX = 5;
+    public static final int STYLE_ORBIT = 6;
+    public static final int STYLE_LOCK = 7;
 
     private static final long FADE_MS = 180L;
 
@@ -261,6 +264,15 @@ public class TargetEspOverlay extends View {
             case STYLE_PULSE:
                 drawPulse(canvas, alpha);
                 break;
+            case STYLE_HEX:
+                drawHex(canvas, alpha);
+                break;
+            case STYLE_ORBIT:
+                drawOrbit(canvas, alpha);
+                break;
+            case STYLE_LOCK:
+                drawLock(canvas, alpha);
+                break;
             case STYLE_CRYSTAL:
             default:
                 drawCrystal(canvas, alpha);
@@ -453,6 +465,95 @@ public class TargetEspOverlay extends View {
         canvas.drawCircle(cx, cy, base * 0.42f, strokePaint);
         canvas.drawCircle(cx, cy, base * 0.18f, fillPaint);
         canvas.drawCircle(cx, cy, base * 0.18f, strokePaint);
+    }
+
+
+    private void drawHex(Canvas canvas, float alpha) {
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float radius = Math.min(rect.width(), rect.height()) * 0.58f;
+        float rotation = (ageMs % 2400L) / 2400f * 360f;
+        for (int ring = 0; ring < 2; ring++) {
+            float r = radius * (ring == 0 ? 1f : 0.68f);
+            path.reset();
+            for (int i = 0; i <= 6; i++) {
+                double a = Math.toRadians(rotation + i * 60 + ring * 30);
+                float px = cx + (float) Math.cos(a) * r;
+                float py = cy + (float) Math.sin(a) * r;
+                if (i == 0) path.moveTo(px, py); else path.lineTo(px, py);
+            }
+            path.close();
+            canvas.drawPath(path, ring == 0 ? glowPaint : fillPaint);
+            strokePaint.setStrokeWidth((ring == 0 ? 2.5f : 2f) * density);
+            canvas.drawPath(path, strokePaint);
+        }
+        strokePaint.setStrokeWidth(2f * density);
+        for (int i = 0; i < 6; i++) {
+            double a = Math.toRadians(rotation + i * 60);
+            canvas.drawLine(cx, cy,
+                    cx + (float) Math.cos(a) * radius,
+                    cy + (float) Math.sin(a) * radius, glowPaint);
+        }
+    }
+
+    private void drawOrbit(Canvas canvas, float alpha) {
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float rx = rect.width() * 0.56f;
+        float ry = rect.height() * 0.30f;
+        float rotation = (ageMs % 2000L) / 2000f * 360f;
+        canvas.save();
+        canvas.rotate(rotation, cx, cy);
+        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, glowPaint);
+        path.reset();
+        path.addOval(cx - rx, cy - ry, cx + rx, cy + ry, Path.Direction.CW);
+        canvas.drawPath(path, strokePaint);
+        canvas.restore();
+        canvas.save();
+        canvas.rotate(-rotation * 0.8f + 90f, cx, cy);
+        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, glowPaint);
+        canvas.restore();
+        for (int i = 0; i < 3; i++) {
+            double a = Math.toRadians(rotation + i * 120);
+            float px = cx + (float) Math.cos(a) * rx * 0.95f;
+            float py = cy + (float) Math.sin(a) * ry * 0.95f;
+            canvas.save();
+            canvas.rotate(rotation, cx, cy);
+            canvas.drawCircle(px, cy, 3f * density, fillPaint);
+            canvas.restore();
+        }
+        fillPaint.setAlpha((int) (36 * alpha));
+        canvas.drawCircle(cx, cy, Math.min(rx, ry) * 0.45f, fillPaint);
+    }
+
+    private void drawLock(Canvas canvas, float alpha) {
+        float inset = 3f * density;
+        rectIns(rect, inset);
+        float arm = Math.min(rect.width(), rect.height()) * 0.30f;
+        strokePaint.setStrokeWidth(2.5f * density);
+        canvas.drawLine(rect.left, rect.top, rect.left + arm, rect.top, strokePaint);
+        canvas.drawLine(rect.left, rect.top, rect.left, rect.top + arm, strokePaint);
+        canvas.drawLine(rect.right, rect.top, rect.right - arm, rect.top, strokePaint);
+        canvas.drawLine(rect.right, rect.top, rect.right, rect.top + arm, strokePaint);
+        canvas.drawLine(rect.left, rect.bottom, rect.left + arm, rect.bottom, strokePaint);
+        canvas.drawLine(rect.left, rect.bottom, rect.left, rect.bottom - arm, strokePaint);
+        canvas.drawLine(rect.right, rect.bottom, rect.right - arm, rect.bottom, strokePaint);
+        canvas.drawLine(rect.right, rect.bottom, rect.right, rect.bottom - arm, strokePaint);
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float r = Math.min(rect.width(), rect.height()) * 0.16f;
+        float pulse = (float) (0.5 + 0.5 * Math.sin(ageMs / 140.0));
+        path.reset();
+        path.moveTo(cx, cy - r);
+        path.lineTo(cx + r, cy);
+        path.lineTo(cx, cy + r);
+        path.lineTo(cx - r, cy);
+        path.close();
+        glowPaint.setAlpha((int) ((45 + 45 * pulse) * alpha));
+        canvas.drawPath(path, glowPaint);
+        canvas.drawPath(path, strokePaint);
+        strokePaint.setStrokeWidth(2f * density);
+        rectIns(rect, -inset);
     }
 
     private static void rectIns(RectF r, float inset) {

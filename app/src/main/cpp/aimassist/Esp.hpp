@@ -28,6 +28,7 @@ struct EspBoxLabel {
   float width = 0.0f;
   float height = 0.0f;
   uint32_t color = 0xFFFFFFFFu;
+  int armorPieces = 0;
 };
 
 struct TargetEspState {

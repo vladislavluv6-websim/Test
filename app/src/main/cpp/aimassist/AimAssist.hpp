@@ -48,11 +48,11 @@ struct Settings {
 
   float fovDeg = 360.0f;
   float range = 8.0f;
-  float smoothingSpeed = 55.0f;
-  float maxDegPerSecond = 1600.0f;
-  float maxAccelDegPerSecond2 = 9000.0f;
-  float deadzoneDeg = 0.02f;
-  float fullSpeedRangeDeg = 45.0f;
+  float smoothingSpeed = 60.0f;
+  float maxDegPerSecond = 2200.0f;
+  float maxAccelDegPerSecond2 = 12000.0f;
+  float deadzoneDeg = 0.0f;
+  float fullSpeedRangeDeg = 60.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
   TargetBone targetBone = TargetBone::Head;
@@ -60,17 +60,17 @@ struct Settings {
   int stickyTicks = 0;
   // Target lock: держим одну цель, пока она жива и в радиусе. Переключение
   // только если прицел стоит точно на другой цели.
-  bool targetLock = false;
+  bool targetLock = true;
   // Fast aim: довод по экспоненте за fastAimTimeMs, без шума/overshoot/
   // deadzone/бюджета. Всегда ближайшая цель и lock до смерти/выхода из range.
-  bool fastAim = false;
-  float fastAimTimeMs = 60.0f;
-  float fastAimMaxSpeed = 1800.0f;
+  bool fastAim = true;
+  float fastAimTimeMs = 35.0f;
+  float fastAimMaxSpeed = 2600.0f;
   float switchHysteresisDeg = 0.75f;
   // EMA-лаг позиции цели (в кадрах при 120 Гц). Даёт «догоняющее» наведение,
   // как у живой руки, вместо мгновенной привязки к центру хитбокса.
   int targetSmoothFrames = 0;
-  int targetGraceFrames = 6;
+  int targetGraceFrames = 3;
 
   float randomJitterDeg = 0.0f;
   int randomJitterIntervalMs = 150;

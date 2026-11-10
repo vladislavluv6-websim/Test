@@ -447,17 +447,17 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_SPEED_MOTION_BOOST,
                     context.getString(R.string.mod_config_speed_motion_boost),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "15", "1", "200",
+                    "24", "1", "200",
                     String.valueOf(manager.getSpeedMotionBoostRaw())));
             configs.add(config(CFG_SPEED_MAX_SPEED,
                     context.getString(R.string.mod_config_speed_max_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "50", "28", "200",
+                    "68", "28", "200",
                     String.valueOf(manager.getSpeedMaxSpeedRaw())));
             configs.add(config(CFG_SPEED_GAP_MAX,
                     context.getString(R.string.mod_config_speed_gap_max),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "40", "15", "300",
+                    "45", "15", "300",
                     String.valueOf(manager.getSpeedGapMaxRaw())));
             configs.add(config(CFG_SPEED_RESET_INTERVAL,
                     context.getString(R.string.mod_config_speed_reset_interval),
@@ -476,13 +476,14 @@ public final class InbuiltModuleProvider {
                     String.valueOf(manager.isSpeedHopEnabled())));
             configs.add(config(CFG_SPEED_HOP_HEIGHT,
                     context.getString(R.string.mod_config_speed_hop_height),
-                    UnifiedMod.ConfigType.SLIDER_INT,
-                    "0", "0", "420",
-                    String.valueOf(manager.getSpeedHopHeightRaw())));
+                    UnifiedMod.ConfigType.SLIDER_FLOAT,
+                    "0.12824392", "0.10", "0.42",
+                    String.format(java.util.Locale.US, "%.8f",
+                            manager.getSpeedHopHeight())));
             configs.add(config(CFG_SPEED_HOP_INTERVAL,
                     context.getString(R.string.mod_config_speed_hop_interval),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "1", "0", "20",
+                    "0", "0", "20",
                     String.valueOf(manager.getSpeedHopInterval())));
             configs.add(config(CFG_SPEED_MASK_Y,
                     context.getString(R.string.mod_config_speed_mask_y),
@@ -579,47 +580,47 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_AIM_ASSIST_GRACE,
                     context.getString(R.string.mod_config_aim_assist_grace),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "6", "0", "30",
+                    "3", "0", "30",
                     String.valueOf(manager.getAimAssistGrace())));
             configs.add(config(CFG_AIM_ASSIST_FAST_AIM,
                     context.getString(R.string.mod_config_aim_assist_fast_aim),
                     UnifiedMod.ConfigType.TOGGLE,
-                    "false", "", "",
+                    "true", "", "",
                     String.valueOf(manager.isAimAssistFastAim())));
             configs.add(config(CFG_AIM_ASSIST_FAST_AIM_TIME,
                     context.getString(R.string.mod_config_aim_assist_fast_aim_time),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "60", "20", "200",
+                    "35", "20", "200",
                     String.valueOf(manager.getAimAssistFastAimTime())));
             configs.add(config(CFG_AIM_ASSIST_FAST_AIM_MAX_SPEED,
                     context.getString(R.string.mod_config_aim_assist_fast_aim_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "1800", "300", "4000",
+                    "2600", "300", "4000",
                     String.valueOf(manager.getAimAssistFastAimMaxSpeed())));
             configs.add(config(CFG_AIM_ASSIST_MAX_SPEED,
                     context.getString(R.string.mod_config_aim_assist_max_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "1100", "100", "1500",
+                    "2200", "100", "3000",
                     String.valueOf(manager.getAimAssistMaxSpeed())));
             configs.add(config(CFG_AIM_ASSIST_SMOOTHING,
                     context.getString(R.string.mod_config_aim_assist_smoothing),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "38", "1", "40",
+                    "60", "1", "100",
                     String.valueOf(manager.getAimAssistSmoothing())));
             configs.add(config(CFG_AIM_ASSIST_ACCEL,
                     context.getString(R.string.mod_config_aim_assist_accel),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "5200", "200", "10000",
+                    "12000", "200", "20000",
                     String.valueOf(manager.getAimAssistAcceleration())));
             configs.add(config(CFG_AIM_ASSIST_DEADZONE,
                     context.getString(R.string.mod_config_aim_assist_deadzone),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "10", "0", "50",
+                    "0", "0", "50",
                     String.valueOf(manager.getAimAssistDeadzone())));
             configs.add(config(CFG_AIM_ASSIST_FULL_RANGE,
                     context.getString(R.string.mod_config_aim_assist_full_range),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "22", "1", "45",
+                    "60", "1", "90",
                     String.valueOf(manager.getAimAssistFullRange())));
             configs.add(config(CFG_AIM_ASSIST_STRENGTH,
                     context.getString(R.string.mod_config_aim_assist_strength),
@@ -732,7 +733,10 @@ public final class InbuiltModuleProvider {
                             + context.getString(R.string.mod_config_target_esp_prism) + ","
                             + context.getString(R.string.mod_config_target_esp_rune) + ","
                             + context.getString(R.string.mod_config_target_esp_nova) + ","
-                            + context.getString(R.string.mod_config_target_esp_pulse),
+                            + context.getString(R.string.mod_config_target_esp_pulse) + ","
+                            + context.getString(R.string.mod_config_target_esp_hex) + ","
+                            + context.getString(R.string.mod_config_target_esp_orbit) + ","
+                            + context.getString(R.string.mod_config_target_esp_lock),
                     "",
                     String.valueOf(manager.getTargetEspStyle())));
             configs.add(config(CFG_TARGET_ESP_COLOR,
@@ -979,7 +983,10 @@ public final class InbuiltModuleProvider {
                 manager.setSpeedHopEnabled(parseBoolean(value));
                 break;
             case CFG_SPEED_HOP_HEIGHT:
-                manager.setSpeedHopHeightRaw(parseInt(value, manager.getSpeedHopHeightRaw()));
+                try {
+                    manager.setSpeedHopHeight(Float.parseFloat(value));
+                } catch (NumberFormatException ignored) {
+                }
                 break;
             case CFG_SPEED_HOP_INTERVAL:
                 manager.setSpeedHopInterval(parseInt(value, manager.getSpeedHopInterval()));

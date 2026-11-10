@@ -384,9 +384,11 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetEspBoxes(
 
   for (size_t i = 0; i < boxes.size(); ++i) {
     char entry[96]{};
-    std::snprintf(entry, sizeof(entry), "%.1f\t%.1f\t%.1f\t%.1f\t%u",
+    std::snprintf(entry, sizeof(entry),
+                  "%.1f\t%.1f\t%.1f\t%.1f\t%u\t%d",
                   boxes[i].x, boxes[i].y, boxes[i].width, boxes[i].height,
-                  static_cast<unsigned>(boxes[i].color));
+                  static_cast<unsigned>(boxes[i].color),
+                  boxes[i].armorPieces);
     jstring item = env->NewStringUTF(entry);
     if (item) {
       env->SetObjectArrayElement(result, static_cast<jsize>(i), item);

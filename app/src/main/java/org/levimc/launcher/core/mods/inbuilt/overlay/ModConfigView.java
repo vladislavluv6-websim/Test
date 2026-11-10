@@ -96,12 +96,12 @@ public class ModConfigView {
                     float fMin = parseFloatSafe(cfg.minValue, 0f);
                     float fMax = parseFloatSafe(cfg.maxValue, 1f);
                     float fCur = parseFloatSafe(cfg.currentValue, parseFloatSafe(cfg.defaultValue, fMin));
-                    int steps = 100;
+                    int steps = 1000;
                     int curProgress = (int)((fCur - fMin) / (fMax - fMin) * steps);
 
                     LinearLayout row = createRow(context, container, density);
                     TextView label = createLabel(context, cfg.displayName, density);
-                    TextView valText = createValueText(context, String.format("%.2f", fCur), accent, density);
+                    TextView valText = createValueText(context, String.format(java.util.Locale.US, "%.4f", fCur), accent, density);
                     row.addView(label);
                     row.addView(valText);
                     container.addView(row);
@@ -117,7 +117,7 @@ public class ModConfigView {
                         public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
                             if (fromUser) {
                                 float val = fMin + (fMax - fMin) * progress / (float) steps;
-                                valText.setText(String.format("%.2f", val));
+                                valText.setText(String.format(java.util.Locale.US, "%.4f", val));
                                 mod.updateConfig(cfg, String.valueOf(val));
                                 wrappedOnConfigChanged.run();
                             }
@@ -224,6 +224,11 @@ public class ModConfigView {
                     break;
                 }
                 case TEXT: {
+                    if ("friend_names".equals(cfg.key)) {
+                        addFriendList(context, container, mod, cfg, accent,
+                                density, wrappedOnConfigChanged);
+                        break;
+                    }
                     LinearLayout row = createRow(context, container, density);
                     TextView label = createLabel(context, cfg.displayName, density);
                     android.widget.EditText editText = new android.widget.EditText(context);
@@ -270,6 +275,160 @@ public class ModConfigView {
             configViews.put(cfg.key, viewsAdded);
         }
         applyDependencies.run();
+    }
+
+
+    private static void addFriendList(Context context, ViewGroup container,
+                                      UnifiedMod mod, UnifiedMod.ConfigEntry cfg,
+                                      int accent, float density,
+                                      Runnable onConfigChanged) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        String current = cfg.currentValue == null ? "" : cfg.currentValue;
+        for (String part : current.split("[,;\\n\\r\\t]+")) {
+            String name = part.trim();
+            if (!name.isEmpty() && !containsFriend(names, name)) names.add(name);
+        }
+
+        LinearLayout section = new LinearLayout(context);
+        section.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams sectionParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        sectionParams.topMargin = (int) (14 * density);
+
+        TextView title = createLabel(context, cfg.displayName, density);
+        section.addView(title);
+
+        LinearLayout list = new LinearLayout(context);
+        list.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams listParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        listParams.leftMargin = (int) (4 * density);
+        section.addView(list, listParams);
+
+        TextView empty = new TextView(context);
+        empty.setText(R.string.mod_friend_empty);
+        empty.setTextColor(0xFF9296A2);
+        empty.setTextSize(13);
+        empty.setPadding((int) (4 * density), (int) (6 * density),
+                (int) (4 * density), (int) (6 * density));
+        section.addView(empty);
+
+        final Runnable[] rebuild = new Runnable[1];
+        final Runnable[] persist = new Runnable[1];
+        persist[0] = () -> {
+            StringBuilder joined = new StringBuilder();
+            for (int i = 0; i < names.size(); i++) {
+                if (i > 0) joined.append(", ");
+                joined.append(names.get(i));
+            }
+            mod.updateConfig(cfg, joined.toString());
+            onConfigChanged.run();
+        };
+        rebuild[0] = () -> {
+            list.removeAllViews();
+            empty.setVisibility(names.isEmpty() ? View.VISIBLE : View.GONE);
+            for (int i = 0; i < names.size(); i++) {
+                final String name = names.get(i);
+                LinearLayout row = new LinearLayout(context);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                row.setPadding((int) (8 * density), (int) (2 * density),
+                        (int) (2 * density), (int) (2 * density));
+
+                TextView label = new TextView(context);
+                label.setText(name);
+                label.setTextColor(0xFFD9DBE2);
+                label.setTextSize(14);
+                label.setSingleLine(true);
+                label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                row.addView(label, new LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+                Button remove = new Button(context);
+                remove.setText("\u00D7");
+                remove.setTextSize(18);
+                remove.setTextColor(0xFFFF6B6B);
+                remove.setMinWidth(0);
+                remove.setMinimumWidth(0);
+                remove.setPadding((int) (10 * density), 0, (int) (10 * density), 0);
+                remove.setBackgroundTintList(ColorStateList.valueOf(0xFF2A1518));
+                remove.setContentDescription(context.getString(
+                        R.string.mod_friend_remove, name));
+                remove.setOnClickListener(v -> {
+                    names.remove(name);
+                    persist[0].run();
+                    rebuild[0].run();
+                });
+                row.addView(remove, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
+                list.addView(row);
+            }
+        };
+
+        LinearLayout inputRow = new LinearLayout(context);
+        inputRow.setOrientation(LinearLayout.HORIZONTAL);
+        inputRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams inputRowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        inputRowParams.topMargin = (int) (6 * density);
+        section.addView(inputRow, inputRowParams);
+
+        android.widget.EditText input = new android.widget.EditText(context);
+        input.setHint(R.string.mod_friend_add_hint);
+        input.setSingleLine(true);
+        input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        input.setTextColor(0xFFCECFD2);
+        input.setHintTextColor(0xFF5E6370);
+        input.setTextSize(14);
+        input.setBackgroundTintList(ColorStateList.valueOf(accent));
+        inputRow.addView(input, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        Button add = new Button(context);
+        add.setText(R.string.mod_friend_add);
+        add.setTextColor(accent);
+        add.setBackgroundTintList(ColorStateList.valueOf(0xFF1F2028));
+        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        addParams.leftMargin = (int) (6 * density);
+        inputRow.addView(add, addParams);
+
+        Runnable addNames = () -> {
+            String raw = input.getText().toString();
+            boolean changed = false;
+            for (String part : raw.split("[,;]+")) {
+                String name = part.trim();
+                if (name.isEmpty() || containsFriend(names, name)) continue;
+                names.add(name);
+                changed = true;
+            }
+            if (changed) {
+                input.setText("");
+                persist[0].run();
+                rebuild[0].run();
+            }
+        };
+        add.setOnClickListener(v -> addNames.run());
+        input.setOnEditorActionListener((v, actionId, event) -> {
+            addNames.run();
+            return true;
+        });
+
+        rebuild[0].run();
+        container.addView(section, sectionParams);
+    }
+
+    private static boolean containsFriend(java.util.List<String> names,
+                                          String candidate) {
+        for (String name : names) {
+            if (name.equalsIgnoreCase(candidate)) return true;
+        }
+        return false;
     }
 
     private static void addSlider(Context context, ViewGroup container, String labelText, int cur, int min, int max, int accent, float density, ValueChangeListener listener) {

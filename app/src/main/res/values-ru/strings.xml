@@ -658,7 +658,7 @@
     <string name="inbuilt_mod_autosprint">Авто-спринт</string>
     <string name="inbuilt_mod_autosprint_desc">Включение/выключение спринта</string>
     <string name="inbuilt_mod_speed">Скорость</string>
-    <string name="inbuilt_mod_speed_desc">Ускорение движения (экспериментально)</string>
+    <string name="inbuilt_mod_speed_desc">Ускорение серией быстрых мини-прыжков с маскировкой пакетов</string>
     <string name="mod_config_speed_multiplier">Множитель скорости (%)</string>
     <string name="mod_config_speed_s1_enabled">Обход Speed S1 (рассинхрон пакетов)</string>
     <string name="mod_config_speed_mode">Где ускорять</string>
@@ -671,7 +671,7 @@
     <string name="mod_config_speed_reset_interval">Интервал сброса (мс)</string>
     <string name="mod_config_speed_max_reset_ticks">Макс. тиков сброса</string>
     <string name="mod_config_speed_hop_enabled">Низкий прыжок</string>
-    <string name="mod_config_speed_hop_height">Высота прыжка (мм, 0 = фейк)</string>
+    <string name="mod_config_speed_hop_height">Высота мини-прыжка (блоки)</string>
     <string name="mod_config_speed_hop_interval">Интервал прыжка (тики)</string>
     <string name="mod_config_speed_mask_y">Маска Y (фантом)</string>
     <string name="mod_config_speed_phantom_hold">Удержание фантома (тики)</string>
@@ -704,9 +704,9 @@
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Автоматически бьёт игроков и мобов в прицеле</string>
     <string name="inbuilt_mod_swing">Анимация удара</string>
-    <string name="inbuilt_mod_swing_desc">Меняет анимацию взмаха меча при ударах TriggerBot</string>
+    <string name="inbuilt_mod_swing_desc">Меняет анимацию взмаха при любых ударах</string>
     <string name="inbuilt_mod_target_esp">Target ESP</string>
-    <string name="inbuilt_mod_target_esp_desc">Подсвечивает текущую цель AimAssist моделью ghost, square, circle или crystal</string>
+    <string name="inbuilt_mod_target_esp_desc">Подсвечивает текущую цель одной из 8 моделей: кристалл, призма, руна, нова, пульс, гекс, орбита, захват</string>
     <string name="mod_config_target_esp_style">Модель</string>
     <string name="mod_config_target_esp_prism">Призма</string>
     <string name="mod_config_target_esp_rune">Руна</string>
@@ -1250,4 +1250,11 @@
     <string name="mod_menu_keybind_reset">Сбросить на M</string>
     <string name="mod_menu_keybind_unbound">Не назначено</string>
     <string name="screenshot_saved">Скриншот сохранён</string>
+    <string name="mod_friend_add">Добавить</string>
+    <string name="mod_friend_add_hint">Ник игрока</string>
+    <string name="mod_friend_empty">Список пуст. Добавь ник выше.</string>
+    <string name="mod_friend_remove">Удалить %1$s</string>
+    <string name="mod_config_target_esp_hex">Гекс</string>
+    <string name="mod_config_target_esp_orbit">Орбита</string>
+    <string name="mod_config_target_esp_lock">Захват</string>
 </resources>

@@ -1237,7 +1237,9 @@ void verifySwingTick(void *base) {
 void applySwingStyle(void *actor) {
   const int style = g_swingStyle.load(std::memory_order_relaxed);
   if (style <= 0 || !actor) return;
-  if (g_swingArmTicks.fetch_sub(1, std::memory_order_relaxed) <= 0) return;
+  if (g_swingArmTicks.load(std::memory_order_relaxed) > 0) {
+    g_swingArmTicks.fetch_sub(1, std::memory_order_relaxed);
+  }
   const auto base = reinterpret_cast<uintptr_t>(actor);
   uint16_t state = 0;
   if (!safeRead(base + offsets::kPlayerSwingState, state)) return;
@@ -1895,11 +1897,12 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     safeRead(p + offsets::kPlayerSwingTicks, counterBefore);
     safeRead(p + offsets::kPlayerSwingState, stateBefore);
 
-    using SwingFn = int (*)(void *, int, int);
+    constexpr uint8_t kAttackSwingSource = 2;
+    using SwingFn = bool (*)(void *, uint8_t);
     const uintptr_t swingFn =
         gameBase + offsets::kPlayerSwingFnFileOffset;
-    const int started =
-        reinterpret_cast<SwingFn>(swingFn)(swingPlayer, 0, 0);
+    const bool started =
+        reinterpret_cast<SwingFn>(swingFn)(swingPlayer, kAttackSwingSource);
 
     int32_t counterAfter = 0;
     uint16_t stateAfter = 0;
@@ -1909,9 +1912,10 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     // Some client builds reject the native start call (wrong source arg or a
     // gated handler). Seed the swing state directly so the module still
     // animates instead of silently doing nothing.
-    if (started <= 0 || (stateAfter & 0x100u) == 0) {
+    if (!started || (stateAfter & 0x100u) == 0) {
       safeWrite(p + offsets::kPlayerSwingTicks, static_cast<int32_t>(-1));
-      safeWrite(p + offsets::kPlayerSwingState, static_cast<uint16_t>(0x100));
+      safeWrite(p + offsets::kPlayerSwingState,
+                static_cast<uint16_t>(0x100u | kAttackSwingSource));
       safeWrite(p + offsets::kPlayerSwingTime, 0.0f);
       safeWrite(p + offsets::kPlayerSwingTimePrev, 0.0f);
       safeRead(p + offsets::kPlayerSwingTicks, counterAfter);
@@ -1925,7 +1929,8 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
       aimbot::diagLog(kTag,
                       "swing trigger #%d player=%p started=%d counter %d->%d "
                       "state 0x%x->0x%x",
-                      n, swingPlayer, started, static_cast<int>(counterBefore),
+                      n, swingPlayer, started ? 1 : 0,
+                      static_cast<int>(counterBefore),
                       static_cast<int>(counterAfter),
                       static_cast<unsigned>(stateBefore),
                       static_cast<unsigned>(stateAfter));

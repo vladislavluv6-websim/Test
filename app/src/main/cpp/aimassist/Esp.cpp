@@ -944,12 +944,15 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
         maxY < -32.0f || minY > height + 32.0f) {
       continue;
     }
+    const int armorPieces =
+        isPlayer ? gameecs::armorPieceCount(actor) : 0;
     uint32_t color =
-        (isPlayer && armorColors && gameecs::hasArmor(actor))
+        (isPlayer && armorColors && armorPieces > 0)
             ? armoredColor
             : (isPlayer ? playerColor : mobColor);
     if (isPlayer && isFriend(actor)) color = kFriendColor;
-    boxes.push_back({minX, minY, maxX - minX, maxY - minY, color});
+    boxes.push_back({minX, minY, maxX - minX, maxY - minY, color,
+                     armorPieces});
     if (boxes.size() >= 256) break;
   }
 

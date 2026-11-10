@@ -215,8 +215,8 @@ int armorPieceCount(void *actor) {
     const uintptr_t stack = begin + slot * kStackSize;
     uint8_t count = 0;
     uint8_t valid = 0;
-    if ((readValue(stack + kStackCount, count) && count > 0) ||
-        (readValue(stack + kStackCount + 1, valid) && valid != 0)) {
+    if (readValue(stack + kStackCount, count) && count > 0 &&
+        readValue(stack + kStackCount + 1, valid) && valid != 0) {
       ++pieces;
     }
   }
