@@ -26,6 +26,12 @@ import java.util.Arrays;
  * касания и не мешает SurfaceView игры.</p>
  */
 public class NameTagsOverlay extends View {
+    public static final int STYLE_PLATE = 0;
+    public static final int STYLE_GLASS = 1;
+    public static final int STYLE_NEON = 2;
+    public static final int STYLE_MINIMAL = 3;
+    public static final int STYLE_BRACKET = 4;
+
     private static final String TAG = "NameTagsOverlay";
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -38,6 +44,8 @@ public class NameTagsOverlay extends View {
     private boolean moduleEnabled = true;
     private String[] labels = new String[0];
     private boolean frameCallbackPosted;
+    private int style = STYLE_PLATE;
+    private int accent = 0xFF4E83FF;
 
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
@@ -64,7 +72,21 @@ public class NameTagsOverlay extends View {
         density = activity.getResources().getDisplayMetrics().density;
         textPaint.setTextSize(13f * density);
         backdropPaint.setColor(0xC012151E);
-        accentPaint.setColor(0xFF4E83FF);
+        accentPaint.setStyle(Paint.Style.STROKE);
+        applySettings();
+    }
+
+    private void applySettings() {
+        InbuiltModManager manager = InbuiltModManager.getInstance(getContext());
+        style = manager.getNameTagStyle();
+        accent = manager.getNameTagColor();
+        accentPaint.setColor(accent);
+        textPaint.setColor(style == STYLE_NEON ? accent : Color.WHITE);
+    }
+
+    public void applyConfigurationChanges() {
+        applySettings();
+        invalidate();
     }
 
     public void show() {
@@ -202,10 +224,47 @@ public class NameTagsOverlay extends View {
                 float top = y - textPaint.getTextSize() - padY;
                 float bottom = y + padY;
                 float radius = 4f * density;
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius,
-                        backdropPaint);
-                canvas.drawRoundRect(left, top, left + 2f * density, bottom,
-                        radius, radius, accentPaint);
+                switch (style) {
+                    case STYLE_GLASS:
+                        backdropPaint.setColor(0x5A0D1018);
+                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                        accentPaint.setStrokeWidth(1f * density);
+                        accentPaint.setColor(0x88FFFFFF);
+                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
+                        accentPaint.setColor(accent);
+                        break;
+                    case STYLE_NEON:
+                        backdropPaint.setColor(0x330D1018);
+                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                        accentPaint.setStrokeWidth(2f * density);
+                        accentPaint.setColor(accent);
+                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
+                        break;
+                    case STYLE_MINIMAL:
+                        break;
+                    case STYLE_BRACKET: {
+                        float arm = Math.min(9f * density, (bottom - top) * 0.45f);
+                        accentPaint.setStrokeWidth(2f * density);
+                        accentPaint.setColor(accent);
+                        canvas.drawLine(left, top, left + arm, top, accentPaint);
+                        canvas.drawLine(left, top, left, top + arm, accentPaint);
+                        canvas.drawLine(right, top, right - arm, top, accentPaint);
+                        canvas.drawLine(right, top, right, top + arm, accentPaint);
+                        canvas.drawLine(left, bottom, left + arm, bottom, accentPaint);
+                        canvas.drawLine(left, bottom, left, bottom - arm, accentPaint);
+                        canvas.drawLine(right, bottom, right - arm, bottom, accentPaint);
+                        canvas.drawLine(right, bottom, right, bottom - arm, accentPaint);
+                        break;
+                    }
+                    case STYLE_PLATE:
+                    default:
+                        backdropPaint.setColor(0xC012151E);
+                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                        accentPaint.setStrokeWidth(2f * density);
+                        accentPaint.setColor(accent);
+                        canvas.drawRoundRect(left, top, left + 2f * density, bottom, radius, radius, accentPaint);
+                        break;
+                }
                 canvas.drawText(name, x, y, textPaint);
             } catch (NumberFormatException ignored) {
             }

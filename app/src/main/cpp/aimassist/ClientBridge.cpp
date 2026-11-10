@@ -69,6 +69,7 @@ PlayerAuthInputWriteFn g_playerAuthWriteOriginal = nullptr;
 
 std::atomic<void *> g_clientInstance{nullptr};
 std::atomic<void *> g_localPlayer{nullptr};
+std::atomic<int> g_swingStyle{0};
 std::atomic<uintptr_t> g_attackControl{0};
 std::atomic<uintptr_t> g_controlLayout{0};
 std::atomic<bool> g_ctlScanStarted{false};
@@ -1228,6 +1229,33 @@ void verifySwingTick(void *base) {
                   static_cast<unsigned>(state >> 8));
 }
 
+void applySwingStyle(void *actor) {
+  const int style = g_swingStyle.load(std::memory_order_relaxed);
+  if (style <= 0 || !actor) return;
+  const auto base = reinterpret_cast<uintptr_t>(actor);
+  uint16_t state = 0;
+  if (!safeRead(base + offsets::kPlayerSwingState, state)) return;
+  if ((state & 0x100) == 0) return;
+  float time = 0.0f;
+  if (!safeRead(base + offsets::kPlayerSwingTime, time)) return;
+  if (!std::isfinite(time)) return;
+  const float p = std::clamp(time, 0.0f, 1.0f);
+  float out = p;
+  switch (style) {
+    case 1: out = std::pow(p, 1.55f); break;
+    case 2: out = std::pow(p, 0.65f); break;
+    case 3: out = std::pow(p, 2.2f); break;
+    case 4: out = 1.0f - std::pow(1.0f - p, 2.4f); break;
+    case 5: out = std::clamp(p + 0.07f * std::sin(p * 18.849556f), 0.0f, 1.0f); break;
+    default: return;
+  }
+  float prev = 0.0f;
+  if (safeRead(base + offsets::kPlayerSwingTimePrev, prev) && prev > out) {
+    safeWrite(base + offsets::kPlayerSwingTimePrev, out);
+  }
+  safeWrite(base + offsets::kPlayerSwingTime, out);
+}
+
 void normalTickDetour(void *actor) {
   if (g_normalTickOriginal) {
     g_normalTickOriginal(actor);
@@ -1241,6 +1269,7 @@ void normalTickDetour(void *actor) {
   }
   // Тик локального игрока — 20 Гц. Сетевую синхронизацию делаем только здесь.
   if (actor && actor == g_localPlayer.load(std::memory_order_relaxed)) {
+    applySwingStyle(actor);
     g_tickCount.fetch_add(1, std::memory_order_relaxed);
     if (aimbot::diagLogActive()) {
       verifySwingTick(actor);
@@ -1900,6 +1929,10 @@ bool ClientBridge::hasLineOfSight(void *player, const Vec3 &, const Vec3 &) cons
 
 void ClientBridge::setMovePacketSender(MovePacketSender sender) {
   g_movePacketSender.store(sender, std::memory_order_release);
+}
+
+void ClientBridge::setSwingStyle(int style) {
+  g_swingStyle.store(std::clamp(style, 0, 5), std::memory_order_relaxed);
 }
 
 void ClientBridge::sendMovePacket(void *player, float yaw, float pitch) const {

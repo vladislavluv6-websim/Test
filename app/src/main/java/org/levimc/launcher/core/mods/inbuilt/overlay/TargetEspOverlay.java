@@ -24,10 +24,11 @@ import org.levimc.launcher.preloader.PreloaderInput;
  * (призрак, квадрат, круг, кристалл) с плавным появлением и затуханием.
  */
 public class TargetEspOverlay extends View {
-    public static final int STYLE_GHOST = 0;
-    public static final int STYLE_SQUARE = 1;
-    public static final int STYLE_CIRCLE = 2;
-    public static final int STYLE_CRYSTAL = 3;
+    public static final int STYLE_CRYSTAL = 0;
+    public static final int STYLE_PRISM = 1;
+    public static final int STYLE_RUNE = 2;
+    public static final int STYLE_NOVA = 3;
+    public static final int STYLE_PULSE = 4;
 
     private static final long FADE_MS = 180L;
 
@@ -42,7 +43,7 @@ public class TargetEspOverlay extends View {
     private boolean attached;
     private boolean showing;
     private boolean moduleEnabled = true;
-    private int style = STYLE_GHOST;
+    private int style = STYLE_CRYSTAL;
     private int accent = 0xFF4E83FF;
     private long holdMs = 650L;
     private float x, y, w, h;
@@ -248,18 +249,21 @@ public class TargetEspOverlay extends View {
                 Color.green(accent), Color.blue(accent)));
 
         switch (style) {
-            case STYLE_SQUARE:
-                drawSquare(canvas, alpha);
+            case STYLE_PRISM:
+                drawPrism(canvas, alpha);
                 break;
-            case STYLE_CIRCLE:
-                drawCircle(canvas, alpha);
+            case STYLE_RUNE:
+                drawRune(canvas, alpha);
+                break;
+            case STYLE_NOVA:
+                drawNova(canvas, alpha);
+                break;
+            case STYLE_PULSE:
+                drawPulse(canvas, alpha);
                 break;
             case STYLE_CRYSTAL:
-                drawCrystal(canvas, alpha);
-                break;
-            case STYLE_GHOST:
             default:
-                drawGhost(canvas, alpha);
+                drawCrystal(canvas, alpha);
                 break;
         }
     }
@@ -354,6 +358,101 @@ public class TargetEspOverlay extends View {
         canvas.drawPath(path, strokePaint);
         strokePaint.setStrokeWidth(2f * density);
         canvas.restore();
+    }
+
+
+    private void drawPrism(Canvas canvas, float alpha) {
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float rotation = (ageMs % 2200L) / 2200f * 360f;
+        float rx = rect.width() * 0.54f;
+        float ry = rect.height() * 0.54f;
+        canvas.save();
+        canvas.rotate(rotation, cx, cy);
+        for (int i = 0; i < 3; i++) {
+            canvas.save();
+            canvas.rotate(i * 60f, cx, cy);
+            path.reset();
+            path.moveTo(cx, cy - ry);
+            path.lineTo(cx + rx, cy);
+            path.lineTo(cx, cy + ry);
+            path.lineTo(cx - rx, cy);
+            path.close();
+            canvas.drawPath(path, i == 0 ? fillPaint : glowPaint);
+            canvas.drawPath(path, strokePaint);
+            canvas.restore();
+        }
+        canvas.restore();
+        path.reset();
+        path.addCircle(cx, cy, Math.min(rx, ry) * 0.16f, Path.Direction.CW);
+        canvas.drawPath(path, strokePaint);
+    }
+
+    private void drawRune(Canvas canvas, float alpha) {
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float radius = Math.min(rect.width(), rect.height()) * 0.56f;
+        float rotation = (ageMs % 2600L) / 2600f * 360f;
+        path.reset();
+        for (int i = 0; i <= 6; i++) {
+            double a = Math.toRadians(rotation + i * 60);
+            float px = cx + (float) Math.cos(a) * radius;
+            float py = cy + (float) Math.sin(a) * radius;
+            if (i == 0) path.moveTo(px, py); else path.lineTo(px, py);
+        }
+        path.close();
+        canvas.drawPath(path, fillPaint);
+        canvas.drawPath(path, glowPaint);
+        strokePaint.setStrokeWidth(3f * density);
+        canvas.drawPath(path, strokePaint);
+        strokePaint.setStrokeWidth(2f * density);
+        for (int i = 0; i < 6; i++) {
+            double a = Math.toRadians(rotation + i * 60);
+            float px = cx + (float) Math.cos(a) * radius * 0.78f;
+            float py = cy + (float) Math.sin(a) * radius * 0.78f;
+            canvas.drawCircle(px, py, 2.5f * density, strokePaint);
+        }
+    }
+
+    private void drawNova(Canvas canvas, float alpha) {
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float radius = Math.min(rect.width(), rect.height()) * 0.58f;
+        float rotation = (ageMs % 1800L) / 1800f * 360f;
+        canvas.save();
+        canvas.rotate(rotation, cx, cy);
+        for (int i = 0; i < 8; i++) {
+            float len = (i % 2 == 0) ? radius : radius * 0.48f;
+            path.reset();
+            path.moveTo(cx, cy - len);
+            path.lineTo(cx + radius * 0.12f, cy);
+            path.lineTo(cx, cy + len);
+            path.lineTo(cx - radius * 0.12f, cy);
+            path.close();
+            canvas.drawPath(path, i % 2 == 0 ? glowPaint : strokePaint);
+            canvas.rotate(45f, cx, cy);
+        }
+        canvas.restore();
+        fillPaint.setAlpha((int) (42 * alpha));
+        canvas.drawCircle(cx, cy, radius * 0.22f, fillPaint);
+        canvas.drawCircle(cx, cy, radius * 0.22f, strokePaint);
+    }
+
+    private void drawPulse(Canvas canvas, float alpha) {
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float base = Math.min(rect.width(), rect.height()) * 0.58f;
+        for (int i = 0; i < 3; i++) {
+            float phase = ((ageMs + i * 320L) % 960L) / 960f;
+            float radius = base * (0.45f + 0.55f * phase);
+            int a = (int) ((1f - phase) * 110 * alpha);
+            glowPaint.setAlpha(a);
+            canvas.drawCircle(cx, cy, radius, glowPaint);
+        }
+        glowPaint.setAlpha((int) (70 * alpha));
+        canvas.drawCircle(cx, cy, base * 0.42f, strokePaint);
+        canvas.drawCircle(cx, cy, base * 0.18f, fillPaint);
+        canvas.drawCircle(cx, cy, base * 0.18f, strokePaint);
     }
 
     private static void rectIns(RectF r, float inset) {

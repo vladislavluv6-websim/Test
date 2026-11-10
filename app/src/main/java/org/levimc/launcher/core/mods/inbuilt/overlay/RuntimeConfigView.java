@@ -1099,10 +1099,8 @@ final class RuntimeConfigView {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(18), dp(6), dp(18), 0);
         int[] color = {initial};
-        addColorChannel(box, "R", Color.red(initial), value -> color[0] = Color.argb(Color.alpha(color[0]), value, Color.green(color[0]), Color.blue(color[0])));
-        addColorChannel(box, "G", Color.green(initial), value -> color[0] = Color.argb(Color.alpha(color[0]), Color.red(color[0]), value, Color.blue(color[0])));
-        addColorChannel(box, "B", Color.blue(initial), value -> color[0] = Color.argb(Color.alpha(color[0]), Color.red(color[0]), Color.green(color[0]), value));
-        if (node.colorAlpha) addColorChannel(box, "A", Color.alpha(initial), value -> color[0] = Color.argb(value, Color.red(color[0]), Color.green(color[0]), Color.blue(color[0])));
+        box.addView(ColorPalette.create(context, initial,
+                node.colorAlpha, value -> color[0] = value));
         new AlertDialog.Builder(context)
                 .setTitle(node.title)
                 .setView(box)

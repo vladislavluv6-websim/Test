@@ -62,6 +62,9 @@ public class InbuiltModManager {
     private static final String KEY_ESP_ARMOR_COLORS = "esp_armor_colors";
     private static final String KEY_ESP_ARMORED_COLOR = "esp_armored_color";
     private static final String KEY_TARGET_ESP_STYLE = "target_esp_style";
+    private static final String KEY_NAME_TAG_STYLE = "name_tag_style";
+    private static final String KEY_NAME_TAG_COLOR = "name_tag_color";
+    private static final String KEY_SWING_STYLE = "swing_style";
     private static final String KEY_TARGET_ESP_COLOR = "target_esp_color";
     private static final String KEY_TARGET_ESP_HOLD = "target_esp_hold_ms";
     private static final String KEY_TRIGGER_BOT_ENABLED = "trigger_bot_enabled";
@@ -165,6 +168,9 @@ public class InbuiltModManager {
     private static final int DEFAULT_TARGET_ESP_STYLE = 0;
     private static final int DEFAULT_TARGET_ESP_COLOR = 0xFF4E83FF;
     private static final int DEFAULT_TARGET_ESP_HOLD = 650;
+    private static final int DEFAULT_NAME_TAG_STYLE = 0;
+    private static final int DEFAULT_NAME_TAG_COLOR = 0xFF4E83FF;
+    private static final int DEFAULT_SWING_STYLE = 0;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
     private static final int DEFAULT_TRIGGER_BOT_DELAY = 90;
     private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 40;
@@ -633,13 +639,41 @@ public class InbuiltModManager {
     }
 
     public int getTargetEspStyle() {
-        return Math.max(0, Math.min(3,
+        return Math.max(0, Math.min(4,
                 prefs.getInt(KEY_TARGET_ESP_STYLE, DEFAULT_TARGET_ESP_STYLE)));
     }
 
     public void setTargetEspStyle(int style) {
         prefs.edit().putInt(KEY_TARGET_ESP_STYLE,
-                Math.max(0, Math.min(3, style))).apply();
+                Math.max(0, Math.min(4, style))).apply();
+    }
+
+    public int getNameTagStyle() {
+        return Math.max(0, Math.min(4,
+                prefs.getInt(KEY_NAME_TAG_STYLE, DEFAULT_NAME_TAG_STYLE)));
+    }
+
+    public void setNameTagStyle(int style) {
+        prefs.edit().putInt(KEY_NAME_TAG_STYLE,
+                Math.max(0, Math.min(4, style))).apply();
+    }
+
+    public int getSwingStyle() {
+        return Math.max(0, Math.min(5,
+                prefs.getInt(KEY_SWING_STYLE, DEFAULT_SWING_STYLE)));
+    }
+
+    public void setSwingStyle(int style) {
+        prefs.edit().putInt(KEY_SWING_STYLE,
+                Math.max(0, Math.min(5, style))).apply();
+    }
+
+    public int getNameTagColor() {
+        return prefs.getInt(KEY_NAME_TAG_COLOR, DEFAULT_NAME_TAG_COLOR);
+    }
+
+    public void setNameTagColor(int argb) {
+        prefs.edit().putInt(KEY_NAME_TAG_COLOR, argb).apply();
     }
 
     public int getTargetEspColor() {
@@ -958,7 +992,18 @@ public class InbuiltModManager {
     }
 
     public void resetAllToDefaults() {
-        prefs.edit().clear().commit();
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.clear();
+        String[] shortcutMods = {
+                ModIds.QUICK_DROP, ModIds.CAMERA_PERSPECTIVE, ModIds.TOGGLE_HUD,
+                ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.ESP,
+                ModIds.FULLBRIGHT, ModIds.TRIGGER_BOT, ModIds.ZOOM, ModIds.SNAPLOOK,
+                ModIds.VIRTUAL_CURSOR, ModIds.GYRO, ModIds.NAME_TAGS, ModIds.TARGET_ESP
+        };
+        for (String modId : shortcutMods) {
+            editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
+        }
+        editor.commit();
         overlayVisibilityRevision.incrementAndGet();
     }
 

@@ -53,6 +53,7 @@ public abstract class BaseOverlayButton {
     private LinearGradient shimmerGradient;
     private Matrix shimmerMatrix;
     private TextView shimmerLabel;
+    private boolean shortcutStyleScheduled;
     
     public BaseOverlayButton(Activity activity) {
         this.activity = activity;
@@ -177,6 +178,16 @@ public abstract class BaseOverlayButton {
 
     private void refreshShortcutStyle() {
         if (overlayView == null || !usesNamedShortcut()) return;
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            if (!shortcutStyleScheduled) {
+                shortcutStyleScheduled = true;
+                activity.runOnUiThread(() -> {
+                    shortcutStyleScheduled = false;
+                    refreshShortcutStyle();
+                });
+            }
+            return;
+        }
         boolean active = isShortcutActive();
         if (appliedShortcutActive != null && appliedShortcutActive == active) return;
         appliedShortcutActive = active;

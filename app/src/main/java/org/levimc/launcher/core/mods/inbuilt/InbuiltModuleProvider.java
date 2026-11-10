@@ -76,6 +76,9 @@ public final class InbuiltModuleProvider {
     private static final String CFG_ESP_MOB_COLOR = "esp_mob_color";
     private static final String CFG_ESP_ARMOR_COLORS = "esp_armor_colors";
     private static final String CFG_ESP_ARMORED_COLOR = "esp_armored_color";
+    private static final String CFG_NAME_TAG_STYLE = "name_tag_style";
+    private static final String CFG_NAME_TAG_COLOR = "name_tag_color";
+    private static final String CFG_SWING_STYLE = "swing_style";
     private static final String CFG_TARGET_ESP_STYLE = "target_esp_style";
     private static final String CFG_TARGET_ESP_COLOR = "target_esp_color";
     private static final String CFG_TARGET_ESP_HOLD = "target_esp_hold_ms";
@@ -262,7 +265,8 @@ public final class InbuiltModuleProvider {
                     category = "trigger_target";
                 } else if ((esp && (CFG_ESP_PLAYER_COLOR.equals(config.key)
                         || CFG_ESP_MOB_COLOR.equals(config.key)))
-                        || (targetEsp && config.key.startsWith("target_esp_"))) {
+                        || (targetEsp && config.key.startsWith("target_esp_"))
+                        || (ModIds.NAME_TAGS.equals(modId) && config.key.startsWith("name_tag_"))) {
                     category = "appearance";
                 } else if (config.key.startsWith("gyro_") || CFG_CURSOR_SENSITIVITY.equals(config.key)) {
                     category = "motion";
@@ -613,6 +617,18 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "1800", "300", "4000",
                     String.valueOf(manager.getAimAssistFastAimMaxSpeed())));
+            configs.add(config(CFG_SWING_STYLE,
+                    context.getString(R.string.mod_config_swing_style),
+                    UnifiedMod.ConfigType.RADIO,
+                    "0",
+                    context.getString(R.string.mod_config_swing_default) + ","
+                            + context.getString(R.string.mod_config_swing_slow) + ","
+                            + context.getString(R.string.mod_config_swing_fast) + ","
+                            + context.getString(R.string.mod_config_swing_heavy) + ","
+                            + context.getString(R.string.mod_config_swing_snap) + ","
+                            + context.getString(R.string.mod_config_swing_twitch),
+                    "",
+                    String.valueOf(manager.getSwingStyle())));
             configs.add(config(CFG_AIM_ASSIST_MAX_SPEED,
                     context.getString(R.string.mod_config_aim_assist_max_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
@@ -689,15 +705,33 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.COLOR,
                     formatColor(manager.getEspArmoredColor()), "", "",
                     formatColor(manager.getEspArmoredColor())));
+        } else if (ModIds.NAME_TAGS.equals(modId)) {
+            configs.add(config(CFG_NAME_TAG_STYLE,
+                    context.getString(R.string.mod_config_name_tag_style),
+                    UnifiedMod.ConfigType.RADIO,
+                    "0",
+                    context.getString(R.string.mod_config_name_tag_plate) + ","
+                            + context.getString(R.string.mod_config_name_tag_glass) + ","
+                            + context.getString(R.string.mod_config_name_tag_neon) + ","
+                            + context.getString(R.string.mod_config_name_tag_minimal) + ","
+                            + context.getString(R.string.mod_config_name_tag_bracket),
+                    "",
+                    String.valueOf(manager.getNameTagStyle())));
+            configs.add(config(CFG_NAME_TAG_COLOR,
+                    context.getString(R.string.mod_config_name_tag_color),
+                    UnifiedMod.ConfigType.COLOR,
+                    formatColor(manager.getNameTagColor()), "", "",
+                    formatColor(manager.getNameTagColor())));
         } else if (ModIds.TARGET_ESP.equals(modId)) {
             configs.add(config(CFG_TARGET_ESP_STYLE,
                     context.getString(R.string.mod_config_target_esp_style),
                     UnifiedMod.ConfigType.RADIO,
                     "0",
-                    context.getString(R.string.mod_config_target_esp_ghost) + ","
-                            + context.getString(R.string.mod_config_target_esp_square) + ","
-                            + context.getString(R.string.mod_config_target_esp_circle) + ","
-                            + context.getString(R.string.mod_config_target_esp_crystal),
+                    context.getString(R.string.mod_config_target_esp_crystal) + ","
+                            + context.getString(R.string.mod_config_target_esp_prism) + ","
+                            + context.getString(R.string.mod_config_target_esp_rune) + ","
+                            + context.getString(R.string.mod_config_target_esp_nova) + ","
+                            + context.getString(R.string.mod_config_target_esp_pulse),
                     "",
                     String.valueOf(manager.getTargetEspStyle())));
             configs.add(config(CFG_TARGET_ESP_COLOR,
@@ -1039,6 +1073,16 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_ESP_MOB_COLOR:
                 manager.setEspMobColor(parseColor(value, manager.getEspMobColor()));
+                break;
+            case CFG_NAME_TAG_STYLE:
+                manager.setNameTagStyle(parseInt(value, manager.getNameTagStyle()));
+                break;
+            case CFG_NAME_TAG_COLOR:
+                manager.setNameTagColor(parseColor(value, manager.getNameTagColor()));
+                break;
+            case CFG_SWING_STYLE:
+                manager.setSwingStyle(parseInt(value, manager.getSwingStyle()));
+                AimAssistMod.setSwingStyle(manager.getSwingStyle());
                 break;
             case CFG_TARGET_ESP_STYLE:
                 manager.setTargetEspStyle(parseInt(value, manager.getTargetEspStyle()));

@@ -203,49 +203,16 @@ public class ModConfigView {
                     headerRow.addView(colorPreview, previewParams);
                     container.addView(headerRow);
 
-                    LinearLayout slidersContainer = new LinearLayout(context);
-                    slidersContainer.setOrientation(LinearLayout.VERTICAL);
-                    slidersContainer.setVisibility(View.GONE);
-                    slidersContainer.setPadding((int)(12 * density), (int)(8 * density), 0, (int)(8 * density));
-
-                    final int[] currentColor = {initialColor};
-
-                    ValueChangeListener onSliderChange = val -> {
-                        gd.setColor(currentColor[0]);
+                    View palette = ColorPalette.create(context, initialColor, true, color -> {
+                        gd.setColor(color);
                         colorPreview.setBackground(gd);
-                        mod.updateConfig(cfg, String.format("#%08X", currentColor[0]));
+                        mod.updateConfig(cfg, String.format("#%08X", color));
                         wrappedOnConfigChanged.run();
-                    };
-
-                    int a = Color.alpha(initialColor);
-                    int r = Color.red(initialColor);
-                    int g = Color.green(initialColor);
-                    int b = Color.blue(initialColor);
-
-                    SeekBar alphaSlider = addColorSliderInline(context, slidersContainer, context.getString(R.string.mod_config_color_alpha_short), a, 0xFFFFFFFF, density, progress -> {
-                        currentColor[0] = Color.argb(progress, Color.red(currentColor[0]), Color.green(currentColor[0]), Color.blue(currentColor[0]));
-                        onSliderChange.onValueChanged(progress);
                     });
-                    SeekBar redSlider = addColorSliderInline(context, slidersContainer, context.getString(R.string.mod_config_color_red_short), r, 0xFFFF4444, density, progress -> {
-                        currentColor[0] = Color.argb(Color.alpha(currentColor[0]), progress, Color.green(currentColor[0]), Color.blue(currentColor[0]));
-                        onSliderChange.onValueChanged(progress);
-                    });
-                    SeekBar greenSlider = addColorSliderInline(context, slidersContainer, context.getString(R.string.mod_config_color_green_short), g, 0xFF44FF44, density, progress -> {
-                        currentColor[0] = Color.argb(Color.alpha(currentColor[0]), Color.red(currentColor[0]), progress, Color.blue(currentColor[0]));
-                        onSliderChange.onValueChanged(progress);
-                    });
-                    SeekBar blueSlider = addColorSliderInline(context, slidersContainer, context.getString(R.string.mod_config_color_blue_short), b, 0xFF4444FF, density, progress -> {
-                        currentColor[0] = Color.argb(Color.alpha(currentColor[0]), Color.red(currentColor[0]), Color.green(currentColor[0]), progress);
-                        onSliderChange.onValueChanged(progress);
-                    });
-
-                    container.addView(slidersContainer, new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-                    headerRow.setOnClickListener(v -> {
-                        boolean isVisible = slidersContainer.getVisibility() == View.VISIBLE;
-                        slidersContainer.setVisibility(isVisible ? View.GONE : View.VISIBLE);
-                    });
+                    LinearLayout.LayoutParams paletteParams = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    paletteParams.leftMargin = (int)(4 * density);
+                    container.addView(palette, paletteParams);
                     break;
                 }
                 case KEYBIND: {

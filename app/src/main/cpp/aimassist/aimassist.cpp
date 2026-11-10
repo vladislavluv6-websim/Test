@@ -164,6 +164,12 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetFastA
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetSwingStyle(
+    JNIEnv *, jclass, jint style) {
+  aimbot::ClientBridge::instance().setSwingStyle(style);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetGrace(
     JNIEnv *, jclass, jint frames) {
   aimbot::AimAssist::instance().setTargetGrace(frames);

@@ -1053,6 +1053,9 @@ public class InbuiltOverlayManager {
         if (modId.equals(ModIds.TARGET_ESP) && targetEspOverlay != null) {
             targetEspOverlay.applyConfigurationChanges();
         }
+        if (modId.equals(ModIds.NAME_TAGS) && nameTagsOverlay != null) {
+            nameTagsOverlay.applyConfigurationChanges();
+        }
     }
 
     public void setHudEditorMode(boolean active) {

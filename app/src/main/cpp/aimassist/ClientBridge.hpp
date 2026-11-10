@@ -43,6 +43,9 @@ public:
   void setClientInstance(void *client);
   void *getClientInstance() const;
 
+  // 0 = ванильная анимация; 1..5 = кривые прогресса взмаха.
+  void setSwingStyle(int style);
+
   void *getLocalPlayer() const;
 
   // Текущий view из ActorRotationComponent: {pitch, yaw}.
