@@ -2,6 +2,10 @@
 
 #include <android/log.h>
 #include <dlfcn.h>
+#include <elf.h>
+#include <link.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <atomic>
 #include <chrono>
@@ -90,12 +94,14 @@ using BaseTickFn = void (*)(void *);
 using ClientInstanceUpdateFn = void *(*)(void *, bool);
 using GetLocalPlayerFn = void *(*)(void *);
 using PlayerAuthInputWriteFn = void *(*)(void *, void *, void *, void *);
+using PredictionHandleFn = void *(*)(void *, void *, void *, void *);
 
 NormalTickFn g_normalTickOriginal = nullptr;
 BaseTickFn g_baseTickOriginal = nullptr;
 ClientInstanceUpdateFn g_clientInstanceUpdateOriginal = nullptr;
 GetLocalPlayerFn g_getLocalPlayer = nullptr;
 PlayerAuthInputWriteFn g_playerAuthWriteOriginal = nullptr;
+PredictionHandleFn g_predictionHandleOriginal = nullptr;
 
 std::atomic_bool g_enabled{false};
 std::atomic_bool g_speedEnabled{true};
@@ -129,9 +135,11 @@ std::atomic<bool> g_onGround{true};
 std::atomic<bool> g_moving{false};
 std::atomic<bool> g_sneaking{false};
 std::atomic<bool> g_pendingJump{false};
+std::atomic<bool> g_phantomBusy{false};
 std::atomic<int> g_phantomRequestSeq{0};
 std::atomic<float> g_phantomRequestH{0.0f};
 std::atomic<float> g_lastRealDist{1.0f};
+std::atomic<bool> g_cheatingPublished{false};
 std::atomic<uint64_t> g_tickCounter{0};
 
 std::mutex g_initMutex;
@@ -140,6 +148,7 @@ bool g_tickHookInstalled = false;
 bool g_baseTickHookInstalled = false;
 bool g_baseTickHookAttempted = false;
 bool g_packetHookInstalled = false;
+bool g_predictionHookInstalled = false;
 bool g_installed = false;
 uintptr_t g_normalTickAddress = 0;
 uintptr_t g_baseTickAddress = 0;
@@ -208,6 +217,7 @@ int64_t monotonicMs() {
 }
 
 void requestPhantom(float height) {
+  g_phantomBusy.store(true, std::memory_order_relaxed);
   g_phantomRequestH.store(height, std::memory_order_relaxed);
   g_phantomRequestSeq.fetch_add(1, std::memory_order_release);
 }
@@ -222,6 +232,8 @@ void resetPacketStateLocked() {
   g_phantomBaselineY = 0.0f;
   g_serverY = 0.0f;
   g_cheating = false;
+  g_cheatingPublished.store(false, std::memory_order_relaxed);
+  g_phantomBusy.store(false, std::memory_order_relaxed);
   g_inResetPhase = false;
   g_resetTicksLeft = 0;
   g_lastResetAt = 0;
@@ -235,6 +247,8 @@ void resetAllState() {
   }
   g_lastRealDist.store(1.0f, std::memory_order_relaxed);
   g_pendingJump.store(false, std::memory_order_relaxed);
+  g_phantomBusy.store(false, std::memory_order_relaxed);
+  g_cheatingPublished.store(false, std::memory_order_relaxed);
   g_phantomRequestSeq.store(0, std::memory_order_relaxed);
   g_phantomRequestH.store(0.0f, std::memory_order_relaxed);
   g_tickCounter.store(0, std::memory_order_relaxed);
@@ -340,6 +354,8 @@ void applyPacketBypass(void *packet) {
   if (!speedOn && !g_phantomActive && g_phantomRecent == 0) {
     g_serverY = realY;
     g_cheating = false;
+    g_cheatingPublished.store(false, std::memory_order_relaxed);
+    g_phantomBusy.store(false, std::memory_order_relaxed);
     g_lastSentX = g_lastRealX = realX;
     g_lastSentY = g_lastRealY = realY;
     g_lastSentZ = g_lastRealZ = realZ;
@@ -364,6 +380,7 @@ void applyPacketBypass(void *packet) {
       if (g_phantomTick >= fakeJumpTicks) {
         g_phantomActive = false;
         g_phantomRecent = 5;
+        g_phantomBusy.store(false, std::memory_order_relaxed);
       }
     } else {
       const float vJump = std::sqrt(2.0f * V_GRAVITY * g_phantomTargetH);
@@ -380,6 +397,7 @@ void applyPacketBypass(void *packet) {
       if (g_phantomTick >= phantomHoldTicks) {
         g_phantomActive = false;
         g_phantomRecent = 5;
+        g_phantomBusy.store(false, std::memory_order_relaxed);
       }
     }
   } else if (g_phantomRecent > 0) {
@@ -420,6 +438,7 @@ void applyPacketBypass(void *packet) {
     delta[2] = realDZ;
 
     g_cheating = false;
+    g_cheatingPublished.store(false, std::memory_order_relaxed);
     g_inResetPhase = false;
     g_lastResetAt = now;
 
@@ -502,6 +521,7 @@ void applyPacketBypass(void *packet) {
 
   g_cheating = g_phantomActive || g_phantomRecent > 0 || shouldScale ||
                g_inResetPhase;
+  g_cheatingPublished.store(g_cheating, std::memory_order_relaxed);
   g_lastSentX = packetX;
   g_lastSentY = packetY;
   g_lastSentZ = packetZ;
@@ -620,47 +640,74 @@ void applySpeed(void *actor) {
   g_onGround.store(onGround, std::memory_order_relaxed);
   g_moving.store(moving, std::memory_order_relaxed);
 
-  const bool speedOn = g_speedEnabled.load(std::memory_order_relaxed);
-  const bool hopOn = g_hopEnabled.load(std::memory_order_relaxed);
-  const bool sneak = g_sneaking.load(std::memory_order_relaxed);
+  const int tick = static_cast<int>(
+      g_tickCounter.fetch_add(1, std::memory_order_relaxed) + 1);
+
+  gameecs::MoveInputState moveInput;
+  const bool haveMoveInput = gameecs::readMoveInput(actor, moveInput);
+  const bool sneak =
+      haveMoveInput ? moveInput.sneaking
+                    : g_sneaking.load(std::memory_order_relaxed);
   const bool sneakBlocked =
       g_pauseIfSneaking.load(std::memory_order_relaxed) && sneak;
+  const bool speedOn = g_speedEnabled.load(std::memory_order_relaxed);
+  const bool hopOn = g_hopEnabled.load(std::memory_order_relaxed);
+  const float hopHeight = g_hopHeight.load(std::memory_order_relaxed);
+  const bool fakeMode = hopHeight < PHYSICAL_HOP_MIN;
+  const bool maskY = g_maskY.load(std::memory_order_relaxed);
 
   // Native sprint request: the packet bit alone does not engage the local
   // sprint state, so mirror it into MoveInputComponent.
   if (g_autoSprint.load(std::memory_order_relaxed) && !sneakBlocked &&
       !combatstate::sprintSuppressed()) {
-    gameecs::MoveInputState input;
-    if (gameecs::readMoveInput(actor, input) && !input.sprinting) {
+    if (haveMoveInput && !moveInput.sprinting) {
       gameecs::setMoveSprinting(actor, true);
     }
   }
-  const int tick = static_cast<int>(
-      g_tickCounter.fetch_add(1, std::memory_order_relaxed) + 1);
+
+  // Manual jump in fake mode: replace the client jump impulse with the same
+  // low ballistic velocity the auto-hop uses, then let the phantom mask it.
+  if (hopOn && fakeMode && !sneakBlocked && haveMoveInput &&
+      moveInput.jumping) {
+    const float vTarget = std::sqrt(2.0f * V_GRAVITY * hopHeight);
+    velocity[1] = vTarget;
+    if (maskY && !g_phantomBusy.load(std::memory_order_relaxed)) {
+      requestPhantom(hopHeight);
+    }
+    g_lastHopTick = tick;
+    if (g_debug.load(std::memory_order_relaxed)) {
+      __android_log_print(ANDROID_LOG_INFO, kTag,
+                          "user jump intercepted h=%.13f v=%.3f",
+                          static_cast<double>(hopHeight),
+                          static_cast<double>(vTarget));
+    }
+  }
 
   // Low hop / physical hop.
   if (hopOn && onGround && !sneakBlocked &&
       tick - g_lastHopTick >= g_hopInterval.load(std::memory_order_relaxed)) {
-    const float h = g_hopHeight.load(std::memory_order_relaxed);
-    const bool fakeMode = h < PHYSICAL_HOP_MIN;
     if (fakeMode) {
       g_lastHopTick = tick;
-      if (g_maskY.load(std::memory_order_relaxed)) requestPhantom(h);
+      if (maskY && !g_phantomBusy.load(std::memory_order_relaxed)) {
+        requestPhantom(hopHeight);
+      }
       if (g_debug.load(std::memory_order_relaxed)) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "fake hop h=%.13f",
-                            static_cast<double>(h));
+                            static_cast<double>(hopHeight));
       }
     } else {
-      const float vTarget = std::sqrt(2.0f * V_GRAVITY * h);
+      const float vTarget = std::sqrt(2.0f * V_GRAVITY * hopHeight);
       // Jump through the same motion path the client uses: set vertical
       // velocity to the ballistic value for this hop.
       velocity[1] = vTarget;
       g_lastHopTick = tick;
       g_pendingJump.store(true, std::memory_order_release);
-      if (g_maskY.load(std::memory_order_relaxed)) requestPhantom(h);
+      if (maskY) requestPhantom(hopHeight);
       if (g_debug.load(std::memory_order_relaxed)) {
-        __android_log_print(ANDROID_LOG_INFO, kTag, "physical hop h=%.3f v=%.3f",
-                            static_cast<double>(h), static_cast<double>(vTarget));
+        __android_log_print(ANDROID_LOG_INFO, kTag,
+                            "physical hop h=%.3f v=%.3f",
+                            static_cast<double>(hopHeight),
+                            static_cast<double>(vTarget));
       }
     }
     vy = velocity[1];
@@ -672,10 +719,11 @@ void applySpeed(void *actor) {
     return;
   if (sneakBlocked) return;
 
-  if (moving &&
-      g_lastRealDist.load(std::memory_order_relaxed) < STUCK_THRESHOLD) {
-    return;
-  }
+  const bool stuckAtWall =
+      (moving && onGround && moveDist <= 0.003f) ||
+      (moving &&
+       g_lastRealDist.load(std::memory_order_relaxed) < STUCK_THRESHOLD);
+  if (stuckAtWall) return;
 
   const int mode = g_speedMode.load(std::memory_order_relaxed);
   const bool should =
@@ -856,6 +904,154 @@ void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Inbound CorrectPlayerMovePrediction cancellation (cancelCorrections).
+//
+// The userscript cancels the correction packet while the desync is active.
+// Bedrock routes the packet through the dispatcher vtable; locate that vtable
+// through RTTI instead of a version-specific address, then hook its handle
+// thunk.  The thunk is only called for CorrectPlayerMovePrediction.
+// ---------------------------------------------------------------------------
+struct LibSegment {
+  uintptr_t start;
+  uintptr_t end;
+};
+
+struct LibSegments {
+  LibSegment readable[8];
+  int readableCount = 0;
+  LibSegment writable[8];
+  int writableCount = 0;
+};
+
+int collectLibSegments(struct dl_phdr_info *info, size_t, void *data) {
+  if (!info->dlpi_name || !std::strstr(info->dlpi_name, kMinecraftLibrary)) {
+    return 0;
+  }
+  auto *out = static_cast<LibSegments *>(data);
+  for (int i = 0; i < info->dlpi_phnum; ++i) {
+    const ElfW(Phdr) &ph = info->dlpi_phdr[i];
+    if (ph.p_type != PT_LOAD) continue;
+    const uintptr_t start = info->dlpi_addr + ph.p_vaddr;
+    const uintptr_t end = start + ph.p_memsz;
+    if (ph.p_flags & PF_R) {
+      if (out->readableCount < 8) {
+        out->readable[out->readableCount++] = {start, end};
+      }
+    }
+    if (ph.p_flags & PF_W) {
+      if (out->writableCount < 8) {
+        out->writable[out->writableCount++] = {start, end};
+      }
+    }
+  }
+  return 1;
+}
+
+bool rangeContains(const LibSegment *ranges, int count, uintptr_t address,
+                   size_t size) {
+  for (int i = 0; i < count; ++i) {
+    if (address >= ranges[i].start &&
+        address + size <= ranges[i].end) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool inWritable(const LibSegments &lib, uintptr_t address, size_t size) {
+  return rangeContains(lib.writable, lib.writableCount, address, size);
+}
+
+bool inReadable(const LibSegments &lib, uintptr_t address, size_t size) {
+  return rangeContains(lib.readable, lib.readableCount, address, size);
+}
+
+bool resolvePredictionHandle(uintptr_t &handle) {
+  LibSegments lib;
+  dl_iterate_phdr(collectLibSegments, &lib);
+  if (lib.readableCount == 0 || lib.writableCount == 0) return false;
+
+  static const char kDispatcherType[] =
+      "31PacketHandlerDispatcherInstanceI33CorrectPlayerMovePredictionPacket"
+      "Lb0EE";
+  const size_t typeLen = sizeof(kDispatcherType) - 1;
+
+  uintptr_t typeInfo = 0;
+  for (int w = 0; w < lib.writableCount && typeInfo == 0; ++w) {
+    const uintptr_t begin = (lib.writable[w].start + 7) & ~uintptr_t(7);
+    const uintptr_t end = lib.writable[w].end;
+    for (uintptr_t field = begin; field + sizeof(uintptr_t) <= end;
+         field += sizeof(uintptr_t)) {
+      const uintptr_t name = *reinterpret_cast<uintptr_t *>(field);
+      if (!inReadable(lib, name, typeLen + 1)) continue;
+      if (std::memcmp(reinterpret_cast<const void *>(name), kDispatcherType,
+                      typeLen) != 0 ||
+          reinterpret_cast<const char *>(name)[typeLen] != '\0') {
+        continue;
+      }
+      const uintptr_t candidate = field - sizeof(uintptr_t);
+      if (!inWritable(lib, candidate, 2 * sizeof(uintptr_t))) continue;
+      const uintptr_t vtableOfTypeInfo =
+          *reinterpret_cast<uintptr_t *>(candidate);
+      if (vtableOfTypeInfo == 0) continue;
+      typeInfo = candidate;
+      break;
+    }
+  }
+  if (!typeInfo) return false;
+
+  for (int w = 0; w < lib.writableCount; ++w) {
+    const uintptr_t begin = (lib.writable[w].start + 7) & ~uintptr_t(7);
+    const uintptr_t end = lib.writable[w].end;
+    for (uintptr_t field = begin; field + sizeof(uintptr_t) <= end;
+         field += sizeof(uintptr_t)) {
+      if (*reinterpret_cast<uintptr_t *>(field) != typeInfo) continue;
+      const uintptr_t vtable = field + sizeof(uintptr_t);
+      if (!inWritable(lib, vtable, 3 * sizeof(uintptr_t))) continue;
+      const uintptr_t slot =
+          *reinterpret_cast<uintptr_t *>(vtable + 2 * sizeof(uintptr_t));
+      if (!inReadable(lib, slot, 4) || !isMinecraftAddress(slot)) continue;
+      handle = slot;
+      return true;
+    }
+  }
+  return false;
+}
+
+void *predictionHandleDetour(void *a1, void *a2, void *a3, void *a4) {
+  if (g_enabled.load(std::memory_order_relaxed) &&
+      g_cancelCorrections.load(std::memory_order_relaxed) &&
+      g_cheatingPublished.load(std::memory_order_relaxed)) {
+    return nullptr;
+  }
+  return g_predictionHandleOriginal
+             ? g_predictionHandleOriginal(a1, a2, a3, a4)
+             : nullptr;
+}
+
+bool installPredictionHook() {
+  if (g_predictionHookInstalled) return true;
+  uintptr_t handle = 0;
+  if (!resolvePredictionHandle(handle)) {
+    logWarning("CorrectPlayerMovePrediction dispatcher not found");
+    return false;
+  }
+  if (pl::memory::hook(reinterpret_cast<pl::memory::FuncPtr>(handle),
+                       reinterpret_cast<pl::memory::FuncPtr>(
+                           predictionHandleDetour),
+                       reinterpret_cast<pl::memory::FuncPtr *>(
+                           &g_predictionHandleOriginal)) != 0) {
+    logWarning("Unable to hook CorrectPlayerMovePrediction dispatcher");
+    return false;
+  }
+  g_predictionHookInstalled = true;
+  __android_log_print(ANDROID_LOG_INFO, kTag,
+                      "CorrectPlayerMovePrediction dispatcher hooked at %p",
+                      reinterpret_cast<void *>(handle));
+  return true;
+}
+
 bool installPacketHook(uintptr_t gameBase) {
   if (g_packetHookInstalled) return true;
   if (gameBase == 0) return false;
@@ -958,6 +1154,9 @@ bool initialize() {
   }
   if (!installPacketHook(gameBase)) {
     logWarning("Packet bypass disabled (PlayerAuthInput hook not installed)");
+  }
+  if (!installPredictionHook()) {
+    logWarning("Correction cancellation disabled");
   }
 
   g_installed = true;
