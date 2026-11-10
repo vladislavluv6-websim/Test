@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.view.MotionEvent;
 import android.view.KeyEvent;
 
+import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.inbuilt.ExternalModBridge;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.manager.MoreButtonsManager;
