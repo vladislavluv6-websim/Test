@@ -1,8 +1,12 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.content.Context;
+import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.Paint;
+import android.graphics.RadialGradient;
+import android.graphics.RectF;
+import android.graphics.Shader;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -11,7 +15,7 @@ import android.widget.SeekBar;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Reusable circular colour palette with an optional alpha slider. */
+/** Circular colour palette styled like desktop cheat menus. */
 public final class ColorPalette {
     public interface Listener {
         void onColorChanged(int color);
@@ -29,10 +33,10 @@ public final class ColorPalette {
         float density = context.getResources().getDisplayMetrics().density;
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(0, (int) (4 * density), 0, (int) (2 * density));
+        root.setPadding(0, (int) (6 * density), 0, (int) (2 * density));
 
         int[] current = {initial};
-        List<View> circles = new ArrayList<>();
+        List<SwatchView> circles = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
 
         for (int start = 0; start < PRESETS.length; start += 6) {
@@ -41,27 +45,19 @@ public final class ColorPalette {
             row.setGravity(Gravity.CENTER_VERTICAL);
             for (int i = start; i < Math.min(PRESETS.length, start + 6); i++) {
                 int preset = PRESETS[i];
-                android.widget.FrameLayout cell = new android.widget.FrameLayout(context);
-                LinearLayout.LayoutParams cellParams = new LinearLayout.LayoutParams(
-                        0, (int) (38 * density), 1f);
-                cell.setLayoutParams(cellParams);
-                View circle = new View(context);
-                android.widget.FrameLayout.LayoutParams circleParams =
-                        new android.widget.FrameLayout.LayoutParams(
-                                (int) (28 * density), (int) (28 * density));
-                circleParams.gravity = Gravity.CENTER;
-                circle.setLayoutParams(circleParams);
-                circle.setContentDescription(String.format("#%06X", preset & 0xFFFFFF));
-                circle.setOnClickListener(v -> {
+                SwatchView swatch = new SwatchView(context, preset);
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        0, (int) (42 * density), 1f);
+                swatch.setLayoutParams(params);
+                swatch.setOnClickListener(v -> {
                     current[0] = Color.argb(Color.alpha(current[0]),
                             Color.red(preset), Color.green(preset), Color.blue(preset));
                     paint(circles, colors, current[0], density);
                     listener.onColorChanged(current[0]);
                 });
-                circles.add(circle);
+                circles.add(swatch);
                 colors.add(preset);
-                cell.addView(circle);
-                row.addView(cell);
+                row.addView(swatch);
             }
             root.addView(row, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -73,12 +69,13 @@ public final class ColorPalette {
             LinearLayout alphaRow = new LinearLayout(context);
             alphaRow.setOrientation(LinearLayout.HORIZONTAL);
             alphaRow.setGravity(Gravity.CENTER_VERTICAL);
-            alphaRow.setPadding(0, (int) (8 * density), 0, 0);
+            alphaRow.setPadding((int) (6 * density), (int) (10 * density),
+                    (int) (6 * density), 0);
             android.widget.TextView alphaLabel = new android.widget.TextView(context);
             alphaLabel.setText("A");
             alphaLabel.setTextColor(0xFF9296A2);
             alphaLabel.setTextSize(12);
-            alphaLabel.setPadding(0, 0, (int) (8 * density), 0);
+            alphaLabel.setPadding(0, 0, (int) (10 * density), 0);
             SeekBar alpha = new SeekBar(context);
             alpha.setMax(255);
             alpha.setProgress(Color.alpha(initial));
@@ -100,21 +97,89 @@ public final class ColorPalette {
         return root;
     }
 
-    private static void paint(List<View> circles, List<Integer> colors, int selected, float density) {
+    private static void paint(List<SwatchView> circles, List<Integer> colors,
+                              int selected, float density) {
         for (int i = 0; i < circles.size(); i++) {
             int base = colors.get(i);
             boolean match = Color.red(base) == Color.red(selected)
                     && Color.green(base) == Color.green(selected)
                     && Color.blue(base) == Color.blue(selected);
-            GradientDrawable shape = new GradientDrawable();
-            shape.setShape(GradientDrawable.OVAL);
-            shape.setColor(base);
-            shape.setStroke((int) ((match ? 2.5f : 1f) * density),
-                    match ? 0xFFFFFFFF : 0x44FFFFFF);
-            circles.get(i).setBackground(shape);
-            circles.get(i).setScaleX(match ? 1.12f : 1f);
-            circles.get(i).setScaleY(match ? 1.12f : 1f);
-            circles.get(i).setAlpha(match ? 255 : 210);
+            circles.get(i).setSelected(match);
+        }
+    }
+
+    private static final class SwatchView extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint checkPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF oval = new RectF();
+        private final int color;
+        private boolean selected;
+
+        SwatchView(Context context, int color) {
+            super(context);
+            this.color = color;
+            ringPaint.setStyle(Paint.Style.STROKE);
+            checkPaint.setStyle(Paint.Style.STROKE);
+            checkPaint.setStrokeCap(Paint.Cap.ROUND);
+            setClickable(true);
+        }
+
+        void setSelected(boolean selected) {
+            this.selected = selected;
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            float cx = getWidth() * 0.5f;
+            float cy = getHeight() * 0.5f;
+            float radius = Math.min(getWidth(), getHeight()) * 0.34f;
+            if (selected) {
+                ringPaint.setStrokeWidth(dp(2.2f));
+                ringPaint.setColor(0xFFFFFFFF);
+                canvas.drawCircle(cx, cy, radius + dp(4f), ringPaint);
+            }
+            paint.setShader(new RadialGradient(cx - radius * 0.35f, cy - radius * 0.4f,
+                    radius * 1.55f,
+                    new int[]{lighten(color), color, darken(color)},
+                    new float[]{0f, 0.58f, 1f}, Shader.TileMode.CLAMP));
+            canvas.drawCircle(cx, cy, radius, paint);
+            paint.setShader(null);
+            ringPaint.setStrokeWidth(dp(1f));
+            ringPaint.setColor(0x33FFFFFF);
+            canvas.drawCircle(cx, cy, radius, ringPaint);
+            if (selected) {
+                boolean dark = luminance(color) < 0.55f;
+                checkPaint.setStrokeWidth(dp(2.6f));
+                checkPaint.setColor(dark ? 0xFFFFFFFF : 0xFF12151E);
+                float s = radius * 0.48f;
+                canvas.drawLine(cx - s, cy, cx - s * 0.15f, cy + s * 0.7f, checkPaint);
+                canvas.drawLine(cx - s * 0.15f, cy + s * 0.7f, cx + s, cy - s * 0.65f, checkPaint);
+            }
+        }
+
+        private float dp(float value) {
+            return value * getResources().getDisplayMetrics().density;
+        }
+
+        private static int lighten(int c) {
+            return Color.argb(Color.alpha(c),
+                    Math.min(255, Color.red(c) + 44),
+                    Math.min(255, Color.green(c) + 44),
+                    Math.min(255, Color.blue(c) + 44));
+        }
+
+        private static int darken(int c) {
+            return Color.argb(Color.alpha(c),
+                    (int) (Color.red(c) * 0.62f),
+                    (int) (Color.green(c) * 0.62f),
+                    (int) (Color.blue(c) * 0.62f));
+        }
+
+        private static float luminance(int c) {
+            return (0.2126f * Color.red(c) + 0.7152f * Color.green(c)
+                    + 0.0722f * Color.blue(c)) / 255f;
         }
     }
 }

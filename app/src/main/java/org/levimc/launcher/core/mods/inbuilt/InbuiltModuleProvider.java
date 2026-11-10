@@ -11,7 +11,6 @@ import org.json.JSONObject;
 import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
-import org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.core.mods.inbuilt.overlay.InbuiltOverlayManager;
 import org.levimc.launcher.core.mods.inbuilt.overlay.MoreButtonsEditor;
@@ -134,6 +133,9 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.TRIGGER_BOT,
                 R.string.inbuilt_mod_trigger_bot, R.string.inbuilt_mod_trigger_bot_desc,
+                groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.SWING,
+                R.string.inbuilt_mod_swing, R.string.inbuilt_mod_swing_desc,
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.TARGET_ESP,
                 R.string.inbuilt_mod_target_esp, R.string.inbuilt_mod_target_esp_desc,
@@ -353,6 +355,7 @@ public final class InbuiltModuleProvider {
             case ModIds.ESP:
             case ModIds.FULLBRIGHT:
             case ModIds.TRIGGER_BOT:
+            case ModIds.SWING:
             case ModIds.ZOOM:
             case ModIds.SNAPLOOK:
             case ModIds.VIRTUAL_CURSOR:
@@ -394,7 +397,7 @@ public final class InbuiltModuleProvider {
                     configs.add(config(CFG_OVERLAY_SHORTCUT,
                             context.getString(R.string.mod_config_overlay_shortcut),
                             UnifiedMod.ConfigType.TOGGLE,
-                            "true", "", "",
+                            "false", "", "",
                             String.valueOf(manager.isOverlayShortcutVisible(modId))));
                 }
             }
@@ -618,18 +621,6 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "1800", "300", "4000",
                     String.valueOf(manager.getAimAssistFastAimMaxSpeed())));
-            configs.add(config(CFG_SWING_STYLE,
-                    context.getString(R.string.mod_config_swing_style),
-                    UnifiedMod.ConfigType.RADIO,
-                    "0",
-                    context.getString(R.string.mod_config_swing_default) + ","
-                            + context.getString(R.string.mod_config_swing_slow) + ","
-                            + context.getString(R.string.mod_config_swing_fast) + ","
-                            + context.getString(R.string.mod_config_swing_heavy) + ","
-                            + context.getString(R.string.mod_config_swing_snap) + ","
-                            + context.getString(R.string.mod_config_swing_twitch),
-                    "",
-                    String.valueOf(manager.getSwingStyle())));
             configs.add(config(CFG_AIM_ASSIST_MAX_SPEED,
                     context.getString(R.string.mod_config_aim_assist_max_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
@@ -706,6 +697,19 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.COLOR,
                     formatColor(manager.getEspArmoredColor()), "", "",
                     formatColor(manager.getEspArmoredColor())));
+        } else if (ModIds.SWING.equals(modId)) {
+            configs.add(config(CFG_SWING_STYLE,
+                    context.getString(R.string.mod_config_swing_style),
+                    UnifiedMod.ConfigType.RADIO,
+                    "1",
+                    context.getString(R.string.mod_config_swing_default) + ","
+                            + context.getString(R.string.mod_config_swing_slow) + ","
+                            + context.getString(R.string.mod_config_swing_fast) + ","
+                            + context.getString(R.string.mod_config_swing_heavy) + ","
+                            + context.getString(R.string.mod_config_swing_snap) + ","
+                            + context.getString(R.string.mod_config_swing_twitch),
+                    "",
+                    String.valueOf(manager.getSwingStyle())));
         } else if (ModIds.NAME_TAGS.equals(modId)) {
             configs.add(config(CFG_NAME_TAG_STYLE,
                     context.getString(R.string.mod_config_name_tag_style),
@@ -921,7 +925,9 @@ public final class InbuiltModuleProvider {
                 {
                     InbuiltOverlayManager shortcutManager =
                             InbuiltOverlayManager.getInstance();
-                    if (shortcutManager != null) shortcutManager.refreshRuntimeVisibility();
+                    if (shortcutManager != null) {
+                        shortcutManager.syncShortcutVisibility(mod.getId());
+                    }
                 }
                 break;
             case CFG_HIDE_LAUNCHER_HUD:
@@ -1083,7 +1089,6 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_SWING_STYLE:
                 manager.setSwingStyle(parseInt(value, manager.getSwingStyle()));
-                AimAssistMod.setSwingStyle(manager.getSwingStyle());
                 break;
             case CFG_TARGET_ESP_STYLE:
                 manager.setTargetEspStyle(parseInt(value, manager.getTargetEspStyle()));

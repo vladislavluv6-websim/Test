@@ -247,6 +247,8 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         InbuiltModManager.getInstance(this).resetAllToDefaults()
         overlayManager = InbuiltOverlayManager(this)
         overlayManager?.showEnabledOverlays()
+        org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod.initializeAsync(null)
+        org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod.initializeAsync(null)
     }
 
     private fun stopInbuiltModServices() {

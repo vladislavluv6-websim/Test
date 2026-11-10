@@ -70,6 +70,7 @@ PlayerAuthInputWriteFn g_playerAuthWriteOriginal = nullptr;
 std::atomic<void *> g_clientInstance{nullptr};
 std::atomic<void *> g_localPlayer{nullptr};
 std::atomic<int> g_swingStyle{0};
+std::atomic<int> g_swingArmTicks{0};
 std::atomic<uintptr_t> g_attackControl{0};
 std::atomic<uintptr_t> g_controlLayout{0};
 std::atomic<bool> g_ctlScanStarted{false};
@@ -1232,6 +1233,7 @@ void verifySwingTick(void *base) {
 void applySwingStyle(void *actor) {
   const int style = g_swingStyle.load(std::memory_order_relaxed);
   if (style <= 0 || !actor) return;
+  if (g_swingArmTicks.fetch_sub(1, std::memory_order_relaxed) <= 0) return;
   const auto base = reinterpret_cast<uintptr_t>(actor);
   uint16_t state = 0;
   if (!safeRead(base + offsets::kPlayerSwingState, state)) return;
@@ -1933,6 +1935,14 @@ void ClientBridge::setMovePacketSender(MovePacketSender sender) {
 
 void ClientBridge::setSwingStyle(int style) {
   g_swingStyle.store(std::clamp(style, 0, 5), std::memory_order_relaxed);
+  if (style <= 0) {
+    g_swingArmTicks.store(0, std::memory_order_relaxed);
+  }
+}
+
+void ClientBridge::armSwing() {
+  if (g_swingStyle.load(std::memory_order_relaxed) <= 0) return;
+  g_swingArmTicks.store(10, std::memory_order_relaxed);
 }
 
 void ClientBridge::sendMovePacket(void *player, float yaw, float pitch) const {

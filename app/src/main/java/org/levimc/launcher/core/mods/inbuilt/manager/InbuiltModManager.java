@@ -170,7 +170,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_TARGET_ESP_HOLD = 650;
     private static final int DEFAULT_NAME_TAG_STYLE = 0;
     private static final int DEFAULT_NAME_TAG_COLOR = 0xFF4E83FF;
-    private static final int DEFAULT_SWING_STYLE = 0;
+    private static final int DEFAULT_SWING_STYLE = 1;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
     private static final int DEFAULT_TRIGGER_BOT_DELAY = 90;
     private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 40;
@@ -954,7 +954,25 @@ public class InbuiltModManager {
 
     public boolean isOverlayShortcutVisible(String modId) {
         if (modId == null || modId.isEmpty()) return true;
-        return prefs.getBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
+        return prefs.getBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId,
+                !isShortcutDefaultOff(modId));
+    }
+
+    private static boolean isShortcutDefaultOff(String modId) {
+        switch (modId) {
+            case ModIds.AUTO_SPRINT:
+            case ModIds.SPEED:
+            case ModIds.AIM_ASSIST:
+            case ModIds.ESP:
+            case ModIds.FULLBRIGHT:
+            case ModIds.TRIGGER_BOT:
+            case ModIds.SWING:
+            case ModIds.NAME_TAGS:
+            case ModIds.TARGET_ESP:
+                return true;
+            default:
+                return false;
+        }
     }
 
     public void setOverlayShortcutVisible(String modId, boolean visible) {
@@ -995,13 +1013,12 @@ public class InbuiltModManager {
         SharedPreferences.Editor editor = prefs.edit();
         editor.clear();
         String[] shortcutMods = {
-                ModIds.QUICK_DROP, ModIds.CAMERA_PERSPECTIVE, ModIds.TOGGLE_HUD,
                 ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.ESP,
-                ModIds.FULLBRIGHT, ModIds.TRIGGER_BOT, ModIds.ZOOM, ModIds.SNAPLOOK,
-                ModIds.VIRTUAL_CURSOR, ModIds.GYRO, ModIds.NAME_TAGS, ModIds.TARGET_ESP
+                ModIds.FULLBRIGHT, ModIds.TRIGGER_BOT, ModIds.SWING,
+                ModIds.NAME_TAGS, ModIds.TARGET_ESP
         };
         for (String modId : shortcutMods) {
-            editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
+            editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, false);
         }
         editor.commit();
         overlayVisibilityRevision.incrementAndGet();

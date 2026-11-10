@@ -45,6 +45,7 @@ public:
 
   // 0 = ванильная анимация; 1..5 = кривые прогресса взмаха.
   void setSwingStyle(int style);
+  void armSwing();
 
   void *getLocalPlayer() const;
 

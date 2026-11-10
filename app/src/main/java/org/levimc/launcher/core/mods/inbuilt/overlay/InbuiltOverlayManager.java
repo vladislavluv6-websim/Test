@@ -38,10 +38,8 @@ public class InbuiltOverlayManager {
             ModIds.POJAV_CONTROLS, ModIds.HOTBAR_SLOT
     };
     private static final String[] STANDARD_SHORTCUT_MOD_IDS = {
-            ModIds.QUICK_DROP, ModIds.CAMERA_PERSPECTIVE, ModIds.TOGGLE_HUD,
             ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.TRIGGER_BOT,
-            ModIds.ESP, ModIds.FULLBRIGHT, ModIds.ZOOM, ModIds.SNAPLOOK,
-            ModIds.VIRTUAL_CURSOR, ModIds.GYRO
+            ModIds.SWING, ModIds.ESP, ModIds.FULLBRIGHT
     };
     private final Map<String, Boolean> modActiveStates = new HashMap<>();
     private final Map<String, BaseOverlayButton> keybindControllers = new HashMap<>();
@@ -58,6 +56,7 @@ public class InbuiltOverlayManager {
     private final Map<String, Integer> modPositionMap = new HashMap<>();
     private ChickPetOverlay chickPetOverlay;
     private ZoomOverlay zoomOverlay;
+    private SwingOverlay swingOverlay;
     private SnaplookOverlay snaplookOverlay;
     private GyroOverlay gyroOverlay;
     private FpsDisplayOverlay fpsDisplayOverlay;
@@ -169,19 +168,29 @@ public class InbuiltOverlayManager {
         float density = activity.getResources().getDisplayMetrics().density;
         int step = (int) (46 * density);
         int y = baseY;
+        int menuY = baseY;
         for (String modId : STANDARD_SHORTCUT_MOD_IDS) {
             modPositionMap.put(modId, y);
             y += step;
+            if (manager.isOverlayShortcutVisible(modId)) menuY += step;
         }
         modPositionMap.put(ModIds.TARGET_ESP, y);
         y += step;
+        if (manager.isOverlayShortcutVisible(ModIds.TARGET_ESP)) menuY += step;
         modPositionMap.put(ModIds.NAME_TAGS, y);
+        if (manager.isOverlayShortcutVisible(ModIds.NAME_TAGS)) menuY += step;
 
         for (String modId : STANDARD_SHORTCUT_MOD_IDS) {
-            showShortcutOnly(modId);
+            if (manager.isOverlayShortcutVisible(modId)) {
+                showShortcutOnly(modId);
+            }
         }
-        ensureToggleShortcut(ModIds.TARGET_ESP);
-        ensureToggleShortcut(ModIds.NAME_TAGS);
+        if (manager.isOverlayShortcutVisible(ModIds.TARGET_ESP)) {
+            ensureToggleShortcut(ModIds.TARGET_ESP);
+        }
+        if (manager.isOverlayShortcutVisible(ModIds.NAME_TAGS)) {
+            ensureToggleShortcut(ModIds.NAME_TAGS);
+        }
 
         if (manager.resolveInbuiltModEnabled(ModIds.CHICK_PET, false)) {
             handleModToggle(ModIds.CHICK_PET, true);
@@ -194,7 +203,7 @@ public class InbuiltOverlayManager {
         }
 
         modMenuButton = new ModMenuButton(activity);
-        modMenuButton.show(START_X, y + step);
+        modMenuButton.show(START_X, menuY + step);
         refreshExternalButtons();
         refreshRuntimeVisibility();
     }
@@ -212,6 +221,19 @@ public class InbuiltOverlayManager {
     private void showShortcutOnly(String modId) {
         if (modOverlayMap.containsKey(modId)) return;
         showModOverlay(modId);
+    }
+
+    public void syncShortcutVisibility(String modId) {
+        if (modId == null || modId.isEmpty() || !isShortcutModule(modId)) return;
+        InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+        if (manager.isOverlayShortcutVisible(modId)) {
+            if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)) {
+                ensureToggleShortcut(modId);
+            } else {
+                showShortcutOnly(modId);
+            }
+        }
+        refreshRuntimeVisibility();
     }
 
     private void ensureToggleShortcut(String modId) {
@@ -291,6 +313,10 @@ public class InbuiltOverlayManager {
             case ModIds.ESP: controller = new EspOverlay(activity); break;
             case ModIds.FULLBRIGHT: controller = new FullbrightOverlay(activity); break;
             case ModIds.TRIGGER_BOT: controller = new TriggerBotOverlay(activity); break;
+            case ModIds.SWING:
+                if (swingOverlay == null) swingOverlay = new SwingOverlay(activity);
+                controller = swingOverlay;
+                break;
             case ModIds.VIRTUAL_CURSOR: controller = new VirtualCursorOverlay(activity); break;
             case ModIds.ZOOM:
                 if (zoomOverlay == null) zoomOverlay = new ZoomOverlay(activity);
@@ -370,6 +396,12 @@ public class InbuiltOverlayManager {
                 triggerBot.show(savedX, savedY);
                 overlays.add(triggerBot);
                 modOverlayMap.put(modId, triggerBot);
+                break;
+            case ModIds.SWING:
+                SwingOverlay swing = (SwingOverlay) getKeybindController(ModIds.SWING);
+                swing.show(savedX, savedY);
+                overlays.add(swing);
+                modOverlayMap.put(modId, swing);
                 break;
             case ModIds.ESP:
                 EspOverlay esp = (EspOverlay) getKeybindController(ModIds.ESP);

@@ -697,6 +697,8 @@
     <string name="esp_mod_unavailable">ESP недоступен для этой версии игры</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Автоматически бьёт игроков и мобов в прицеле</string>
+    <string name="inbuilt_mod_swing">Анимация удара</string>
+    <string name="inbuilt_mod_swing_desc">Меняет анимацию взмаха меча при ударах TriggerBot</string>
     <string name="inbuilt_mod_target_esp">Target ESP</string>
     <string name="inbuilt_mod_target_esp_desc">Подсвечивает текущую цель AimAssist моделью ghost, square, circle или crystal</string>
     <string name="mod_config_target_esp_style">Модель</string>

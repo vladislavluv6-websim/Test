@@ -45,7 +45,6 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setFastAim(manager.isAimAssistFastAim());
         AimAssistMod.setFastAimTime(manager.getAimAssistFastAimTime());
         AimAssistMod.setFastAimMaxSpeed(manager.getAimAssistFastAimMaxSpeed());
-        AimAssistMod.setSwingStyle(manager.getSwingStyle());
     }
 
     private boolean isSupportedVersion() {

@@ -690,6 +690,8 @@
     <string name="esp_mod_unavailable">ESP is unavailable for this game version</string>
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players and mobs under the crosshair</string>
+    <string name="inbuilt_mod_swing">Hit Animation</string>
+    <string name="inbuilt_mod_swing_desc">Changes the sword swing animation for TriggerBot hits</string>
     <string name="inbuilt_mod_target_esp">Target ESP</string>
     <string name="inbuilt_mod_target_esp_desc">Highlights the current AimAssist target with a ghost, square, circle or crystal model</string>
     <string name="mod_config_target_esp_style">Model</string>

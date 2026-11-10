@@ -662,7 +662,6 @@ void AimAssist::updateVisual(float dt) {
     m_lastStepPitch = afterPitch - beforePitch;
     m_lastDelta = std::sqrt(m_lastStepYaw * m_lastStepYaw +
                             m_lastStepPitch * m_lastStepPitch);
-    m_lastFactor = 1.0f;
     if (settings.debugOverlay) {
       aimbot::diagLog(kTag,
           "fast aim target=%p step=(p %.3f y %.3f) dt=%.4f",
@@ -727,9 +726,21 @@ void AimAssist::updateVisual(float dt) {
 
   if (settings.humanize) {
     updateHumanProfile(settings, dt, aimNow);
-    aim.yaw = normalizeYaw(aim.yaw + m_restYaw + m_noiseYaw + m_overYaw);
-    aim.pitch = clampf(
-        aim.pitch + m_restPitch + m_noisePitch + m_overPitch, -89.9f, 89.9f);
+    const float curYaw = m_localYaw.load(std::memory_order_relaxed);
+    const float curPitch = m_localPitch.load(std::memory_order_relaxed);
+    const float errYaw = shortestDelta(curYaw, aim.yaw);
+    const float errPitch = aim.pitch - curPitch;
+    const float err = std::sqrt(errYaw * errYaw + errPitch * errPitch);
+    const float speedFactor = clampf(m_lastFactor, 0.0f, 1.0f);
+    const float errFactor = clampf(err / 20.0f, 0.0f, 1.0f);
+    const float offsetScale =
+        (1.0f - 0.60f * speedFactor) * (1.0f - 0.40f * errFactor);
+    const float overScale = 1.0f - 0.45f * speedFactor;
+    aim.yaw = normalizeYaw(aim.yaw
+            + (m_restYaw + m_noiseYaw) * offsetScale + m_overYaw * overScale);
+    aim.pitch = clampf(aim.pitch
+            + (m_restPitch + m_noisePitch) * offsetScale + m_overPitch * overScale,
+            -89.9f, 89.9f);
   }
 
   if (settings.humanize) {
@@ -1365,6 +1376,8 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   if (m_bridge.attackActor(bestActor, hitPoint)) {
     // Target ESP появляется только на факте удара TriggerBot.
     Esp::instance().markTargetEspHit(bestActor);
+    // Анимация взмаха применяется только к удару TriggerBot.
+    m_bridge.armSwing();
     // Интервал между ударами: база + разброс + редкая «задумчивость».
     int64_t next = now + settings.triggerIntervalMs;
     if (settings.attackIntervalJitterMs > 0) {
@@ -1529,10 +1542,21 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     // математически точно в центре хитбокса и не описывает идеальную
     // прямую/экспоненту, которую ловят Polar/ML.
     updateHumanProfile(settings, fastDt, nowMs());
-    const float aimYaw =
-        normalizeYaw(targetYaw + m_restYaw + m_noiseYaw);
+    // Во время быстрого довода не раскачиваем камеру человеческим шумом:
+    // смещения плавно возвращаются, когда ошибка и скорость падают.
+    const float rawErrYaw = shortestDelta(curYaw, targetYaw);
+    const float rawErrPitch = targetPitch - curPitch;
+    const float rawErrMag =
+        std::sqrt(rawErrYaw * rawErrYaw + rawErrPitch * rawErrPitch);
+    const float speedFactor = clampf(m_lastFactor, 0.0f, 1.0f);
+    const float errFactor = clampf(rawErrMag / 18.0f, 0.0f, 1.0f);
+    const float offsetScale =
+        (1.0f - 0.60f * speedFactor) * (1.0f - 0.40f * errFactor);
+    const float aimYaw = normalizeYaw(
+        targetYaw + (m_restYaw + m_noiseYaw) * offsetScale);
     const float aimPitch = clampf(
-        targetPitch + m_restPitch + m_noisePitch, -89.9f, 89.9f);
+        targetPitch + (m_restPitch + m_noisePitch) * offsetScale,
+        -89.9f, 89.9f);
 
     float errYaw = shortestDelta(curYaw, aimYaw);
     float errPitch = aimPitch - curPitch;
@@ -1546,7 +1570,7 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     float desiredPitch = (errPitch / tau) * m_fastGain * motor;
 
     const float maxSpeed =
-        clampf(settings.fastAimMaxSpeed * m_fastSpeedScale, 300.0f, 1200.0f);
+        clampf(settings.fastAimMaxSpeed * m_fastSpeedScale, 300.0f, 2000.0f);
     const float desiredMag =
         std::sqrt(desiredYaw * desiredYaw + desiredPitch * desiredPitch);
     if (desiredMag > maxSpeed && desiredMag > 1e-6f) {
@@ -1674,8 +1698,10 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     const float omegaPitch = omega * 0.84f;
     // zeta ~0.92: почти критическое демпфирование, чтобы на высокой
     // скорости сопровождения не было колебаний вокруг цели.
-    const float dampingYaw = 1.84f * omegaYaw;
-    const float dampingPitch = 1.88f * omegaPitch;
+    // Ближе к цели чуть сильнее демпфируем, чтобы на высокой скорости
+    // не было звона вокруг хитбокса; вдали сохраняем быстрый разгон.
+    const float dampingYaw = (1.84f + 0.12f * (1.0f - proximity)) * omegaYaw;
+    const float dampingPitch = (1.88f + 0.10f * (1.0f - proximity)) * omegaPitch;
     float accelYaw = omegaYaw * omegaYaw * deltaYaw - dampingYaw * m_velYaw;
     float accelPitch =
         omegaPitch * omegaPitch * deltaPitch - dampingPitch * m_velPitch;
