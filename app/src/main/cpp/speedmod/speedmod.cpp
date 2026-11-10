@@ -951,9 +951,10 @@ int collectLibSegments(struct dl_phdr_info *info, size_t, void *data) {
 
 bool rangeContains(const LibSegment *ranges, int count, uintptr_t address,
                    size_t size) {
+  if (address < 0x1000) return false;
   for (int i = 0; i < count; ++i) {
-    if (address >= ranges[i].start &&
-        address + size <= ranges[i].end) {
+    if (address < ranges[i].start || address > ranges[i].end) continue;
+    if (size <= ranges[i].end - address) {
       return true;
     }
   }

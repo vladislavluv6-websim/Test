@@ -148,12 +148,12 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
     private static final int DEFAULT_AIM_ASSIST_BODY_PART = 0;
-    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 1100;
-    private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 38;
-    private static final int DEFAULT_AIM_ASSIST_ACCEL = 5200;
-    private static final int DEFAULT_AIM_ASSIST_DEADZONE = 10;
-    private static final int DEFAULT_AIM_ASSIST_FULL_RANGE = 22;
-    private static final int DEFAULT_AIM_ASSIST_STICKY = 3;
+    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 1600;
+    private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 55;
+    private static final int DEFAULT_AIM_ASSIST_ACCEL = 9000;
+    private static final int DEFAULT_AIM_ASSIST_DEADZONE = 2;
+    private static final int DEFAULT_AIM_ASSIST_FULL_RANGE = 45;
+    private static final int DEFAULT_AIM_ASSIST_STICKY = 0;
     private static final int DEFAULT_AIM_ASSIST_GRACE = 6;
     private static final boolean DEFAULT_AIM_ASSIST_PREFER_CLOSEST = false;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_LOCK = false;
@@ -193,7 +193,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
     private static final String KEY_TUNING_REVISION = "tuning_revision";
-    private static final int TUNING_REVISION = 2;
+    private static final int TUNING_REVISION = 3;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
     private static final String KEY_FRIEND_NAMES = "friend_names";

@@ -48,16 +48,16 @@ struct Settings {
 
   float fovDeg = 360.0f;
   float range = 8.0f;
-  float smoothingSpeed = 38.0f;
-  float maxDegPerSecond = 1100.0f;
-  float maxAccelDegPerSecond2 = 5200.0f;
-  float deadzoneDeg = 0.10f;
-  float fullSpeedRangeDeg = 22.0f;
+  float smoothingSpeed = 55.0f;
+  float maxDegPerSecond = 1600.0f;
+  float maxAccelDegPerSecond2 = 9000.0f;
+  float deadzoneDeg = 0.02f;
+  float fullSpeedRangeDeg = 45.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
   TargetBone targetBone = TargetBone::Head;
 
-  int stickyTicks = 3;
+  int stickyTicks = 0;
   // Target lock: держим одну цель, пока она жива и в радиусе. Переключение
   // только если прицел стоит точно на другой цели.
   bool targetLock = false;
@@ -66,10 +66,10 @@ struct Settings {
   bool fastAim = false;
   float fastAimTimeMs = 60.0f;
   float fastAimMaxSpeed = 1800.0f;
-  float switchHysteresisDeg = 4.0f;
+  float switchHysteresisDeg = 0.75f;
   // EMA-лаг позиции цели (в кадрах при 120 Гц). Даёт «догоняющее» наведение,
   // как у живой руки, вместо мгновенной привязки к центру хитбокса.
-  int targetSmoothFrames = 2;
+  int targetSmoothFrames = 0;
   int targetGraceFrames = 6;
 
   float randomJitterDeg = 0.0f;
@@ -108,9 +108,9 @@ struct Settings {
   // ------------------------------------------------------------
   // Реакция перед началом доводки: живой игрок не начинает вести цель
   // в тот же кадр, в котором она появилась.
-  bool humanize = true;
-  float reactionDelayMs = 60.0f;
-  float reactionJitterMs = 35.0f;
+  bool humanize = false;
+  float reactionDelayMs = 0.0f;
+  float reactionJitterMs = 0.0f;
   // Дополнительный вклад в шум сопровождения (0 — только trackingNoiseDeg).
   float aimTremorDeg = 0.0f;
   // Верхний предел поворота за один серверный тик (50 мс). Защита от
@@ -127,17 +127,17 @@ struct Settings {
   float assistConeDeg = 360.0f;
   // Шум сопровождения (Gauss-Markov / OU): плавно «плавает» вокруг цели,
   // из-за чего траектория не является точной функцией угла до цели.
-  float trackingNoiseDeg = 0.14f;
+  float trackingNoiseDeg = 0.0f;
   // Постоянное смещение точки прицеливания от центра хитбокса. Игрок не
   // держит прицел математически точно в центре; это ломает проверки
   // "aim placement"/"target offset" и статистику идеальной точности.
-  float restOffsetDeg = 0.12f;
+  float restOffsetDeg = 0.0f;
   // Одноразовый перелёт при захвате новой цели (доля начальной ошибки).
   float overshootFactor = 0.07f;
   // Медленная вариация «моторной» скорости (доля единицы).
   float motorVariation = 0.22f;
   // Минимальное время удержания текущей цели перед переключением, мс.
-  int switchDelayMs = 140;
+  int switchDelayMs = 0;
   // Триггер: максимальный угол от прицела до центра цели для «мягкого»
   // добивания, если луч не попал в AABB. В legit-режиме не используется.
   float attackMaxAngleDeg = 2.0f;
@@ -395,10 +395,6 @@ private:
   // Random per-engagement profile for Fast aim (stealth mode): never reuse
   // the same time constant / speed / settle radius, otherwise ML heuristics
   // see a deterministic motor pattern across fights.
-  float m_fastTimeScale = 1.0f;
-  float m_fastSpeedScale = 0.85f;
-  float m_fastGain = 1.0f;
-  float m_fastSettleDeg = 0.22f;
 
   mutable Vec3 m_eye{};
   std::minstd_rand m_rng{0x5EED1234u};
