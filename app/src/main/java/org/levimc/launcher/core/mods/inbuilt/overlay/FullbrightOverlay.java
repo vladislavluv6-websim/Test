@@ -127,4 +127,14 @@ public class FullbrightOverlay extends BaseOverlayButton {
     protected boolean autoActivateOnConfig() {
         return true;
     }
+
+    @Override
+    public void onModuleConfigDisabled() {
+        wantActive = false;
+        if (isActive) {
+            FullbrightMod.setEnabled(false);
+            isActive = false;
+            updateButtonState(false);
+        }
+    }
 }

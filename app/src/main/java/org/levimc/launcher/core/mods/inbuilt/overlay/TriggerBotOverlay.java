@@ -310,4 +310,17 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     protected boolean autoActivateOnConfig() {
         return true;
     }
+
+    @Override
+    public void onModuleConfigDisabled() {
+        wantActive = false;
+        stopLoop();
+        if (isActive) {
+            AimAssistMod.setTriggerBot(false);
+            nativeTriggerEnabled = false;
+            isActive = false;
+            updateButtonState(false);
+            exportDiagLog(true);
+        }
+    }
 }

@@ -142,4 +142,14 @@ public class EspOverlay extends BaseOverlayButton {
     protected boolean autoActivateOnConfig() {
         return true;
     }
+
+    @Override
+    public void onModuleConfigDisabled() {
+        wantActive = false;
+        if (isActive) {
+            EspMod.setEnabled(false);
+            isActive = false;
+            updateButtonState(false);
+        }
+    }
 }

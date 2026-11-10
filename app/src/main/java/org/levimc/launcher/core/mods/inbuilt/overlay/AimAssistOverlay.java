@@ -157,4 +157,14 @@ public class AimAssistOverlay extends BaseOverlayButton {
     protected boolean autoActivateOnConfig() {
         return true;
     }
+
+    @Override
+    public void onModuleConfigDisabled() {
+        wantActive = false;
+        if (isActive) {
+            AimAssistMod.setEnabled(false, 8.0f, 100.0f);
+            isActive = false;
+            updateButtonState(false);
+        }
+    }
 }
