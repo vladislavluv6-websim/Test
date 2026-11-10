@@ -327,18 +327,34 @@ public class InbuiltOverlayManager {
                 overlays.add(fullbright);
                 modOverlayMap.put(modId, fullbright);
                 break;
-            case ModIds.TARGET_ESP:
+            case ModIds.TARGET_ESP: {
+                ModuleToggleShortcut shortcut = new ModuleToggleShortcut(
+                        activity, ModIds.TARGET_ESP,
+                        R.drawable.ic_target_esp_normal,
+                        R.drawable.ic_target_esp_pressed);
+                shortcut.show(savedX, savedY);
+                overlays.add(shortcut);
+                modOverlayMap.put(modId, shortcut);
                 if (targetEspOverlay == null) {
                     targetEspOverlay = new TargetEspOverlay(activity);
                     targetEspOverlay.show();
                 }
                 break;
-            case ModIds.NAME_TAGS:
+            }
+            case ModIds.NAME_TAGS: {
+                ModuleToggleShortcut shortcut = new ModuleToggleShortcut(
+                        activity, ModIds.NAME_TAGS,
+                        R.drawable.ic_name_tags_normal,
+                        R.drawable.ic_name_tags_pressed);
+                shortcut.show(savedX, savedY);
+                overlays.add(shortcut);
+                modOverlayMap.put(modId, shortcut);
                 if (nameTagsOverlay == null) {
                     nameTagsOverlay = new NameTagsOverlay(activity);
                     nameTagsOverlay.show();
                 }
                 break;
+            }
             case ModIds.CHICK_PET:
                 if (chickPetOverlay == null) {
                     chickPetOverlay = new ChickPetOverlay(activity);
@@ -416,12 +432,22 @@ public class InbuiltOverlayManager {
                 targetEspOverlay.hide();
                 targetEspOverlay = null;
             }
+            BaseOverlayButton shortcut = modOverlayMap.remove(modId);
+            if (shortcut != null) {
+                shortcut.hide();
+                overlays.remove(shortcut);
+            }
             return;
         }
         if (modId.equals(ModIds.NAME_TAGS)) {
             if (nameTagsOverlay != null) {
                 nameTagsOverlay.hide();
                 nameTagsOverlay = null;
+            }
+            BaseOverlayButton shortcut = modOverlayMap.remove(modId);
+            if (shortcut != null) {
+                shortcut.hide();
+                overlays.remove(shortcut);
             }
             return;
         }

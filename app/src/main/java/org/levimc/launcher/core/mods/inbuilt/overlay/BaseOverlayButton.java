@@ -78,6 +78,8 @@ public abstract class BaseOverlayButton {
         if (ModIds.SNAPLOOK.equals(id)) return activity.getString(R.string.inbuilt_mod_snaplook);
         if (ModIds.VIRTUAL_CURSOR.equals(id)) return activity.getString(R.string.inbuilt_mod_virtual_cursor);
         if (ModIds.GYRO.equals(id)) return activity.getString(R.string.inbuilt_mod_gyro);
+        if (ModIds.NAME_TAGS.equals(id)) return activity.getString(R.string.inbuilt_mod_name_tags);
+        if (ModIds.TARGET_ESP.equals(id)) return activity.getString(R.string.inbuilt_mod_target_esp);
         return "";
     }
 

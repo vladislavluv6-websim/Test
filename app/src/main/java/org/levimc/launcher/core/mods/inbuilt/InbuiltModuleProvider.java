@@ -352,6 +352,8 @@ public final class InbuiltModuleProvider {
             case ModIds.SNAPLOOK:
             case ModIds.VIRTUAL_CURSOR:
             case ModIds.GYRO:
+            case ModIds.NAME_TAGS:
+            case ModIds.TARGET_ESP:
                 return true;
             default:
                 return false;
