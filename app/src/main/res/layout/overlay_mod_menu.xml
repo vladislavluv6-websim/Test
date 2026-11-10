@@ -12,10 +12,10 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="center"
-        android:layout_marginStart="10dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginEnd="10dp"
-        android:layout_marginBottom="10dp"
+        android:layout_marginStart="18dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="14dp"
         app:cardBackgroundColor="#00000000"
         app:cardCornerRadius="15dp"
         app:cardElevation="0dp">
@@ -28,7 +28,7 @@
 
             <LinearLayout
                 android:id="@+id/mod_menu_sidebar"
-                android:layout_width="150dp"
+                android:layout_width="158dp"
                 android:layout_height="match_parent"
                 android:background="@drawable/bg_zenix_sidebar"
                 android:orientation="vertical"
@@ -286,7 +286,7 @@
 
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="60dp"
+                    android:layout_height="56dp"
                     android:background="@drawable/bg_zenix_topbar"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
@@ -536,8 +536,8 @@
                         android:padding="10dp"
                         android:visibility="gone" />
 
-                    <org.levimc.launcher.core.mods.inbuilt.overlay.SolsticeModulesView
-                        android:id="@+id/solstice_modules"
+                    <org.levimc.launcher.core.mods.inbuilt.overlay.NeverloseModulesView
+                        android:id="@+id/neverlose_modules"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent" />
 

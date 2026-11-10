@@ -38,6 +38,7 @@ public class NameTagsOverlay extends View {
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint backdropPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint accentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint distancePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private float density = 1f;
     private boolean attached;
     private boolean showing;
@@ -70,8 +71,12 @@ public class NameTagsOverlay extends View {
         textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         textPaint.setShadowLayer(3f, 0f, 1f, 0xCC000000);
         density = activity.getResources().getDisplayMetrics().density;
-        textPaint.setTextSize(13f * density);
-        backdropPaint.setColor(0xC012151E);
+        textPaint.setTextSize(12.5f * density);
+        distancePaint.setColor(0xFF9296A2);
+        distancePaint.setTextAlign(Paint.Align.CENTER);
+        distancePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        distancePaint.setTextSize(9f * density);
+        backdropPaint.setColor(0xE012151E);
         accentPaint.setStyle(Paint.Style.STROKE);
         applySettings();
     }
@@ -211,62 +216,117 @@ public class NameTagsOverlay extends View {
             if (first < 0) continue;
             int second = entry.indexOf('\t', first + 1);
             if (second < 0) continue;
+            int third = entry.indexOf('\t', second + 1);
+            int fourth = third >= 0 ? entry.indexOf('\t', third + 1) : -1;
+            String name;
+            float distance;
+            boolean armored;
             try {
                 float x = Float.parseFloat(entry.substring(0, first));
                 float y = Float.parseFloat(entry.substring(first + 1, second));
-                String name = entry.substring(second + 1);
-                if (name.isEmpty()) continue;
-                float textWidth = textPaint.measureText(name);
-                float padX = 6f * density;
-                float padY = 3f * density;
-                float left = x - textWidth * 0.5f - padX;
-                float right = x + textWidth * 0.5f + padX;
-                float top = y - textPaint.getTextSize() - padY;
-                float bottom = y + padY;
-                float radius = 4f * density;
-                switch (style) {
-                    case STYLE_GLASS:
-                        backdropPaint.setColor(0x5A0D1018);
-                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
-                        accentPaint.setStrokeWidth(1f * density);
-                        accentPaint.setColor(0x88FFFFFF);
-                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
-                        accentPaint.setColor(accent);
-                        break;
-                    case STYLE_NEON:
-                        backdropPaint.setColor(0x330D1018);
-                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
-                        accentPaint.setStrokeWidth(2f * density);
-                        accentPaint.setColor(accent);
-                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
-                        break;
-                    case STYLE_MINIMAL:
-                        break;
-                    case STYLE_BRACKET: {
-                        float arm = Math.min(9f * density, (bottom - top) * 0.45f);
-                        accentPaint.setStrokeWidth(2f * density);
-                        accentPaint.setColor(accent);
-                        canvas.drawLine(left, top, left + arm, top, accentPaint);
-                        canvas.drawLine(left, top, left, top + arm, accentPaint);
-                        canvas.drawLine(right, top, right - arm, top, accentPaint);
-                        canvas.drawLine(right, top, right, top + arm, accentPaint);
-                        canvas.drawLine(left, bottom, left + arm, bottom, accentPaint);
-                        canvas.drawLine(left, bottom, left, bottom - arm, accentPaint);
-                        canvas.drawLine(right, bottom, right - arm, bottom, accentPaint);
-                        canvas.drawLine(right, bottom, right, bottom - arm, accentPaint);
-                        break;
-                    }
-                    case STYLE_PLATE:
-                    default:
-                        backdropPaint.setColor(0xC012151E);
-                        canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
-                        accentPaint.setStrokeWidth(2f * density);
-                        accentPaint.setColor(accent);
-                        canvas.drawRoundRect(left, top, left + 2f * density, bottom, radius, radius, accentPaint);
-                        break;
+                if (third >= 0 && fourth >= 0) {
+                    distance = Float.parseFloat(entry.substring(second + 1, third));
+                    armored = "1".equals(entry.substring(third + 1, fourth).trim());
+                    name = entry.substring(fourth + 1);
+                } else {
+                    distance = 0f;
+                    armored = false;
+                    name = entry.substring(second + 1);
                 }
-                canvas.drawText(name, x, y, textPaint);
+                if (name.isEmpty()) continue;
+                drawLabel(canvas, x, y, name, distance, armored);
             } catch (NumberFormatException ignored) {
+            }
+        }
+    }
+
+    private void drawLabel(Canvas canvas, float x, float y, String name,
+                           float distance, boolean armored) {
+        String distanceText = distance > 0f
+                ? String.format(java.util.Locale.US, "%.0f m", distance)
+                : "";
+        float nameWidth = textPaint.measureText(name);
+        float distanceWidth = distanceText.isEmpty()
+                ? 0f : distancePaint.measureText(distanceText);
+        float armorWidth = armored ? 8f * density : 0f;
+        float textWidth = Math.max(nameWidth, distanceWidth + armorWidth
+                + (armored ? 4f * density : 0f));
+        float padX = 7f * density;
+        float padY = 4f * density;
+        float left = x - textWidth * 0.5f - padX;
+        float right = x + textWidth * 0.5f + padX;
+        float nameHeight = textPaint.getTextSize();
+        float distHeight = distanceText.isEmpty() ? 0f : distancePaint.getTextSize();
+        float gap = distanceText.isEmpty() ? 0f : 1f * density;
+        float top = y - nameHeight - gap - distHeight - padY * 1.5f;
+        float bottom = y + padY * 0.5f;
+        float radius = 5f * density;
+        float nameBaseline = top + padY + nameHeight * 0.82f;
+        float distBaseline = bottom - padY * 0.9f;
+
+        switch (style) {
+            case STYLE_GLASS:
+                backdropPaint.setColor(0x7A0D1018);
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                accentPaint.setStrokeWidth(1f * density);
+                accentPaint.setColor(0x66FFFFFF);
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
+                break;
+            case STYLE_NEON:
+                backdropPaint.setColor(0x4A0A0C12);
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                accentPaint.setStrokeWidth(1.5f * density);
+                accentPaint.setColor(accent);
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
+                break;
+            case STYLE_MINIMAL:
+                accentPaint.setStrokeWidth(1.5f * density);
+                accentPaint.setColor(accent);
+                canvas.drawLine(left, bottom, right, bottom, accentPaint);
+                break;
+            case STYLE_BRACKET: {
+                float arm = Math.min(9f * density, (bottom - top) * 0.45f);
+                accentPaint.setStrokeWidth(1.8f * density);
+                accentPaint.setColor(accent);
+                canvas.drawLine(left, top, left + arm, top, accentPaint);
+                canvas.drawLine(left, top, left, top + arm, accentPaint);
+                canvas.drawLine(right, top, right - arm, top, accentPaint);
+                canvas.drawLine(right, top, right, top + arm, accentPaint);
+                canvas.drawLine(left, bottom, left + arm, bottom, accentPaint);
+                canvas.drawLine(left, bottom, left, bottom - arm, accentPaint);
+                canvas.drawLine(right, bottom, right - arm, bottom, accentPaint);
+                canvas.drawLine(right, bottom, right, bottom - arm, accentPaint);
+                break;
+            }
+            case STYLE_PLATE:
+            default:
+                backdropPaint.setColor(0xE012151E);
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+                accentPaint.setStrokeWidth(1f * density);
+                accentPaint.setColor(0xFF20232E);
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
+                accentPaint.setStrokeWidth(2f * density);
+                accentPaint.setColor(accent);
+                canvas.drawLine(left + radius * 0.4f, top + 2f * density,
+                        left + radius * 0.4f, bottom - 2f * density, accentPaint);
+                break;
+        }
+
+        textPaint.setColor(style == STYLE_NEON ? accent : Color.WHITE);
+        canvas.drawText(name, x, nameBaseline, textPaint);
+        if (!distanceText.isEmpty()) {
+            distancePaint.setColor(style == STYLE_NEON ? accent : 0xFF9296A2);
+            float dx = x - (distanceWidth + armorWidth
+                    + (armored ? 4f * density : 0f)) * 0.5f + distanceWidth * 0.5f;
+            canvas.drawText(distanceText, dx, distBaseline, distancePaint);
+            if (armored) {
+                float ax = dx + distanceWidth * 0.5f + 4f * density;
+                float ay = distBaseline - distancePaint.getTextSize() * 0.72f;
+                accentPaint.setStyle(Paint.Style.FILL);
+                accentPaint.setColor(accent);
+                canvas.drawRoundRect(ax, ay, ax + 6f * density,
+                        ay + 6f * density, 1.5f * density, 1.5f * density, accentPaint);
+                accentPaint.setStyle(Paint.Style.STROKE);
             }
         }
     }

@@ -15,7 +15,17 @@ namespace aimbot {
 struct NameTagLabel {
   float x = 0.0f;
   float y = 0.0f;
+  float distance = 0.0f;
+  bool armored = false;
   std::string name;
+};
+
+struct EspBoxLabel {
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 0.0f;
+  float height = 0.0f;
+  uint32_t color = 0xFFFFFFFFu;
 };
 
 struct TargetEspState {
@@ -44,6 +54,9 @@ public:
   void setMobColor(uint32_t argb);
   void setArmoredColor(uint32_t argb);
   void setArmorColors(bool enabled);
+  void setEspBoxStyle(int style);
+  int getEspBoxStyle() const;
+  std::vector<EspBoxLabel> copyEspBoxes() const;
 
   // Name Tags: экранные координаты считает native (game thread), Java
   // overlay только рисует готовые подписи.
@@ -68,6 +81,8 @@ private:
 
   void updateNameTags(void *player, uintptr_t playerRenderer,
                       const float camera[3]);
+  void updateEspBoxes(void *player, uintptr_t playerRenderer,
+                      const float camera[3]);
   void updateTargetEsp(void *player, uintptr_t playerRenderer,
                        const float camera[3]);
   std::string actorName(void *actor, std::chrono::steady_clock::time_point now);
@@ -83,6 +98,7 @@ private:
   std::atomic<uint32_t> m_mobColor{0xFFFFAA00u};
   std::atomic<uint32_t> m_armoredColor{0xFF4E83FFu};
   std::atomic<bool> m_armorColors{true};
+  std::atomic<int> m_espBoxStyle{0};
   std::atomic<bool> m_nameTags{true};
   std::atomic<float> m_surfaceWidth{0.0f};
   std::atomic<float> m_surfaceHeight{0.0f};
@@ -90,6 +106,8 @@ private:
   std::chrono::steady_clock::time_point m_lastLog{};
   mutable std::mutex m_nameMutex;
   std::vector<NameTagLabel> m_nameSnapshot;
+  mutable std::mutex m_boxMutex;
+  std::vector<EspBoxLabel> m_boxSnapshot;
   std::atomic<bool> m_targetEsp{false};
   std::atomic<int> m_targetEspHoldMs{650};
   mutable std::mutex m_targetMutex;

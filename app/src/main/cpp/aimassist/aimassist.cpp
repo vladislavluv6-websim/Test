@@ -348,6 +348,44 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetArmorColors
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetEspBoxStyle(
+    JNIEnv *, jclass, jint style) {
+  aimbot::Esp::instance().setEspBoxStyle(style);
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetEspBoxes(
+    JNIEnv *env, jclass) {
+  const std::vector<aimbot::EspBoxLabel> boxes =
+      aimbot::Esp::instance().copyEspBoxes();
+  if (boxes.empty() || !env) return nullptr;
+
+  jclass stringClass = env->FindClass("java/lang/String");
+  if (!stringClass) return nullptr;
+
+  jobjectArray result =
+      env->NewObjectArray(static_cast<jsize>(boxes.size()), stringClass, nullptr);
+  if (!result) {
+    env->DeleteLocalRef(stringClass);
+    return nullptr;
+  }
+
+  for (size_t i = 0; i < boxes.size(); ++i) {
+    char entry[96]{};
+    std::snprintf(entry, sizeof(entry), "%.1f\t%.1f\t%.1f\t%.1f\t%u",
+                  boxes[i].x, boxes[i].y, boxes[i].width, boxes[i].height,
+                  static_cast<unsigned>(boxes[i].color));
+    jstring item = env->NewStringUTF(entry);
+    if (item) {
+      env->SetObjectArrayElement(result, static_cast<jsize>(i), item);
+      env->DeleteLocalRef(item);
+    }
+  }
+  env->DeleteLocalRef(stringClass);
+  return result;
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetNameTags(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::Esp::instance().setNameTags(enabled == JNI_TRUE);
@@ -377,9 +415,10 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetNameTags(
   }
 
   for (size_t i = 0; i < labels.size(); ++i) {
-    char coordinates[32]{};
-    std::snprintf(coordinates, sizeof(coordinates), "%.1f	%.1f	",
-                  labels[i].x, labels[i].y);
+    char coordinates[64]{};
+    std::snprintf(coordinates, sizeof(coordinates), "%.1f	%.1f	%.1f	%d	",
+                  labels[i].x, labels[i].y, labels[i].distance,
+                  labels[i].armored ? 1 : 0);
     const std::string entry = std::string(coordinates) + labels[i].name;
     jstring item = env->NewStringUTF(entry.c_str());
     if (item) {

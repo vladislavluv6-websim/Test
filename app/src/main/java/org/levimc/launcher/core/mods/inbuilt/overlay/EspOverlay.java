@@ -19,6 +19,7 @@ public class EspOverlay extends BaseOverlayButton {
     private boolean isActive = false;
     private boolean wantActive = false;
     private boolean initPending = false;
+    private EspBoxesOverlay boxesOverlay;
 
     public EspOverlay(Activity activity) {
         super(activity);
@@ -44,6 +45,7 @@ public class EspOverlay extends BaseOverlayButton {
         EspMod.setMobColor(manager.getEspMobColor());
         EspMod.setArmorColors(manager.isEspArmorColors());
         EspMod.setArmoredColor(manager.getEspArmoredColor());
+        EspMod.setEspBoxStyle(manager.getEspBoxStyle());
     }
 
     // Native init сканирует libminecraftpe.so несколько секунд, поэтому
@@ -58,6 +60,7 @@ public class EspOverlay extends BaseOverlayButton {
             if (ok && EspMod.setEnabled(true)) {
                 applyNativeSettings(InbuiltModManager.getInstance(activity));
                 isActive = true;
+                syncBoxOverlay();
             } else {
                 isActive = false;
                 wantActive = false;
@@ -102,6 +105,10 @@ public class EspOverlay extends BaseOverlayButton {
         EspMod.setEnabled(false);
         isActive = false;
         updateButtonState(false);
+        if (boxesOverlay != null) {
+            boxesOverlay.hide();
+            boxesOverlay = null;
+        }
     }
 
     private void updateButtonState(boolean active) {
@@ -114,11 +121,27 @@ public class EspOverlay extends BaseOverlayButton {
         }
     }
 
+    private void syncBoxOverlay() {
+        int style = InbuiltModManager.getInstance(activity).getEspBoxStyle();
+        if (isActive && style > 0) {
+            if (boxesOverlay == null) {
+                boxesOverlay = new EspBoxesOverlay(activity);
+                boxesOverlay.show();
+            }
+            boxesOverlay.setModuleEnabled(true);
+            boxesOverlay.applyConfigurationChanges();
+        } else if (boxesOverlay != null) {
+            boxesOverlay.hide();
+            boxesOverlay = null;
+        }
+    }
+
     @Override
     public void applyConfigurationChanges() {
         super.applyConfigurationChanges();
         if (isActive) {
             applyNativeSettings(InbuiltModManager.getInstance(activity));
+            syncBoxOverlay();
         }
     }
 
@@ -129,6 +152,10 @@ public class EspOverlay extends BaseOverlayButton {
             EspMod.setEnabled(false);
             isActive = false;
             updateButtonState(false);
+        }
+        if (boxesOverlay != null) {
+            boxesOverlay.hide();
+            boxesOverlay = null;
         }
         super.hide();
     }
@@ -150,6 +177,10 @@ public class EspOverlay extends BaseOverlayButton {
             EspMod.setEnabled(false);
             isActive = false;
             updateButtonState(false);
+        }
+        if (boxesOverlay != null) {
+            boxesOverlay.hide();
+            boxesOverlay = null;
         }
     }
 }

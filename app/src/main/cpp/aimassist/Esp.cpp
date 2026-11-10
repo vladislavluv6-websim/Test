@@ -614,6 +614,18 @@ void Esp::setArmorColors(bool enabled) {
   m_armorColors.store(enabled, std::memory_order_relaxed);
 }
 
+void Esp::setEspBoxStyle(int style) {
+  m_espBoxStyle.store(std::clamp(style, 0, 4), std::memory_order_release);
+}
+
+int Esp::getEspBoxStyle() const {
+  return m_espBoxStyle.load(std::memory_order_acquire);
+}
+
+std::vector<EspBoxLabel> Esp::copyEspBoxes() const {
+  std::lock_guard<std::mutex> lock(m_boxMutex);
+  return m_boxSnapshot;
+}
 
 void Esp::setNameTags(bool enabled) {
   m_nameTags.store(enabled, std::memory_order_release);
@@ -772,13 +784,120 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
 
       std::string name = actorName(actor, now);
       if (name.empty()) continue;
-      labels.push_back({labelX, labelY, std::move(name)});
+      const bool armored = gameecs::hasArmor(actor);
+      labels.push_back({labelX, labelY, depth, armored, std::move(name)});
       if (labels.size() >= 256) break;
     }
   }
 
   std::lock_guard<std::mutex> lock(m_nameMutex);
   m_nameSnapshot = std::move(labels);
+}
+
+void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
+                         const float camera[3]) {
+  std::vector<EspBoxLabel> boxes;
+
+  const float width = m_surfaceWidth.load(std::memory_order_relaxed);
+  const float height = m_surfaceHeight.load(std::memory_order_relaxed);
+  ViewAngles view{};
+  if (width <= 1.0f || height <= 1.0f ||
+      !m_bridge.getViewAngles(player, view)) {
+    std::lock_guard<std::mutex> lock(m_boxMutex);
+    m_boxSnapshot = std::move(boxes);
+    return;
+  }
+
+  const float aspect = width / height;
+  float fovY = 0.0f;
+  const float liveFov = g_worldFovDeg.load(std::memory_order_relaxed);
+  if (std::isfinite(liveFov) && liveFov > 1.0f && liveFov < 179.0f) {
+    fovY = liveFov * 0.01745329252f;
+  }
+  if (fovY <= 0.0f) {
+    const uintptr_t client =
+        reinterpret_cast<uintptr_t>(m_bridge.getClientInstance());
+    if (!readFovY(client, offsets::kClientInstanceFovX,
+                  offsets::kClientInstanceFovY, aspect, fovY) &&
+        !readFovY(playerRenderer, offsets::kLevelRendererPlayerFovX,
+                  offsets::kLevelRendererPlayerFovY, aspect, fovY)) {
+      fovY = 70.0f * 0.01745329252f;
+    }
+  }
+
+  const float pitch = view.pitch * 0.01745329252f;
+  const float yaw = view.yaw * 0.01745329252f;
+  const float sy = std::sin(yaw);
+  const float cy = std::cos(yaw);
+  const float sp = std::sin(pitch);
+  const float cp = std::cos(pitch);
+
+  const float fx = -sy * cp;
+  const float fy = -sp;
+  const float fz = cy * cp;
+  const float rx = -cy;
+  const float rz = -sy;
+  const float ux = -rz * fy;
+  const float uy = rz * fx - rx * fz;
+  const float uz = rx * fy;
+  const float focal = (height * 0.5f) / std::tan(fovY * 0.5f);
+
+  const bool showPlayers = m_showPlayers.load(std::memory_order_relaxed);
+  const bool showMobs = m_showMobs.load(std::memory_order_relaxed);
+  const bool armorColors = m_armorColors.load(std::memory_order_relaxed);
+  const uint32_t playerColor = m_playerColor.load(std::memory_order_relaxed);
+  const uint32_t mobColor = m_mobColor.load(std::memory_order_relaxed);
+  const uint32_t armoredColor = m_armoredColor.load(std::memory_order_relaxed);
+
+  for (void *actor : m_actors) {
+    if (!actor || actor == player) continue;
+    const bool isPlayer = m_bridge.isPlayer(actor);
+    if (isPlayer ? !showPlayers : !showMobs) continue;
+
+    Aabb bounds{};
+    if (!m_bridge.getActorBounds(actor, bounds)) continue;
+
+    float minX = 1e9f;
+    float minY = 1e9f;
+    float maxX = -1e9f;
+    float maxY = -1e9f;
+    bool anyBehind = false;
+    for (int corner = 0; corner < 8; ++corner) {
+      const float px = (corner & 1) ? bounds.max.x : bounds.min.x;
+      const float py = (corner & 2) ? bounds.max.y : bounds.min.y;
+      const float pz = (corner & 4) ? bounds.max.z : bounds.min.z;
+      const float dx = px - camera[0];
+      const float dy = py - camera[1];
+      const float dz = pz - camera[2];
+      const float depth = dx * fx + dy * fy + dz * fz;
+      if (depth <= 0.15f) {
+        anyBehind = true;
+        break;
+      }
+      const float right = dx * rx + dz * rz;
+      const float up = dx * ux + dy * uy + dz * uz;
+      const float sx = width * 0.5f + (right / depth) * focal;
+      const float sy2 = height * 0.5f - (up / depth) * focal;
+      minX = std::min(minX, sx);
+      minY = std::min(minY, sy2);
+      maxX = std::max(maxX, sx);
+      maxY = std::max(maxY, sy2);
+    }
+    if (anyBehind || minX >= maxX || minY >= maxY) continue;
+    if (maxX < -32.0f || minX > width + 32.0f ||
+        maxY < -32.0f || minY > height + 32.0f) {
+      continue;
+    }
+    const uint32_t color =
+        (isPlayer && armorColors && gameecs::hasArmor(actor))
+            ? armoredColor
+            : (isPlayer ? playerColor : mobColor);
+    boxes.push_back({minX, minY, maxX - minX, maxY - minY, color});
+    if (boxes.size() >= 256) break;
+  }
+
+  std::lock_guard<std::mutex> lock(m_boxMutex);
+  m_boxSnapshot = std::move(boxes);
 }
 
 void Esp::updateTargetEsp(void *player, uintptr_t playerRenderer,
@@ -905,6 +1024,8 @@ void Esp::render(void *levelRenderer, void *screenContext) {
   const bool showMobs = m_showMobs.load(std::memory_order_relaxed);
   const bool nameTags = m_nameTags.load(std::memory_order_relaxed);
   const bool targetEsp = m_targetEsp.load(std::memory_order_relaxed);
+  const int boxStyle = m_espBoxStyle.load(std::memory_order_relaxed);
+  const bool javaBoxes = boxStyle > 0;
   if (!espBoxes && !nameTags && !targetEsp) return;
   if (espBoxes && !showPlayers && !showMobs && !nameTags && !targetEsp) return;
 
@@ -933,8 +1054,9 @@ void Esp::render(void *levelRenderer, void *screenContext) {
   m_bridge.fillNearbyActors(player, scanRange, m_actors);
 
   if (nameTags) updateNameTags(player, playerRenderer, camera);
+  if (espBoxes && javaBoxes) updateEspBoxes(player, playerRenderer, camera);
   if (targetEsp) updateTargetEsp(player, playerRenderer, camera);
-  if (!espBoxes) return;
+  if (!espBoxes || javaBoxes) return;
 
   if (!mem::isPlausiblePointer(reinterpret_cast<uintptr_t>(screenContext))) {
     return;

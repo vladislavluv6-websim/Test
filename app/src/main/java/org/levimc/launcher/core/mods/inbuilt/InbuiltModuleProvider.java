@@ -72,6 +72,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String CFG_ESP_SHOW_MOBS = "esp_show_mobs";
     private static final String CFG_ESP_RANGE = "esp_range";
+    private static final String CFG_ESP_BOX_STYLE = "esp_box_style";
     private static final String CFG_ESP_PLAYER_COLOR = "esp_player_color";
     private static final String CFG_ESP_MOB_COLOR = "esp_mob_color";
     private static final String CFG_ESP_ARMOR_COLORS = "esp_armor_colors";
@@ -667,6 +668,17 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "32", "4", "512",
                     String.valueOf(manager.getEspRange())));
+            configs.add(config(CFG_ESP_BOX_STYLE,
+                    context.getString(R.string.mod_config_esp_box_style),
+                    UnifiedMod.ConfigType.RADIO,
+                    "0",
+                    context.getString(R.string.mod_config_esp_box_3d) + ","
+                            + context.getString(R.string.mod_config_esp_box_2d) + ","
+                            + context.getString(R.string.mod_config_esp_box_corners) + ","
+                            + context.getString(R.string.mod_config_esp_box_glow) + ","
+                            + context.getString(R.string.mod_config_esp_box_filled),
+                    "",
+                    String.valueOf(manager.getEspBoxStyle())));
             configs.add(config(CFG_ESP_SHOW_PLAYERS,
                     context.getString(R.string.mod_config_esp_players),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -1060,6 +1072,10 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_ESP_RANGE:
                 manager.setEspRange(parseInt(value, manager.getEspRange()));
+                break;
+            case CFG_ESP_BOX_STYLE:
+                manager.setEspBoxStyle(parseInt(value, manager.getEspBoxStyle()));
+                EspMod.setEspBoxStyle(manager.getEspBoxStyle());
                 break;
             case CFG_ESP_SHOW_PLAYERS:
                 manager.setEspShowPlayers(parseBoolean(value));

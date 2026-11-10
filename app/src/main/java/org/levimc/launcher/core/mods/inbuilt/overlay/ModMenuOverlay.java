@@ -126,7 +126,7 @@ public class ModMenuOverlay {
     private boolean updatingHudButtonSize = false;
     private boolean compactMode = false;
     private GridLayoutManager modsLayoutManager;
-    private SolsticeModulesView solsticeView;
+    private NeverloseModulesView solsticeView;
     
     private List<UnifiedMod> allMods = new ArrayList<>();
     private List<UnifiedMod> filteredMods = new ArrayList<>();
@@ -348,7 +348,7 @@ public class ModMenuOverlay {
         searchInput = overlayView.findViewById(R.id.search_input);
         clearSearchBtn = overlayView.findViewById(R.id.btn_clear_search);
         modsRecycler = overlayView.findViewById(R.id.mods_grid_recycler);
-        solsticeView = overlayView.findViewById(R.id.solstice_modules);
+        solsticeView = overlayView.findViewById(R.id.neverlose_modules);
         navModules = overlayView.findViewById(R.id.nav_modules);
         navSettings = overlayView.findViewById(R.id.nav_settings);
         navHudEditor = overlayView.findViewById(R.id.nav_hud_editor);
@@ -605,7 +605,7 @@ public class ModMenuOverlay {
         });
         modsRecycler.setAdapter(adapter);
         if (solsticeView != null) {
-            solsticeView.setListener(new SolsticeModulesView.Listener() {
+            solsticeView.setListener(new NeverloseModulesView.Listener() {
                 @Override
                 public void onToggle(UnifiedMod mod, boolean enabled) {
                     InbuiltModManager modManager = InbuiltModManager.getInstance(activity);
@@ -623,19 +623,6 @@ public class ModMenuOverlay {
                 @Override
                 public void onConfig(UnifiedMod mod) {
                     showConfigSection(mod);
-                }
-
-                @Override
-                public void onFavorite(UnifiedMod mod, boolean favorite) {
-                    InbuiltModManager.getInstance(activity).setModFavorite(mod.getStableKey(), favorite);
-                    if (favorite) {
-                        favoriteKeys.add(mod.getStableKey());
-                    } else {
-                        favoriteKeys.remove(mod.getStableKey());
-                    }
-                    if (activeFilter == ModuleFilter.FAVORITES) {
-                        applyFilters();
-                    }
                 }
             });
         }
@@ -1160,7 +1147,7 @@ public class ModMenuOverlay {
             detailsPanel.setLayoutParams(params);
         }
         if (navCategories != null) {
-            navCategories.setVisibility(compact ? View.GONE : View.VISIBLE);
+            navCategories.setVisibility(View.GONE);
         }
 
         if (modsRecycler != null) {
@@ -1198,13 +1185,10 @@ public class ModMenuOverlay {
     }
 
     private void updateFilterBarVisibility() {
-        boolean modulesVisible = activeSection == MenuSection.MODULES;
-        if (filterBar != null) {
-            filterBar.setVisibility(modulesVisible && !compactMode ? View.VISIBLE : View.GONE);
-        }
-        if (compactFilterBar != null) {
-            compactFilterBar.setVisibility(modulesVisible && compactMode ? View.VISIBLE : View.GONE);
-        }
+        // Neverlose board keeps every module on one canvas; filter chips and
+        // category pages would split it up again, so both stay hidden.
+        if (filterBar != null) filterBar.setVisibility(View.GONE);
+        if (compactFilterBar != null) compactFilterBar.setVisibility(View.GONE);
     }
 
     private void updateCompactFilterSelector() {
@@ -1322,42 +1306,8 @@ public class ModMenuOverlay {
     }
 
     private void rebuildCategories() {
-        if (navCategories == null || overlayView == null) return;
-        // Keep already created views, only update visibility of empty categories.
-        java.util.Set<String> present = new java.util.HashSet<>();
-        for (UnifiedMod mod : allMods) {
-            present.add(categoryKeyFor(mod));
-        }
-        if (categoryNavViews.isEmpty()) {
-            for (int i = 0; i < CATEGORY_KEYS.length; i++) {
-                final String key = CATEGORY_KEYS[i];
-                TextView item = new TextView(activity);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(40));
-                lp.topMargin = dp(3);
-                item.setLayoutParams(lp);
-                item.setGravity(Gravity.CENTER_VERTICAL);
-                item.setSingleLine(true);
-                item.setPadding(dp(12), 0, dp(8), 0);
-                item.setTextSize(13);
-                item.setAutoSizeTextTypeUniformWithConfiguration(10, 13, 1,
-                    android.util.TypedValue.COMPLEX_UNIT_SP);
-                item.setText(CATEGORY_LABELS[i]);
-                item.setCompoundDrawablesWithIntrinsicBounds(CATEGORY_ICONS[i], 0, 0, 0);
-                item.setCompoundDrawablePadding(dp(9));
-                item.setBackgroundResource(R.drawable.bg_zenix_nav);
-                item.setOnClickListener(v -> selectCategory(key));
-                categoryNavViews.put(key, item);
-                navCategories.addView(item);
-            }
-        }
-        for (int i = 0; i < CATEGORY_KEYS.length; i++) {
-            TextView item = categoryNavViews.get(CATEGORY_KEYS[i]);
-            if (item != null) {
-                item.setVisibility(present.contains(CATEGORY_KEYS[i]) ? View.VISIBLE : View.GONE);
-            }
-        }
-        updateCategorySelection();
+        if (navCategories != null) navCategories.setVisibility(View.GONE);
+        return;
     }
 
     private void selectCategory(String key) {

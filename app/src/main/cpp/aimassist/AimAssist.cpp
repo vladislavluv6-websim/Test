@@ -1363,14 +1363,13 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
                       m_bridge.getGameMode());
     }
   }
-  if (settings.onlyCrit) {
-    // Critical hits require the server to see a non-sprinting player on the
-    // attack tick: drop the local sprint request and arm the packet window.
-    combatstate::suppressSprint(120);
-    if (player) {
-      gameecs::setMoveSprinting(player, false);
-      gameecs::setSprintingFlag(player, false);
-    }
+  // TriggerBot always resets sprint on the attack tick, even when the player
+  // is running. Critical hits need a non-sprinting server state, and keeping
+  // the reset unconditional avoids a sprinting hit packet after a chase.
+  combatstate::suppressSprint(120);
+  if (player) {
+    gameecs::setMoveSprinting(player, false);
+    gameecs::setSprintingFlag(player, false);
   }
 
   if (m_bridge.attackActor(bestActor, hitPoint)) {

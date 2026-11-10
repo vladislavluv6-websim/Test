@@ -61,6 +61,7 @@ public class InbuiltModManager {
     private static final String KEY_ESP_MOB_COLOR = "esp_mob_color";
     private static final String KEY_ESP_ARMOR_COLORS = "esp_armor_colors";
     private static final String KEY_ESP_ARMORED_COLOR = "esp_armored_color";
+    private static final String KEY_ESP_BOX_STYLE = "esp_box_style";
     private static final String KEY_TARGET_ESP_STYLE = "target_esp_style";
     private static final String KEY_NAME_TAG_STYLE = "name_tag_style";
     private static final String KEY_NAME_TAG_COLOR = "name_tag_color";
@@ -165,6 +166,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_ESP_RANGE = 32;
     private static final int DEFAULT_ESP_PLAYER_COLOR = 0xFFFF5555;
     private static final int DEFAULT_ESP_MOB_COLOR = 0xFFFFAA00;
+    private static final int DEFAULT_ESP_BOX_STYLE = 0;
     private static final int DEFAULT_TARGET_ESP_STYLE = 0;
     private static final int DEFAULT_TARGET_ESP_COLOR = 0xFF4E83FF;
     private static final int DEFAULT_TARGET_ESP_HOLD = 650;
@@ -620,6 +622,16 @@ public class InbuiltModManager {
 
     public void setEspArmoredColor(int argb) {
         prefs.edit().putInt(KEY_ESP_ARMORED_COLOR, argb).apply();
+    }
+
+    public int getEspBoxStyle() {
+        return Math.max(0, Math.min(4,
+                prefs.getInt(KEY_ESP_BOX_STYLE, DEFAULT_ESP_BOX_STYLE)));
+    }
+
+    public void setEspBoxStyle(int style) {
+        prefs.edit().putInt(KEY_ESP_BOX_STYLE,
+                Math.max(0, Math.min(4, style))).apply();
     }
 
     public boolean isNameTagsEnabled() {

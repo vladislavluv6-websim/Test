@@ -77,6 +77,14 @@ public final class EspMod {
         if (initialized) nativeSetArmorColors(enabled);
     }
 
+    public static void setEspBoxStyle(int style) {
+        if (initialized) nativeSetEspBoxStyle(style);
+    }
+
+    public static String[] getEspBoxes() {
+        return initialized ? nativeGetEspBoxes() : null;
+    }
+
     public static void setNameTags(boolean enabled) {
         if (initialized) nativeSetNameTags(enabled);
     }
@@ -114,6 +122,8 @@ public final class EspMod {
     private static native void nativeSetMobColor(int argb);
     private static native void nativeSetArmoredColor(int argb);
     private static native void nativeSetArmorColors(boolean enabled);
+    private static native void nativeSetEspBoxStyle(int style);
+    private static native String[] nativeGetEspBoxes();
     private static native void nativeSetNameTags(boolean enabled);
     private static native void nativeSetNameTagScreenSize(float width, float height);
     private static native String[] nativeGetNameTags();
