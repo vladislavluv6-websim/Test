@@ -392,6 +392,13 @@ private:
   // Fast aim сам вызывает applyTurnDelta; внешний onTick не должен
   // применять тот же шаг второй раз.
   bool m_fastAimTurnApplied = false;
+  // Random per-engagement profile for Fast aim (stealth mode): never reuse
+  // the same time constant / speed / settle radius, otherwise ML heuristics
+  // see a deterministic motor pattern across fights.
+  float m_fastTimeScale = 1.0f;
+  float m_fastSpeedScale = 0.85f;
+  float m_fastGain = 1.0f;
+  float m_fastSettleDeg = 0.22f;
 
   mutable Vec3 m_eye{};
   std::minstd_rand m_rng{0x5EED1234u};

@@ -144,6 +144,11 @@ void AimAssist::onEnable() {
   m_fallingSinceMs = 0;
   resetHumanProfile();
   m_fastAimTurnApplied = false;
+  // Per-session reseed: a fixed seed gives an identical noise trace every
+  // launch, which is easy for server-side ML to fingerprint.
+  m_rng.seed(static_cast<std::minstd_rand::result_type>(
+      std::chrono::steady_clock::now().time_since_epoch().count() ^
+      reinterpret_cast<uintptr_t>(this)));
   m_onTarget.store(false, std::memory_order_release);
   // Release-публикация после сброса состояния: render-поток увидит
   // согласованные поля, а не полу-инициализированные.
@@ -646,11 +651,7 @@ void AimAssist::updateVisual(float dt) {
   // Fast aim: без человеческого профиля, EMA позиции, шума, overshoot,
   // мёртвой зоны и сетевого бюджета. Чистая экспонента + лимит скорости.
   if (settings.fastAim) {
-    m_lastAimActor = m_target.actor;
     m_targetLockMs = aimNow;
-    m_aimEngageAtMs = 0;
-    m_velYaw = 0.0f;
-    m_velPitch = 0.0f;
     m_fastAimTurnApplied = false;
     const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
     const float beforePitch = m_localPitch.load(std::memory_order_relaxed);
@@ -910,12 +911,16 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
 
   // Жёсткий конус захвата даже при FOV=360. Развороты на 90-180° —
   // самый явный маркер aimbot/aimassist для серверных эвристик.
-  // Fast aim игнорирует конус анти-чита: цель всегда ближайшая.
-  const float assistFov = settings.fastAim
-      ? 360.0f
-      : (settings.antiCheatMode
-             ? std::min(settings.fovDeg, settings.assistConeDeg)
-             : settings.fovDeg);
+  // Fast aim с anti-cheat профилем не разворачивается за спину: снапы
+  // на 90-180° — первый маркер rotation-check'ов. Без профиля — 360°.
+  const float assistFov =
+      settings.fastAim
+          ? (settings.antiCheatMode
+                 ? std::max(60.0f, settings.assistConeDeg)
+                 : 360.0f)
+          : (settings.antiCheatMode
+                 ? std::min(settings.fovDeg, settings.assistConeDeg)
+                 : settings.fovDeg);
 
   Target current = m_target;
   bool currentStillValid = false;
@@ -1241,6 +1246,18 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   if (now - m_triggerSinceMs < effectiveDelay) return;
   if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
 
+  // Не бьём в кадре быстрого довода. Polar/ML смотрят не только на угол
+  // прицела, но и на угловую скорость в момент удара: удар на 20-30°/тик
+  // выглядит как killaura даже при идеальном попадании.
+  if (settings.antiCheatMode) {
+    const float attackSpeedLimit =
+        std::max(14.0f, settings.sustainedTickDeltaDeg);
+    if (m_prevTickDeltaDeg > attackSpeedLimit) {
+      m_nextAttackAtMs = now + 45;
+      return;
+    }
+  }
+
   // Не бьём сразу после смены цели и иногда «промахиваемся» (не жмём).
   if (settings.humanize && !settings.onlyCrit) {
     if (m_lastSwitchMs != 0 && now - m_lastSwitchMs < 120) return;
@@ -1283,10 +1300,13 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
             1.0f);
         netAngle = std::acos(dot) * kRadToDeg;
       }
-      const float guardTolerance =
-          settings.onlyCrit
-              ? std::max(settings.serverViewToleranceDeg, 18.0f)
-              : settings.serverViewToleranceDeg;
+      float guardTolerance = settings.serverViewToleranceDeg;
+      if (settings.onlyCrit) {
+        guardTolerance = std::max(guardTolerance, 18.0f);
+      } else if (settings.antiCheatMode && settings.fastAim) {
+        // В Fast aim серверная ротация должна почти совпадать с ударом.
+        guardTolerance = std::min(guardTolerance, 4.0f);
+      }
       if (netAngle > guardTolerance) {
         m_serverViewSinceMs = 0;
         m_nextAttackAtMs = now + 40;
@@ -1418,56 +1438,173 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
   const float h = dt;
 
   // ------------------------------------------------------------
-  // Fast aim: чистая экспонента, без шума/overshoot/deadzone/бюджета.
-  // step = err * (1 - exp(-dt*1000/timeMs)), затем limit по скорости.
+  // Fast aim.
+  //
+  // antiCheatMode=false: прежняя чистая экспонента (быстро, но палевно).
+  // antiCheatMode=true: быстрый довод внутри человеческого конверта —
+  // случайный профиль на каждый бой, разгон с ограничением ускорения,
+  // OU-шум/смещение точки, бюджет поворота на серверный тик и пауза
+  // реакции. Это не «гарантия обхода» ML: серверные модели ловят саму
+  // статистику идеального трекинга, поэтому профиль рандомизирован.
   // ------------------------------------------------------------
   if (settings.fastAim) {
     const float curYaw = m_localYaw.load(std::memory_order_relaxed);
     const float curPitch = m_localPitch.load(std::memory_order_relaxed);
-
-    // dt зажимаем строго в [0.001, 0.05], чтобы exp не давал скачки
-    // на первом кадре после лага.
     const float fastDt = clampf(dt, 0.001f, 0.05f);
-    const float timeMs = clampf(settings.fastAimTimeMs, 20.0f, 200.0f);
-    const float alpha =
-        1.0f - std::exp(-fastDt * 1000.0f / timeMs);
+    const float now = static_cast<float>(nowMs());
 
-    float errYaw = shortestDelta(curYaw, targetYaw);
-    float errPitch = targetPitch - curPitch;
+    if (!settings.antiCheatMode) {
+      const float timeMs = clampf(settings.fastAimTimeMs, 20.0f, 200.0f);
+      const float alpha = 1.0f - std::exp(-fastDt * 1000.0f / timeMs);
+      float errYaw = shortestDelta(curYaw, targetYaw);
+      float errPitch = targetPitch - curPitch;
+      const float errMag =
+          std::sqrt(errYaw * errYaw + errPitch * errPitch);
+      float stepYaw = errYaw * alpha;
+      float stepPitch = errPitch * alpha;
+      const float maxSpeed =
+          clampf(settings.fastAimMaxSpeed, 120.0f, 4000.0f);
+      const float maxStep = maxSpeed * fastDt;
+      const float stepMag =
+          std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
+      if (stepMag > maxStep && stepMag > 1e-6f) {
+        const float scale = maxStep / stepMag;
+        stepYaw *= scale;
+        stepPitch *= scale;
+      }
+      if (errMag < 0.05f) {
+        stepYaw = errYaw;
+        stepPitch = errPitch;
+      }
+      const float newYaw = normalizeYaw(curYaw + stepYaw);
+      const float newPitch = clampf(curPitch + stepPitch, -89.9f, 89.9f);
+      m_localYaw.store(newYaw, std::memory_order_relaxed);
+      m_localPitch.store(newPitch, std::memory_order_relaxed);
+      m_lastDelta = errMag;
+      m_lastFactor = 1.0f;
+      m_lastDt = fastDt;
+      m_deadzoneHit = false;
+      void *rawPlayer = m_bridge.getLocalPlayer();
+      if (rawPlayer && (std::fabs(stepYaw) > 0.00005f ||
+                        std::fabs(stepPitch) > 0.00005f)) {
+        m_bridge.applyTurnDelta(rawPlayer, -stepPitch, stepYaw);
+        m_fastAimTurnApplied = true;
+      }
+      return;
+    }
+
+    // Новый бой — новый моторный профиль. Одинаковые tau/скорость/радиус
+    // покоя от боя к бою — готовый признак для ML-классификатора.
+    if (m_lastAimActor != m_target.actor) {
+      m_lastAimActor = m_target.actor;
+      resetHumanProfile();
+      m_fastTimeScale = randomFloat(0.82f, 1.22f);
+      m_fastSpeedScale = randomFloat(0.72f, 0.95f);
+      m_fastGain = randomFloat(0.85f, 1.15f);
+      m_fastSettleDeg = randomFloat(0.14f, 0.30f);
+      m_velYaw = 0.0f;
+      m_velPitch = 0.0f;
+      m_overYaw = 0.0f;
+      m_overPitch = 0.0f;
+      m_flickTicksLeft =
+          std::max(m_flickTicksLeft, settings.flickTickBudget);
+      int reaction = 0;
+      if (settings.humanize) {
+        reaction = static_cast<int>(
+            std::max(0.0f, settings.reactionDelayMs));
+        if (settings.reactionJitterMs > 0.0f) {
+          reaction += randomInt(
+              0, static_cast<int>(settings.reactionJitterMs));
+        }
+      }
+      m_aimEngageAtMs = nowMs() + reaction;
+    }
+    if (settings.humanize && now < static_cast<float>(m_aimEngageAtMs)) {
+      m_velYaw *= 0.7f;
+      m_velPitch *= 0.7f;
+      return;
+    }
+
+    // Медленный OU-шум и блуждающая точка покоя: камера не стоит
+    // математически точно в центре хитбокса и не описывает идеальную
+    // прямую/экспоненту, которую ловят Polar/ML.
+    updateHumanProfile(settings, fastDt, nowMs());
+    const float aimYaw =
+        normalizeYaw(targetYaw + m_restYaw + m_noiseYaw);
+    const float aimPitch = clampf(
+        targetPitch + m_restPitch + m_noisePitch, -89.9f, 89.9f);
+
+    float errYaw = shortestDelta(curYaw, aimYaw);
+    float errPitch = aimPitch - curPitch;
     const float errMag = std::sqrt(errYaw * errYaw + errPitch * errPitch);
 
-    float stepYaw = errYaw * alpha;
-    float stepPitch = errPitch * alpha;
+    const float timeMs = clampf(settings.fastAimTimeMs * m_fastTimeScale,
+                                20.0f, 240.0f);
+    const float tau = std::max(0.020f, timeMs / 1000.0f);
+    const float motor = clampf(m_motorScale, 0.72f, 1.28f);
+    float desiredYaw = (errYaw / tau) * m_fastGain * motor;
+    float desiredPitch = (errPitch / tau) * m_fastGain * motor;
 
-    // Лимит длины шага: сохраняем направление, режем модуль.
-    const float maxSpeed = clampf(settings.fastAimMaxSpeed, 120.0f, 4000.0f);
-    const float maxStep = maxSpeed * fastDt;
-    const float stepMag = std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
-    if (stepMag > maxStep && stepMag > 1e-6f) {
-      const float scale = maxStep / stepMag;
-      stepYaw *= scale;
-      stepPitch *= scale;
+    const float maxSpeed =
+        clampf(settings.fastAimMaxSpeed * m_fastSpeedScale, 300.0f, 1200.0f);
+    const float desiredMag =
+        std::sqrt(desiredYaw * desiredYaw + desiredPitch * desiredPitch);
+    if (desiredMag > maxSpeed && desiredMag > 1e-6f) {
+      const float scale = maxSpeed / desiredMag;
+      desiredYaw *= scale;
+      desiredPitch *= scale;
     }
 
-    // Доводим остаток точно, чтобы не «зудеть» у нуля.
-    if (errMag < 0.05f) {
+    // Радиус покоя: не доводим до нуля, у живой руки есть мёртвая зона.
+    if (errMag < m_fastSettleDeg) {
+      desiredYaw = 0.0f;
+      desiredPitch = 0.0f;
+    }
+
+    // Ограничение ускорения: убирает мгновенный выход на максимальную
+    // скорость и «ступеньки» угловой скорости между тиками.
+    const float maxAccel =
+        clampf(settings.maxAccelDegPerSecond2, 1800.0f, 6500.0f) *
+        clampf(m_fatigueScale, 0.75f, 1.0f);
+    const float dv = maxAccel * fastDt;
+    m_velYaw += clampf(desiredYaw - m_velYaw, -dv, dv);
+    m_velPitch += clampf(desiredPitch - m_velPitch, -dv, dv);
+
+    float stepYaw = m_velYaw * fastDt;
+    float stepPitch = m_velPitch * fastDt;
+
+    // Не проскакиваем точку: иначе получаем звенящую микрокоррекцию.
+    if (std::fabs(stepYaw) > std::fabs(errYaw)) {
       stepYaw = errYaw;
-      stepPitch = errPitch;
+      m_velYaw = 0.0f;
     }
+    if (std::fabs(stepPitch) > std::fabs(errPitch)) {
+      stepPitch = errPitch;
+      m_velPitch = 0.0f;
+    }
+
+    // То, что реально увидит сервер в PlayerAuthInput 20 Гц: суммарный
+    // поворот за тик, прирост скорости и короткое окно флика.
+    applyTickBudget(stepYaw, stepPitch, settings, fastDt);
+
+    m_lastDelta = errMag;
+    m_lastDt = fastDt;
+    m_lastFactor = (maxSpeed > 0.001f)
+                       ? std::min(1.0f,
+                                  std::sqrt(m_velYaw * m_velYaw +
+                                            m_velPitch * m_velPitch) /
+                                      maxSpeed)
+                       : 0.0f;
+    m_deadzoneHit = false;
 
     const float newYaw = normalizeYaw(curYaw + stepYaw);
     const float newPitch = clampf(curPitch + stepPitch, -89.9f, 89.9f);
     m_localYaw.store(newYaw, std::memory_order_relaxed);
     m_localPitch.store(newPitch, std::memory_order_relaxed);
 
-    m_lastDelta = errMag;
-    m_lastFactor = 1.0f;
-    m_lastDt = fastDt;
-    m_deadzoneHit = false;
-
     void *player = m_bridge.getLocalPlayer();
-    if (player && (std::fabs(stepYaw) > 0.00005f ||
-                   std::fabs(stepPitch) > 0.00005f)) {
+    if (player && (std::fabs(stepYaw) > 0.0005f ||
+                   std::fabs(stepPitch) > 0.0005f)) {
       m_bridge.applyTurnDelta(player, -stepPitch, stepYaw);
       m_fastAimTurnApplied = true;
     }
