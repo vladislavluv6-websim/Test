@@ -69,7 +69,8 @@ public class SpeedOverlay extends BaseOverlayButton {
 
     @Override
     public void show(int startX, int startY) {
-        if (!isActive && isSupportedVersion()) {
+        if (!isActive && isSupportedVersion()
+                && InbuiltModManager.getInstance(activity).resolveInbuiltModEnabled(getModId(), false)) {
             InbuiltModManager manager = InbuiltModManager.getInstance(activity);
             float multiplier = manager.getSpeedMultiplier() / 100f;
             isActive = SpeedMod.setEnabled(true, multiplier);
@@ -130,5 +131,15 @@ public class SpeedOverlay extends BaseOverlayButton {
             updateButtonState(false);
         }
         super.hide();
+    }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return isActive;
+    }
+
+    @Override
+    protected boolean autoActivateOnConfig() {
+        return true;
     }
 }

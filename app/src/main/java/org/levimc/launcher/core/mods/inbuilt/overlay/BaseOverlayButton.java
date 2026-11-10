@@ -3,8 +3,12 @@ package org.levimc.launcher.core.mods.inbuilt.overlay;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
+import android.animation.ValueAnimator;
+import android.graphics.LinearGradient;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,6 +21,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.animation.LinearInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -43,6 +48,11 @@ public abstract class BaseOverlayButton {
     private boolean isHiding = false;
     private Runnable pendingShowRunnable;
     private boolean isHudEditorSelected = false;
+    private Boolean appliedShortcutActive = null;
+    private ValueAnimator shimmerAnimator;
+    private LinearGradient shimmerGradient;
+    private Matrix shimmerMatrix;
+    private TextView shimmerLabel;
     
     public BaseOverlayButton(Activity activity) {
         this.activity = activity;
@@ -92,7 +102,7 @@ public abstract class BaseOverlayButton {
         paint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         paint.setTextSize(12f * activity.getResources().getDisplayMetrics().scaledDensity);
         int textWidth = (int) Math.ceil(paint.measureText(getShortcutLabel()));
-        return (int) ((textWidth + dp(18) + dp(7) + dp(22)) * scale);
+        return Math.max(dp(54), (int) ((textWidth + dp(30)) * scale));
     }
 
     protected int getButtonHeightPx() {
@@ -105,12 +115,6 @@ public abstract class BaseOverlayButton {
 
     private void setupShortcutContent(View view) {
         if (view == null) return;
-        View iconView = view.findViewById(R.id.mod_overlay_button);
-        if (iconView instanceof ImageButton && getIconResource() != 0) {
-            ImageButton icon = (ImageButton) iconView;
-            icon.setImageResource(getIconResource());
-            icon.setScaleType(ImageButton.ScaleType.FIT_CENTER);
-        }
         TextView label = view.findViewById(R.id.mod_overlay_label);
         if (label != null) {
             String text = getShortcutLabel();
@@ -134,18 +138,7 @@ public abstract class BaseOverlayButton {
 
     protected void applyOpacity() {
         if (overlayView == null) return;
-        float opacity = getButtonOpacity();
-        if (usesNamedShortcut()) {
-            // Pill: alpha on children so the icon (updated by subclasses)
-            // and label fade together without squaring the alpha.
-            overlayView.setAlpha(1f);
-            View icon = overlayView.findViewById(R.id.mod_overlay_button);
-            if (icon != null) icon.setAlpha(opacity);
-            TextView label = overlayView.findViewById(R.id.mod_overlay_label);
-            if (label != null) label.setAlpha(opacity);
-        } else {
-            overlayView.setAlpha(opacity);
-        }
+        overlayView.setAlpha(getButtonOpacity());
     }
 
     protected void updateLockState() {
@@ -158,7 +151,94 @@ public abstract class BaseOverlayButton {
         return R.layout.overlay_mod_button;
     }
 
-    public void tick() {}
+    public void tick() {
+        refreshShortcutStyle();
+    }
+
+    protected boolean isShortcutActive() {
+        return false;
+    }
+
+    protected boolean autoActivateOnConfig() {
+        return false;
+    }
+
+    public void onModuleConfigEnabled() {
+        if (autoActivateOnConfig() && !isShortcutActive()) {
+            onButtonClick();
+        }
+    }
+
+    public void onModuleConfigDisabled() {
+        if (autoActivateOnConfig() && isShortcutActive()) {
+            onButtonClick();
+        }
+    }
+
+    private void refreshShortcutStyle() {
+        if (overlayView == null || !usesNamedShortcut()) return;
+        boolean active = isShortcutActive();
+        if (appliedShortcutActive != null && appliedShortcutActive == active) return;
+        appliedShortcutActive = active;
+        if (!isHudEditorMode) {
+            overlayView.setBackgroundResource(active
+                    ? R.drawable.bg_overlay_shortcut_active
+                    : R.drawable.bg_overlay_shortcut);
+        }
+        TextView label = overlayView.findViewById(R.id.mod_overlay_label);
+        if (label == null) return;
+        if (active) {
+            startShimmer(label);
+        } else {
+            stopShimmer(label);
+        }
+    }
+
+    private void startShimmer(TextView label) {
+        stopShimmer(label);
+        shimmerLabel = label;
+        label.setTextColor(Color.WHITE);
+        label.setShadowLayer(dp(6), 0f, 0f, 0xAA4E83FF);
+        int width = Math.max(label.getWidth(),
+                (int) Math.ceil(label.getPaint().measureText(String.valueOf(label.getText()))));
+        if (width <= 0) width = dp(80);
+        shimmerGradient = new LinearGradient(0f, 0f, width, 0f,
+                new int[]{0xFF4E83FF, 0xFFFFFFFF, 0xFF9CC0FF, 0xFF4E83FF},
+                new float[]{0f, 0.35f, 0.6f, 1f},
+                Shader.TileMode.CLAMP);
+        shimmerMatrix = new Matrix();
+        shimmerGradient.setLocalMatrix(shimmerMatrix);
+        label.getPaint().setShader(shimmerGradient);
+        final int span = width;
+        shimmerAnimator = ValueAnimator.ofFloat(-span, span * 2f);
+        shimmerAnimator.setDuration(1400L);
+        shimmerAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        shimmerAnimator.setInterpolator(new LinearInterpolator());
+        shimmerAnimator.addUpdateListener(animation -> {
+            if (shimmerMatrix == null) return;
+            shimmerMatrix.setTranslate((float) animation.getAnimatedValue(), 0f);
+            if (shimmerGradient != null) {
+                shimmerGradient.setLocalMatrix(shimmerMatrix);
+            }
+            if (shimmerLabel != null) shimmerLabel.invalidate();
+        });
+        shimmerAnimator.start();
+    }
+
+    private void stopShimmer(TextView label) {
+        if (shimmerAnimator != null) {
+            shimmerAnimator.cancel();
+            shimmerAnimator = null;
+        }
+        if (label != null) {
+            label.getPaint().setShader(null);
+            label.setTextColor(0xFFE8EAF1);
+            label.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
+        }
+        shimmerLabel = null;
+        shimmerGradient = null;
+        shimmerMatrix = null;
+    }
 
     protected void onOverlayGeometryChanged(int x, int y, int width, int height) {}
 
@@ -229,6 +309,8 @@ public abstract class BaseOverlayButton {
             windowManager.addView(overlayView, wmParams);
             isShowing = true;
             applyOpacity();
+            appliedShortcutActive = null;
+            refreshShortcutStyle();
             updateLockState();
             notifyOverlayGeometryChanged();
             refreshRuntimeVisibility();
@@ -274,6 +356,8 @@ public abstract class BaseOverlayButton {
         isShowing = true;
         wmParams = null;
         applyOpacity();
+        appliedShortcutActive = null;
+        refreshShortcutStyle();
         updateLockState();
         notifyOverlayGeometryChanged();
         refreshRuntimeVisibility();
@@ -306,6 +390,8 @@ public abstract class BaseOverlayButton {
                 }
             }
         } catch (Exception ignored) {}
+        stopShimmer(overlayView == null ? null
+                : overlayView.findViewById(R.id.mod_overlay_label));
         overlayView = null;
         isShowing = false;
         isHiding = false;
@@ -339,7 +425,8 @@ public abstract class BaseOverlayButton {
             if (isHudEditorMode) {
                 overlayView.setBackgroundColor(isHudEditorSelected ? 0x6680B3FF : 0x44FFFFFF);
             } else if (usesNamedShortcut()) {
-                overlayView.setBackgroundResource(R.drawable.bg_overlay_shortcut);
+                appliedShortcutActive = null;
+                refreshShortcutStyle();
             } else {
                 overlayView.setBackgroundColor(Color.TRANSPARENT);
             }

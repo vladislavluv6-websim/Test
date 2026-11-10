@@ -115,4 +115,9 @@ public class SnaplookOverlay extends BaseOverlayButton {
     public void applyConfigurationChanges() {
         super.applyConfigurationChanges();
     }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return isActive;
+    }
 }

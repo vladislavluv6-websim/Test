@@ -170,7 +170,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
 
     @Override
     public void show(int startX, int startY) {
-        if (!isActive && isSupportedVersion()) {
+        if (!isActive && isSupportedVersion()
+                && InbuiltModManager.getInstance(activity).resolveInbuiltModEnabled(getModId(), false)) {
             // Лог прошлой сессии мог остаться после краша — выгружаем его
             // до того, как новый setDiagLogPath очистит файл.
             exportDiagLog(false);
@@ -298,5 +299,15 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             updateButtonState(false);
         }
         super.hide();
+    }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return isActive;
+    }
+
+    @Override
+    protected boolean autoActivateOnConfig() {
+        return true;
     }
 }

@@ -37,6 +37,12 @@ public class InbuiltOverlayManager {
             ModIds.SNAPLOOK, ModIds.VIRTUAL_CURSOR, ModIds.GYRO,
             ModIds.POJAV_CONTROLS, ModIds.HOTBAR_SLOT
     };
+    private static final String[] STANDARD_SHORTCUT_MOD_IDS = {
+            ModIds.QUICK_DROP, ModIds.CAMERA_PERSPECTIVE, ModIds.TOGGLE_HUD,
+            ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.TRIGGER_BOT,
+            ModIds.ESP, ModIds.FULLBRIGHT, ModIds.ZOOM, ModIds.SNAPLOOK,
+            ModIds.VIRTUAL_CURSOR, ModIds.GYRO
+    };
     private final Map<String, Boolean> modActiveStates = new HashMap<>();
     private final Map<String, BaseOverlayButton> keybindControllers = new HashMap<>();
     private final Map<Integer, List<String>> pressedKeybinds = new HashMap<>();
@@ -155,43 +161,71 @@ public class InbuiltOverlayManager {
 
     public void showEnabledOverlays() {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
-        // Modules without a HUD button are restored regardless of whether the
-        // mod menu itself is enabled.
-        if (manager.resolveInbuiltModEnabled(ModIds.TARGET_ESP, false)) {
-            handleModToggle(ModIds.TARGET_ESP, true);
+        if (!manager.isModMenuEnabled()) {
+            refreshRuntimeVisibility();
+            return;
         }
-        if (manager.resolveInbuiltModEnabled(ModIds.NAME_TAGS, false)) {
-            handleModToggle(ModIds.NAME_TAGS, true);
+
+        float density = activity.getResources().getDisplayMetrics().density;
+        int step = (int) (46 * density);
+        int y = baseY;
+        for (String modId : STANDARD_SHORTCUT_MOD_IDS) {
+            modPositionMap.put(modId, y);
+            y += step;
         }
-        if (manager.resolveInbuiltModEnabled(ModIds.FULLBRIGHT, false)) {
-            handleModToggle(ModIds.FULLBRIGHT, true);
+        modPositionMap.put(ModIds.TARGET_ESP, y);
+        y += step;
+        modPositionMap.put(ModIds.NAME_TAGS, y);
+
+        for (String modId : STANDARD_SHORTCUT_MOD_IDS) {
+            showShortcutOnly(modId);
         }
-        if (!manager.isModMenuEnabled()) return;
+        ensureToggleShortcut(ModIds.TARGET_ESP);
+        ensureToggleShortcut(ModIds.NAME_TAGS);
 
-        int nextY = baseY;
-
-        modActiveStates.put(ModIds.AUTO_SPRINT, false);
-        modActiveStates.put(ModIds.SPEED, false);
-        modActiveStates.put(ModIds.AIM_ASSIST, false);
-        modActiveStates.put(ModIds.TRIGGER_BOT, false);
-        modActiveStates.put(ModIds.ESP, false);
-
-        modPositionMap.put(ModIds.AUTO_SPRINT, nextY + SPACING * 4);
-        modPositionMap.put(ModIds.SPEED, nextY + SPACING * 5);
-        modPositionMap.put(ModIds.AIM_ASSIST, nextY + SPACING * 6);
-        modPositionMap.put(ModIds.TRIGGER_BOT, nextY + SPACING * 12);
-        modPositionMap.put(ModIds.ESP, nextY + SPACING * 6 + 60);
-
-        restorePersistedInbuiltModState(manager, ModIds.AUTO_SPRINT);
-        restorePersistedInbuiltModState(manager, ModIds.SPEED);
-        restorePersistedInbuiltModState(manager, ModIds.AIM_ASSIST);
-        restorePersistedInbuiltModState(manager, ModIds.TRIGGER_BOT);
-        restorePersistedInbuiltModState(manager, ModIds.ESP);
+        if (manager.resolveInbuiltModEnabled(ModIds.CHICK_PET, false)) {
+            handleModToggle(ModIds.CHICK_PET, true);
+        }
+        if (manager.resolveInbuiltModEnabled(ModIds.FPS_DISPLAY, false)) {
+            handleModToggle(ModIds.FPS_DISPLAY, true);
+        }
+        if (manager.resolveInbuiltModEnabled(ModIds.CPS_DISPLAY, false)) {
+            handleModToggle(ModIds.CPS_DISPLAY, true);
+        }
 
         modMenuButton = new ModMenuButton(activity);
-        modMenuButton.show(START_X, nextY);
+        modMenuButton.show(START_X, y + step);
         refreshExternalButtons();
         refreshRuntimeVisibility();
+    }
+
+    private boolean isShortcutModule(String modId) {
+        if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)) {
+            return true;
+        }
+        for (String id : STANDARD_SHORTCUT_MOD_IDS) {
+            if (id.equals(modId)) return true;
+        }
+        return false;
+    }
+
+    private void showShortcutOnly(String modId) {
+        if (modOverlayMap.containsKey(modId)) return;
+        showModOverlay(modId);
+    }
+
+    private void ensureToggleShortcut(String modId) {
+        if (modOverlayMap.containsKey(modId)) return;
+        InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+        android.util.DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
+        int centerY = metrics.heightPixels / 2 - (int) (26 * metrics.density);
+        int defaultY = modPositionMap.getOrDefault(modId, centerY);
+        int x = manager.getOverlayPositionX(modId, START_X);
+        int y = manager.getOverlayPositionY(modId, defaultY);
+        ModuleToggleShortcut shortcut = new ModuleToggleShortcut(activity, modId);
+        shortcut.show(x, y);
+        overlays.add(shortcut);
+        modOverlayMap.put(modId, shortcut);
     }
 
     private void restorePersistedInbuiltModState(InbuiltModManager manager, String modId) {
@@ -209,16 +243,34 @@ public class InbuiltOverlayManager {
     public void handleModToggle(String modId, boolean enabled) {
         boolean wasEnabled = modActiveStates.getOrDefault(modId, false);
         modActiveStates.put(modId, enabled);
-        
-        if (enabled && !wasEnabled) {
+
+        if (enabled) {
+            if (wasEnabled) return;
+            boolean existed = modOverlayMap.containsKey(modId);
             showModOverlay(modId);
-        } else if (!enabled) {
-            releaseModKeybind(modId);
-            if (wasEnabled) hideModOverlay(modId);
-            else {
-                BaseOverlayButton controller = keybindControllers.get(modId);
-                if (controller != null) controller.hide();
+            if (existed) {
+                BaseOverlayButton controller = modOverlayMap.get(modId);
+                if (controller != null) controller.onModuleConfigEnabled();
             }
+            return;
+        }
+
+        releaseModKeybind(modId);
+        if (isShortcutModule(modId)) {
+            if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)) {
+                if (wasEnabled) hideModOverlay(modId);
+            } else {
+                BaseOverlayButton controller = modOverlayMap.get(modId);
+                if (controller != null) controller.onModuleConfigDisabled();
+                else if (wasEnabled) hideModOverlay(modId);
+            }
+            return;
+        }
+        if (wasEnabled) {
+            hideModOverlay(modId);
+        } else {
+            BaseOverlayButton controller = keybindControllers.get(modId);
+            if (controller != null) controller.hide();
         }
     }
 
@@ -259,7 +311,9 @@ public class InbuiltOverlayManager {
     }
 
     private void showModOverlay(String modId) {
-        if (modOverlayMap.containsKey(modId)) {
+        if (modOverlayMap.containsKey(modId)
+                && !ModIds.TARGET_ESP.equals(modId)
+                && !ModIds.NAME_TAGS.equals(modId)) {
             return;
         }
 
@@ -269,8 +323,10 @@ public class InbuiltOverlayManager {
         int centerX = metrics.widthPixels / 2 - (int)(26 * metrics.density);
         int centerY = metrics.heightPixels / 2 - (int)(26 * metrics.density);
 
-        int savedX = manager.getOverlayPositionX(modId, centerX);
-        int savedY = manager.getOverlayPositionY(modId, centerY);
+        Integer defaultY = modPositionMap.get(modId);
+        int savedX = manager.getOverlayPositionX(modId, START_X);
+        int savedY = manager.getOverlayPositionY(
+                modId, defaultY != null ? defaultY : centerY);
 
         switch (modId) {
             case ModIds.QUICK_DROP:
@@ -329,13 +385,7 @@ public class InbuiltOverlayManager {
                 modOverlayMap.put(modId, fullbright);
                 break;
             case ModIds.TARGET_ESP: {
-                ModuleToggleShortcut shortcut = new ModuleToggleShortcut(
-                        activity, ModIds.TARGET_ESP,
-                        R.drawable.ic_target_esp_normal,
-                        R.drawable.ic_target_esp_pressed);
-                shortcut.show(savedX, savedY);
-                overlays.add(shortcut);
-                modOverlayMap.put(modId, shortcut);
+                ensureToggleShortcut(ModIds.TARGET_ESP);
                 if (targetEspOverlay == null) {
                     targetEspOverlay = new TargetEspOverlay(activity);
                     targetEspOverlay.show();
@@ -343,13 +393,7 @@ public class InbuiltOverlayManager {
                 break;
             }
             case ModIds.NAME_TAGS: {
-                ModuleToggleShortcut shortcut = new ModuleToggleShortcut(
-                        activity, ModIds.NAME_TAGS,
-                        R.drawable.ic_name_tags_normal,
-                        R.drawable.ic_name_tags_pressed);
-                shortcut.show(savedX, savedY);
-                overlays.add(shortcut);
-                modOverlayMap.put(modId, shortcut);
+                ensureToggleShortcut(ModIds.NAME_TAGS);
                 if (nameTagsOverlay == null) {
                     nameTagsOverlay = new NameTagsOverlay(activity);
                     nameTagsOverlay.show();
@@ -433,22 +477,12 @@ public class InbuiltOverlayManager {
                 targetEspOverlay.hide();
                 targetEspOverlay = null;
             }
-            BaseOverlayButton shortcut = modOverlayMap.remove(modId);
-            if (shortcut != null) {
-                shortcut.hide();
-                overlays.remove(shortcut);
-            }
             return;
         }
         if (modId.equals(ModIds.NAME_TAGS)) {
             if (nameTagsOverlay != null) {
                 nameTagsOverlay.hide();
                 nameTagsOverlay = null;
-            }
-            BaseOverlayButton shortcut = modOverlayMap.remove(modId);
-            if (shortcut != null) {
-                shortcut.hide();
-                overlays.remove(shortcut);
             }
             return;
         }

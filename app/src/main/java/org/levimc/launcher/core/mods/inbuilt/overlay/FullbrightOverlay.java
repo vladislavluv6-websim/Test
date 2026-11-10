@@ -71,7 +71,8 @@ public class FullbrightOverlay extends BaseOverlayButton {
 
     @Override
     public void show(int startX, int startY) {
-        if (!isActive && isSupportedVersion()) {
+        if (!isActive && isSupportedVersion()
+                && InbuiltModManager.getInstance(activity).resolveInbuiltModEnabled(getModId(), false)) {
             requestActivate(false);
         }
         super.show(startX, startY);
@@ -114,5 +115,15 @@ public class FullbrightOverlay extends BaseOverlayButton {
             updateButtonState(false);
         }
         super.hide();
+    }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return isActive;
+    }
+
+    @Override
+    protected boolean autoActivateOnConfig() {
+        return true;
     }
 }

@@ -335,4 +335,9 @@ public class GyroOverlay extends BaseOverlayButton implements SensorEventListene
         result[7] = a[6]*b[1] + a[7]*b[4] + a[8]*b[7];
         result[8] = a[6]*b[2] + a[7]*b[5] + a[8]*b[8];
     }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return isActive;
+    }
 }

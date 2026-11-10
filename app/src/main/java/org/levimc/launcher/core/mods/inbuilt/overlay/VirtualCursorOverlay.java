@@ -57,4 +57,9 @@ public class VirtualCursorOverlay extends BaseOverlayButton {
         }
         super.hide();
     }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return VirtualCursorMod.isActive();
+    }
 }

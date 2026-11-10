@@ -53,4 +53,9 @@ public class ToggleHudOverlay extends BaseOverlayButton {
                     : R.drawable.ic_toggle_hud_normal);
         }
     }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return isActive;
+    }
 }

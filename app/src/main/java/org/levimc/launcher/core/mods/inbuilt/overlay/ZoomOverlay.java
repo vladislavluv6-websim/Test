@@ -145,4 +145,9 @@ public class ZoomOverlay extends BaseOverlayButton {
     public boolean isInitialized() {
         return initialized;
     }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return isActive;
+    }
 }

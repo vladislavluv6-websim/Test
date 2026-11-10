@@ -957,6 +957,11 @@ public class InbuiltModManager {
         prefs.edit().putInt(KEY_OVERLAY_OPACITY_PREFIX + modId, Math.max(0, Math.min(100, opacity))).apply();
     }
 
+    public void resetAllToDefaults() {
+        prefs.edit().clear().commit();
+        overlayVisibilityRevision.incrementAndGet();
+    }
+
     public boolean isModMenuEnabled() {
         return prefs.getBoolean(KEY_MOD_MENU_ENABLED, true);
     }

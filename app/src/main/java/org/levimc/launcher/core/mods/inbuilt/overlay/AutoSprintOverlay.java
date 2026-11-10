@@ -53,4 +53,14 @@ public class AutoSprintOverlay extends BaseOverlayButton {
         }
         super.hide();
     }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return isActive;
+    }
+
+    @Override
+    protected boolean autoActivateOnConfig() {
+        return true;
+    }
 }

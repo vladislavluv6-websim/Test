@@ -1,28 +1,21 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.app.Activity;
-import android.view.View;
-import android.widget.ImageButton;
 
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 
 /**
  * Compact named shortcut for modules whose on-screen output is not itself a
- * button (Name Tags, Target ESP). Tapping toggles the module; the module keeps
- * running when its shortcut is hidden in the module settings.
+ * button (Name Tags, Target ESP). Tapping toggles the module; the shortcut
+ * stays visible while the module is off.
  */
 public class ModuleToggleShortcut extends BaseOverlayButton {
     private final String modId;
-    private final int normalIcon;
-    private final int pressedIcon;
     private boolean active;
 
-    public ModuleToggleShortcut(Activity activity, String modId,
-                                int normalIcon, int pressedIcon) {
+    public ModuleToggleShortcut(Activity activity, String modId) {
         super(activity);
         this.modId = modId;
-        this.normalIcon = normalIcon;
-        this.pressedIcon = pressedIcon;
         this.active = InbuiltModManager.getInstance(activity)
                 .resolveInbuiltModEnabled(modId, false);
     }
@@ -34,7 +27,12 @@ public class ModuleToggleShortcut extends BaseOverlayButton {
 
     @Override
     protected int getIconResource() {
-        return active ? pressedIcon : normalIcon;
+        return 0;
+    }
+
+    @Override
+    protected boolean isShortcutActive() {
+        return active;
     }
 
     @Override
@@ -48,16 +46,8 @@ public class ModuleToggleShortcut extends BaseOverlayButton {
                 .resolveInbuiltModEnabled(modId, false);
         if (next != active) {
             active = next;
-            updateIcon();
         }
-    }
-
-    private void updateIcon() {
-        if (overlayView == null) return;
-        View icon = overlayView.findViewById(org.levimc.launcher.R.id.mod_overlay_button);
-        if (icon instanceof ImageButton) {
-            ((ImageButton) icon).setImageResource(getIconResource());
-        }
+        super.tick();
     }
 
     @Override
@@ -70,6 +60,5 @@ public class ModuleToggleShortcut extends BaseOverlayButton {
             overlayManager.handleModToggle(modId, next);
         }
         active = next;
-        updateIcon();
     }
 }
