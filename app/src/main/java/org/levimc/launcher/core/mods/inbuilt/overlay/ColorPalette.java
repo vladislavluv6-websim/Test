@@ -104,7 +104,7 @@ public final class ColorPalette {
             boolean match = Color.red(base) == Color.red(selected)
                     && Color.green(base) == Color.green(selected)
                     && Color.blue(base) == Color.blue(selected);
-            circles.get(i).setSelected(match);
+            circles.get(i).setChosen(match);
         }
     }
 
@@ -125,7 +125,7 @@ public final class ColorPalette {
             setClickable(true);
         }
 
-        void setSelected(boolean selected) {
+        void setChosen(boolean selected) {
             this.selected = selected;
             invalidate();
         }
