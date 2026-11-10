@@ -698,7 +698,7 @@
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Автоматически бьёт игроков и мобов в прицеле</string>
     <string name="inbuilt_mod_target_esp">Target ESP</string>
-    <string name="inbuilt_mod_target_esp_desc">Подсвечивает цель моделью призрака, квадрата, круга или кристалла, но только когда TriggerBot попал</string>
+    <string name="inbuilt_mod_target_esp_desc">Подсвечивает текущую цель AimAssist моделью ghost, square, circle или crystal</string>
     <string name="mod_config_target_esp_style">Модель</string>
     <string name="mod_config_target_esp_ghost">Призрак</string>
     <string name="mod_config_target_esp_square">Квадрат</string>
@@ -841,6 +841,7 @@
     <string name="mod_overlay_fps_value">FPS: %1$d</string>
     <string name="mod_overlay_cps_value">CPS: %1$d</string>
     <string name="mod_config_overlay_button_size_dp">Размер кнопки оверлея (dp)</string>
+    <string name="mod_config_overlay_shortcut">Показывать ярлык</string>
     <string name="mod_config_overlay_opacity_percent" formatted="false">Непрозрачность оверлея (%)</string>
     <string name="mod_config_overlay_show_everywhere" formatted="false">Показывать везде</string>
     <string name="mod_config_cursor_sensitivity_percent" formatted="false">Чувствительность курсора (%)</string>

@@ -1276,9 +1276,11 @@ public class InbuiltOverlayManager {
 
             for (BaseOverlayButton overlay : overlays) {
                 if (overlay.overlayView != null) {
+                    boolean shortcutAllowed = manager.isOverlayShortcutVisible(
+                            overlay.getOverlayConfigKey());
                     boolean visible = overlay instanceof ToggleHudOverlay
-                            ? inbuiltVisible || manager.isOverlayShowEverywhere(overlay.getOverlayConfigKey())
-                            : !hideLauncherOverlays && (overlay instanceof HotbarSlotOverlay ? hotbarVisible :
+                            ? shortcutAllowed && (inbuiltVisible || manager.isOverlayShowEverywhere(overlay.getOverlayConfigKey()))
+                            : shortcutAllowed && !hideLauncherOverlays && (overlay instanceof HotbarSlotOverlay ? hotbarVisible :
                             inbuiltVisible || manager.isOverlayShowEverywhere(overlay.getOverlayConfigKey()));
                     int visibility = visible
                             ? android.view.View.VISIBLE

@@ -3,7 +3,9 @@ package org.levimc.launcher.core.mods.inbuilt.overlay;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -17,10 +19,12 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.TextView;
 
 import org.levimc.launcher.R;
 import org.levimc.launcher.core.minecraft.MinecraftActivity;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
+import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
 
 public abstract class BaseOverlayButton {
     protected final Activity activity;
@@ -51,12 +55,66 @@ public abstract class BaseOverlayButton {
         return (int) (sizeDp * density);
     }
 
+    private int dp(float value) {
+        return Math.round(value * activity.getResources().getDisplayMetrics().density);
+    }
+
+    protected boolean usesNamedShortcut() {
+        return getLayoutResource() == R.layout.overlay_mod_button;
+    }
+
+    protected String getShortcutLabel() {
+        String id = getModId();
+        if (ModIds.QUICK_DROP.equals(id)) return activity.getString(R.string.inbuilt_mod_quick_drop);
+        if (ModIds.CAMERA_PERSPECTIVE.equals(id)) return activity.getString(R.string.inbuilt_mod_camera);
+        if (ModIds.TOGGLE_HUD.equals(id)) return activity.getString(R.string.inbuilt_mod_hud);
+        if (ModIds.AUTO_SPRINT.equals(id)) return activity.getString(R.string.inbuilt_mod_autosprint);
+        if (ModIds.SPEED.equals(id)) return activity.getString(R.string.inbuilt_mod_speed);
+        if (ModIds.AIM_ASSIST.equals(id)) return activity.getString(R.string.inbuilt_mod_aim_assist);
+        if (ModIds.ESP.equals(id)) return activity.getString(R.string.inbuilt_mod_esp);
+        if (ModIds.FULLBRIGHT.equals(id)) return activity.getString(R.string.inbuilt_mod_fullbright);
+        if (ModIds.TRIGGER_BOT.equals(id)) return activity.getString(R.string.inbuilt_mod_trigger_bot);
+        if (ModIds.ZOOM.equals(id)) return activity.getString(R.string.inbuilt_mod_zoom);
+        if (ModIds.SNAPLOOK.equals(id)) return activity.getString(R.string.inbuilt_mod_snaplook);
+        if (ModIds.VIRTUAL_CURSOR.equals(id)) return activity.getString(R.string.inbuilt_mod_virtual_cursor);
+        if (ModIds.GYRO.equals(id)) return activity.getString(R.string.inbuilt_mod_gyro);
+        return "";
+    }
+
     protected int getButtonWidthPx() {
-        return (int) (getButtonSizePx() * getWidthScale());
+        if (!usesNamedShortcut()) {
+            return (int) (getButtonSizePx() * getWidthScale());
+        }
+        float scale = Math.max(0.85f, Math.min(1.25f, getButtonSizePx() / (56f * activity.getResources().getDisplayMetrics().density)));
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        paint.setTextSize(12f * activity.getResources().getDisplayMetrics().scaledDensity);
+        int textWidth = (int) Math.ceil(paint.measureText(getShortcutLabel()));
+        return (int) ((textWidth + dp(18) + dp(7) + dp(22)) * scale);
     }
 
     protected int getButtonHeightPx() {
-        return (int) (getButtonSizePx() * getHeightScale());
+        if (!usesNamedShortcut()) {
+            return (int) (getButtonSizePx() * getHeightScale());
+        }
+        float scale = Math.max(0.85f, Math.min(1.25f, getButtonSizePx() / (56f * activity.getResources().getDisplayMetrics().density)));
+        return (int) (dp(36) * scale);
+    }
+
+    private void setupShortcutContent(View view) {
+        if (view == null) return;
+        View iconView = view.findViewById(R.id.mod_overlay_button);
+        if (iconView instanceof ImageButton && getIconResource() != 0) {
+            ImageButton icon = (ImageButton) iconView;
+            icon.setImageResource(getIconResource());
+            icon.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+        }
+        TextView label = view.findViewById(R.id.mod_overlay_label);
+        if (label != null) {
+            String text = getShortcutLabel();
+            label.setText(text);
+            view.setContentDescription(text.isEmpty() ? activity.getString(R.string.inbuilt_mods) : text);
+        }
     }
 
     protected float getWidthScale() {
@@ -73,8 +131,18 @@ public abstract class BaseOverlayButton {
     }
 
     protected void applyOpacity() {
-        if (overlayView != null) {
-            overlayView.setAlpha(getButtonOpacity());
+        if (overlayView == null) return;
+        float opacity = getButtonOpacity();
+        if (usesNamedShortcut()) {
+            // Pill: alpha on children so the icon (updated by subclasses)
+            // and label fade together without squaring the alpha.
+            overlayView.setAlpha(1f);
+            View icon = overlayView.findViewById(R.id.mod_overlay_button);
+            if (icon != null) icon.setAlpha(opacity);
+            TextView label = overlayView.findViewById(R.id.mod_overlay_label);
+            if (label != null) label.setAlpha(opacity);
+        } else {
+            overlayView.setAlpha(opacity);
         }
     }
 
@@ -130,6 +198,8 @@ public abstract class BaseOverlayButton {
                     btn.setImageResource(getIconResource());
                 }
                 btn.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+            } else {
+                setupShortcutContent(overlayView);
             }
             configureOverlayView(overlayView);
 
@@ -178,6 +248,8 @@ public abstract class BaseOverlayButton {
                 btn.setImageResource(getIconResource());
             }
             btn.setScaleType(ImageButton.ScaleType.FIT_CENTER);
+        } else {
+            setupShortcutContent(overlayView);
         }
         configureOverlayView(overlayView);
 
@@ -264,6 +336,8 @@ public abstract class BaseOverlayButton {
         if (overlayView != null) {
             if (isHudEditorMode) {
                 overlayView.setBackgroundColor(isHudEditorSelected ? 0x6680B3FF : 0x44FFFFFF);
+            } else if (usesNamedShortcut()) {
+                overlayView.setBackgroundResource(R.drawable.bg_overlay_shortcut);
             } else {
                 overlayView.setBackgroundColor(Color.TRANSPARENT);
             }

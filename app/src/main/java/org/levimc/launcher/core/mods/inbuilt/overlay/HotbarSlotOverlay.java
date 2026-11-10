@@ -60,6 +60,11 @@ public final class HotbarSlotOverlay extends BaseOverlayButton {
     }
 
     @Override
+    protected int getLayoutResource() {
+        return R.layout.overlay_mod_button_legacy;
+    }
+
+    @Override
     protected int getIconResource() {
         return 0;
     }

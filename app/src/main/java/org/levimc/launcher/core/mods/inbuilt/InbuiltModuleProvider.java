@@ -24,6 +24,7 @@ public final class InbuiltModuleProvider {
 
     private static final String CFG_OVERLAY_SIZE = "overlay_size";
     private static final String CFG_OVERLAY_OPACITY = "overlay_opacity";
+    private static final String CFG_OVERLAY_SHORTCUT = "overlay_shortcut";
     private static final String CFG_HIDE_LAUNCHER_HUD = "hide_launcher_hud";
     private static final String CFG_ACTIVATION_KEYBIND = "activation_keybind";
     private static final String CFG_EDIT_CONTROLS = "edit_controls";
@@ -245,7 +246,9 @@ public final class InbuiltModuleProvider {
                     continue;
                 }
                 String category = "behavior";
-                if (CFG_OVERLAY_SIZE.equals(config.key) || CFG_OVERLAY_OPACITY.equals(config.key)) {
+                if (CFG_OVERLAY_SIZE.equals(config.key)
+                        || CFG_OVERLAY_OPACITY.equals(config.key)
+                        || CFG_OVERLAY_SHORTCUT.equals(config.key)) {
                     category = "appearance";
                 } else if (aim && isAimMotionKey(config.key)) {
                     category = "aim_motion";
@@ -334,6 +337,27 @@ public final class InbuiltModuleProvider {
         return node;
     }
 
+    private static boolean hasOverlayShortcut(String modId) {
+        switch (modId) {
+            case ModIds.QUICK_DROP:
+            case ModIds.CAMERA_PERSPECTIVE:
+            case ModIds.TOGGLE_HUD:
+            case ModIds.AUTO_SPRINT:
+            case ModIds.SPEED:
+            case ModIds.AIM_ASSIST:
+            case ModIds.ESP:
+            case ModIds.FULLBRIGHT:
+            case ModIds.TRIGGER_BOT:
+            case ModIds.ZOOM:
+            case ModIds.SNAPLOOK:
+            case ModIds.VIRTUAL_CURSOR:
+            case ModIds.GYRO:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     private static List<UnifiedMod.ConfigEntry> createConfigs(Context context,
                                                               InbuiltModManager manager,
                                                               String modId) {
@@ -359,6 +383,13 @@ public final class InbuiltModuleProvider {
                         UnifiedMod.ConfigType.SLIDER_INT,
                         "100", "0", "100",
                         String.valueOf(manager.getOverlayOpacity(modId))));
+                if (hasOverlayShortcut(modId)) {
+                    configs.add(config(CFG_OVERLAY_SHORTCUT,
+                            context.getString(R.string.mod_config_overlay_shortcut),
+                            UnifiedMod.ConfigType.TOGGLE,
+                            "true", "", "",
+                            String.valueOf(manager.isOverlayShortcutVisible(modId))));
+                }
             }
         }
 
@@ -847,6 +878,14 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_OVERLAY_OPACITY:
                 manager.setOverlayOpacity(mod.getId(), parseInt(value, manager.getOverlayOpacity(mod.getId())));
+                break;
+            case CFG_OVERLAY_SHORTCUT:
+                manager.setOverlayShortcutVisible(mod.getId(), parseBoolean(value));
+                {
+                    InbuiltOverlayManager shortcutManager =
+                            InbuiltOverlayManager.getInstance();
+                    if (shortcutManager != null) shortcutManager.refreshRuntimeVisibility();
+                }
                 break;
             case CFG_HIDE_LAUNCHER_HUD:
                 manager.setLauncherHudHideEnabled(parseBoolean(value));

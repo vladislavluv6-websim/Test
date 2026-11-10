@@ -336,7 +336,17 @@ void drawBox(void *tessellator, void *screenContext, void *material,
 using ActorGetNameTagFn = std::string (*)(void *);
 
 ActorGetNameTagFn g_actorGetNameTag = nullptr;
+ActorGetNameTagFn g_actorGetNameTagOriginal = nullptr;
 std::once_flag g_actorGetNameTagOnce;
+
+// Пока Name Tags включён, ванильный рендер получает пустую строку и не
+// рисует серверные ники. Свой слой берёт имя из Player::mName и кэша,
+// поэтому хук не влияет на наши подписи.
+std::string actorGetNameTagDetour(void *actor) {
+  if (Esp::instance().isNameTagsEnabled()) return {};
+  return g_actorGetNameTagOriginal ? g_actorGetNameTagOriginal(actor)
+                                   : std::string{};
+}
 
 using GetFovFn = float (*)(void *, float, int);
 GetFovFn g_getFovOriginal = nullptr;
@@ -355,8 +365,22 @@ ActorGetNameTagFn actorGetNameTagFn() {
   std::call_once(g_actorGetNameTagOnce, [] {
     const uintptr_t fn = pl::memory::resolveSignature(
         offsets::kActorGetNameTagSignature, offsets::kMinecraftLibrary);
-    if (fn && mem::isGameAddress(reinterpret_cast<const void *>(fn))) {
-      g_actorGetNameTag = reinterpret_cast<ActorGetNameTagFn>(fn);
+    if (!fn || !mem::isGameAddress(reinterpret_cast<const void *>(fn))) return;
+    auto target = reinterpret_cast<ActorGetNameTagFn>(fn);
+    pl::memory::FuncPtr original = nullptr;
+    if (pl::memory::hook(reinterpret_cast<pl::memory::FuncPtr>(target),
+                         reinterpret_cast<pl::memory::FuncPtr>(
+                             &actorGetNameTagDetour),
+                         &original) == 0 &&
+        original) {
+      g_actorGetNameTagOriginal =
+          reinterpret_cast<ActorGetNameTagFn>(original);
+      g_actorGetNameTag = g_actorGetNameTagOriginal;
+    } else {
+      // Хук не встал: читаем имя напрямую, но ванильные ники скрыть
+      // не получится.
+      g_actorGetNameTagOriginal = target;
+      g_actorGetNameTag = target;
     }
   });
   return g_actorGetNameTag;

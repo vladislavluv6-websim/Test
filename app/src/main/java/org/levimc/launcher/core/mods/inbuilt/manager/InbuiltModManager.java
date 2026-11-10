@@ -79,6 +79,7 @@ public class InbuiltModManager {
     private static final String KEY_INBUILT_KEYBIND_PREFIX = "inbuilt_keybind_";
     private static final String KEY_OVERLAY_BUTTON_SIZE_PREFIX = "overlay_button_size_";
     private static final String KEY_OVERLAY_OPACITY_PREFIX = "overlay_opacity_";
+    private static final String KEY_OVERLAY_SHORTCUT_PREFIX = "overlay_shortcut_";
     private static final String KEY_MOD_MENU_ENABLED = "mod_menu_enabled";
     private static final String KEY_NOTIFICATIONS_ENABLED = "notifications_enabled";
     private static final String KEY_MOD_MENU_OPACITY = "mod_menu_opacity";
@@ -917,6 +918,17 @@ public class InbuiltModManager {
         return modId;
     }
 
+    public boolean isOverlayShortcutVisible(String modId) {
+        if (modId == null || modId.isEmpty()) return true;
+        return prefs.getBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
+    }
+
+    public void setOverlayShortcutVisible(String modId, boolean visible) {
+        if (modId == null || modId.isEmpty()) return;
+        prefs.edit().putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, visible).apply();
+        overlayVisibilityRevision.incrementAndGet();
+    }
+
     public int getOverlayButtonSize(String modId) {
         String key = KEY_OVERLAY_BUTTON_SIZE_PREFIX + modId;
         if (prefs.contains(key)) return prefs.getInt(key, DEFAULT_OVERLAY_BUTTON_SIZE);
@@ -1125,6 +1137,7 @@ public class InbuiltModManager {
         prefs.edit()
                 .remove(KEY_OVERLAY_BUTTON_SIZE_PREFIX + modId)
                 .remove(KEY_OVERLAY_OPACITY_PREFIX + modId)
+                .remove(KEY_OVERLAY_SHORTCUT_PREFIX + modId)
                 .remove(KEY_OVERLAY_POSITION_X_PREFIX + modId)
                 .remove(KEY_OVERLAY_POSITION_Y_PREFIX + modId)
                 .remove(KEY_OVERLAY_LOCK_PREFIX + modId)

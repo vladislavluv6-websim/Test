@@ -691,7 +691,7 @@
     <string name="inbuilt_mod_trigger_bot">Trigger Bot</string>
     <string name="inbuilt_mod_trigger_bot_desc">Automatically attacks players and mobs under the crosshair</string>
     <string name="inbuilt_mod_target_esp">Target ESP</string>
-    <string name="inbuilt_mod_target_esp_desc">Highlights the target with a ghost, square, circle or crystal model, but only when TriggerBot lands a hit</string>
+    <string name="inbuilt_mod_target_esp_desc">Highlights the current AimAssist target with a ghost, square, circle or crystal model</string>
     <string name="mod_config_target_esp_style">Model</string>
     <string name="mod_config_target_esp_ghost">Ghost</string>
     <string name="mod_config_target_esp_square">Square</string>
@@ -838,6 +838,7 @@
     <string name="mod_overlay_fps_value">FPS: %1$d</string>
     <string name="mod_overlay_cps_value">CPS: %1$d</string>
     <string name="mod_config_overlay_button_size_dp">Overlay Button Size (dp)</string>
+    <string name="mod_config_overlay_shortcut">Show Shortcut</string>
     <string name="mod_config_overlay_opacity_percent" formatted="false">Overlay Opacity (%)</string>
     <string name="mod_config_overlay_show_everywhere" formatted="false">Show Everywhere</string>
     <string name="mod_config_cursor_sensitivity_percent" formatted="false">Cursor Sensitivity (%)</string>
