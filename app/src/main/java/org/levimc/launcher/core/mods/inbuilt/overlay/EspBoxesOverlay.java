@@ -17,6 +17,7 @@ import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.preloader.PreloaderInput;
 
 import java.util.Arrays;
+import java.util.regex.Pattern;
 
 /**
  * Java-side ESP box models. Native still computes the projected screen
@@ -24,6 +25,10 @@ import java.util.Arrays;
  * or filled) and lets native draw only the original 3D variant.
  */
 public class EspBoxesOverlay extends View {
+    private static final long POLL_INTERVAL_NANOS = 33_000_000L;
+    private static final Pattern TAB = Pattern.compile("\t");
+    private static final String[] EMPTY = new String[0];
+
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -34,15 +39,26 @@ public class EspBoxesOverlay extends View {
     private volatile boolean showing;
     private volatile boolean moduleEnabled = true;
     private int style = 0;
-    private String[] boxes = new String[0];
+    private String[] boxes = EMPTY;
     private boolean framePosted;
+    private long lastPollNanos;
+    private float[] boxX = new float[0];
+    private float[] boxY = new float[0];
+    private float[] boxW = new float[0];
+    private float[] boxH = new float[0];
+    private int[] boxColor = new int[0];
+    private int[] boxArmor = new int[0];
+    private int boxCount;
 
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
         public void doFrame(long frameTimeNanos) {
             framePosted = false;
             if (!attached) return;
-            poll();
+            if (frameTimeNanos - lastPollNanos >= POLL_INTERVAL_NANOS) {
+                lastPollNanos = frameTimeNanos;
+                poll();
+            }
             postFrame();
         }
     };
@@ -108,7 +124,8 @@ public class EspBoxesOverlay extends View {
         attached = false;
         Choreographer.getInstance().removeFrameCallback(frameCallback);
         framePosted = false;
-        boxes = new String[0];
+        boxes = EMPTY;
+        boxCount = 0;
         try {
             if (getParent() instanceof ViewGroup) {
                 ((ViewGroup) getParent()).removeView(this);
@@ -121,7 +138,8 @@ public class EspBoxesOverlay extends View {
         moduleEnabled = enabled;
         if (enabled) return;
         Runnable clear = () -> {
-            boxes = new String[0];
+            boxes = EMPTY;
+            boxCount = 0;
             invalidate();
         };
         if (Looper.myLooper() == Looper.getMainLooper()) clear.run();
@@ -175,43 +193,60 @@ public class EspBoxesOverlay extends View {
     }
 
     private void poll() {
-        String[] next = new String[0];
+        String[] next = EMPTY;
         if (moduleEnabled && gameplayVisible() && EspMod.isInitialized()) {
             String[] nativeBoxes = EspMod.getEspBoxes();
             if (nativeBoxes != null) next = nativeBoxes;
         }
-        if (!Arrays.equals(boxes, next)) {
-            boxes = next;
-            invalidate();
+        if (Arrays.equals(boxes, next)) return;
+        boxes = next;
+        parseBoxes(next);
+        invalidate();
+    }
+
+    private void parseBoxes(String[] raw) {
+        final int n = raw.length;
+        if (boxX.length < n) {
+            boxX = new float[n];
+            boxY = new float[n];
+            boxW = new float[n];
+            boxH = new float[n];
+            boxColor = new int[n];
+            boxArmor = new int[n];
         }
+        int count = 0;
+        for (String entry : raw) {
+            if (entry == null) continue;
+            String[] parts = TAB.split(entry);
+            if (parts.length < 5) continue;
+            try {
+                boxX[count] = Float.parseFloat(parts[0]);
+                boxY[count] = Float.parseFloat(parts[1]);
+                boxW[count] = Float.parseFloat(parts[2]);
+                boxH[count] = Float.parseFloat(parts[3]);
+                boxColor[count] = (int) Long.parseLong(parts[4].trim());
+                boxArmor[count] = 0;
+                if (parts.length >= 6) {
+                    try {
+                        boxArmor[count] = Integer.parseInt(parts[5].trim());
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                count++;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        boxCount = count;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (!moduleEnabled || style <= 0 || boxes.length == 0) return;
-        for (String entry : boxes) {
-            if (entry == null) continue;
-            String[] parts = entry.split("\\t");
-            if (parts.length < 5) continue;
-            try {
-                float x = Float.parseFloat(parts[0]);
-                float y = Float.parseFloat(parts[1]);
-                float w = Float.parseFloat(parts[2]);
-                float h = Float.parseFloat(parts[3]);
-                int color = (int) Long.parseLong(parts[4].trim());
-                int armorPieces = 0;
-                if (parts.length >= 6) {
-                    try {
-                        armorPieces = Integer.parseInt(parts[5].trim());
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-                if (style > 0) drawBox(canvas, x, y, w, h, color);
-                if (armorPieces > 0) {
-                    drawArmorPips(canvas, x, y, w, armorPieces);
-                }
-            } catch (NumberFormatException ignored) {
+        if (!moduleEnabled || style <= 0 || boxCount == 0) return;
+        for (int i = 0; i < boxCount; i++) {
+            drawBox(canvas, boxX[i], boxY[i], boxW[i], boxH[i], boxColor[i]);
+            if (boxArmor[i] > 0) {
+                drawArmorPips(canvas, boxX[i], boxY[i], boxW[i], boxArmor[i]);
             }
         }
     }

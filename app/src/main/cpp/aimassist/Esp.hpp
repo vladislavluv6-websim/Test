@@ -114,6 +114,7 @@ private:
   std::atomic<float> m_surfaceHeight{0.0f};
   std::vector<void *> m_actors;
   std::chrono::steady_clock::time_point m_lastLog{};
+  std::chrono::steady_clock::time_point m_lastScan{};
   mutable std::mutex m_nameMutex;
   mutable std::mutex m_friendMutex;
   std::unordered_set<std::string> m_friends;

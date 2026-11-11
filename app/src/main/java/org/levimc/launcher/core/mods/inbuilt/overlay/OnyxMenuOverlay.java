@@ -8,6 +8,7 @@ import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -161,12 +162,18 @@ public class OnyxMenuOverlay {
                 }
             });
 
+            DisplayMetrics dm = activity.getResources().getDisplayMetrics();
+            int panelWidth = Math.min(
+                    (int) (dm.widthPixels * 0.94f),
+                    (int) (720f * dm.density));
+            int panelHeight = Math.min(
+                    (int) (dm.heightPixels * 0.9f),
+                    (int) (470f * dm.density));
             wmParams = new WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
+                    Math.max(panelWidth, 1),
+                    Math.max(panelHeight, 1),
                     WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                            | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                             | WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     PixelFormat.TRANSLUCENT);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -187,8 +194,8 @@ public class OnyxMenuOverlay {
                 wmParams = null;
                 fallbackRoot = root;
                 FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT);
+                        Math.max(panelWidth, 1), Math.max(panelHeight, 1));
+                params.gravity = Gravity.CENTER;
                 root.addView(view, params);
             }
             view.requestFocus();

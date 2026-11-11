@@ -34,6 +34,7 @@ public class TargetEspOverlay extends View {
     public static final int STYLE_LOCK = 7;
 
     private static final long FADE_MS = 180L;
+    private static final long POLL_INTERVAL_NANOS = 33_000_000L;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -52,13 +53,17 @@ public class TargetEspOverlay extends View {
     private float x, y, w, h;
     private long ageMs = -1;
     private boolean framePosted;
+    private long lastPollNanos;
 
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
         public void doFrame(long frameTimeNanos) {
             framePosted = false;
             if (!attached) return;
-            poll();
+            if (frameTimeNanos - lastPollNanos >= POLL_INTERVAL_NANOS) {
+                lastPollNanos = frameTimeNanos;
+                poll();
+            }
             postFrame();
         }
     };

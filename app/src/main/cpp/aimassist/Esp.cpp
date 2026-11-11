@@ -1135,12 +1135,20 @@ void Esp::render(void *levelRenderer, void *screenContext) {
   const float scanRange = targetEsp
       ? std::max(m_range.load(std::memory_order_relaxed), 64.0f)
       : m_range.load(std::memory_order_relaxed);
-  m_bridge.fillNearbyActors(player, scanRange, m_actors);
-  AntiBot::instance().update(m_actors, player);
 
-  if (nameTags) updateNameTags(player, playerRenderer, camera);
-  if (espBoxes && javaBoxes) updateEspBoxes(player, playerRenderer, camera);
-  if (targetEsp) updateTargetEsp(player, playerRenderer, camera);
+  const auto scanNow = std::chrono::steady_clock::now();
+  const bool refresh =
+      m_actors.empty() ||
+      scanNow - m_lastScan >= std::chrono::milliseconds(33);
+  if (refresh) {
+    m_lastScan = scanNow;
+    m_bridge.fillNearbyActors(player, scanRange, m_actors);
+    AntiBot::instance().update(m_actors, player);
+
+    if (nameTags) updateNameTags(player, playerRenderer, camera);
+    if (espBoxes && javaBoxes) updateEspBoxes(player, playerRenderer, camera);
+    if (targetEsp) updateTargetEsp(player, playerRenderer, camera);
+  }
   if (!espBoxes || javaBoxes) return;
 
   if (!mem::isPlausiblePointer(reinterpret_cast<uintptr_t>(screenContext))) {

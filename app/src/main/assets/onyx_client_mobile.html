@@ -1016,31 +1016,79 @@ html, body {
 .nl-text-input:focus {
   border-color: var(--accent);
 }
+
+.toolbar-close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #1a1e2a;
+  border: 1px solid #2a3040;
+  color: #AEB4C2;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 10px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+.toolbar-close-btn:active {
+  background: #232838;
+}
+.nl-toolbar {
+  justify-content: flex-start;
+}
+.toolbar-search-box {
+  margin-left: auto;
+}
+.device-viewport {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  z-index: 10;
+}
+.nl-shell {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  background: #0d0f16;
+  border-radius: 14px;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: none;
+}
+*,
+*::before,
+*::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+* {
+  animation: none !important;
+}
+.module-settings,
+.nl-toggle-track,
+.nl-toggle-thumb,
+.nl-page,
+.sidebar-nav,
+.search-input-wrapper,
+.nl-select-btn,
+.color-chip {
+  transition: none !important;
+}
 </style>
 </head>
 <body>
 
-<div class="bedrock-bg">
-  <div class="bedrock-bg-grid"></div>
-  <div class="bedrock-vignette"></div>
-</div>
 
-<!-- Top Control Switcher for Phone Sizes -->
-<div class="top-sim-bar">
-  <span data-i18n="phone_size">📱 Phone Size:</span>
-  <select id="deviceSelector" onchange="changeDeviceMode(this.value)">
-    <option value="compact" data-i18n="opt_standard">Mobile Standard (748x440)</option>
-    <option value="iphone15">iPhone 15 Pro (932x430)</option>
-    <option value="galaxyS24">Galaxy S24 (912x412)</option>
-    <option value="fullscreen" data-i18n="opt_fullscreen">Fit Fullscreen Phone</option>
-  </select>
-  <button onclick="toggleMenuVisibility()" data-i18n="btn_toggle">👁️ Toggle Menu</button>
-</div>
 
-<!-- Floating Mobile Pill Button (Draggable / Tap) -->
-<div class="mobile-pill-btn" onclick="toggleMenuVisibility()" title="Onyx Client Toggle">
-  <span>OX</span>
-</div>
+
+
+
 
 <!-- Main Device Viewport Wrapper -->
 <div class="device-viewport">
@@ -1119,6 +1167,7 @@ html, body {
           <input type="text" class="search-input" id="nlSearchInput" placeholder="Search modules..." oninput="handleSearch(this.value)">
         </div>
       </div>
+      <button class="toolbar-close-btn" onclick="toggleMenuVisibility()" aria-label="Close">✕</button>
     </div>
 
     <!-- CONTENT SCROLL AREA (EXPANDABLE MODULE CARDS) -->
