@@ -69,6 +69,10 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_FAST_AIM = "aim_assist_fast_aim";
     private static final String CFG_AIM_ASSIST_FAST_AIM_TIME = "aim_assist_fast_aim_time";
     private static final String CFG_AIM_ASSIST_FAST_AIM_MAX_SPEED = "aim_assist_fast_aim_max_speed";
+    private static final String CFG_AIM_ASSIST_ANTI_BOT = "aim_assist_anti_bot";
+    private static final String CFG_AIM_ASSIST_RANDOM_POINT = "aim_assist_random_point";
+    private static final String CFG_TRIGGER_BOT_ANTI_BOT = "trigger_bot_anti_bot";
+    private static final String CFG_TRIGGER_BOT_RANDOM_POINT = "trigger_bot_random_point";
     private static final String CFG_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String CFG_ESP_SHOW_MOBS = "esp_show_mobs";
     private static final String CFG_ESP_RANGE = "esp_range";
@@ -597,6 +601,16 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "2600", "300", "4000",
                     String.valueOf(manager.getAimAssistFastAimMaxSpeed())));
+            configs.add(config(CFG_AIM_ASSIST_ANTI_BOT,
+                    context.getString(R.string.mod_config_aim_assist_anti_bot),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isAimAssistAntiBot())));
+            configs.add(config(CFG_AIM_ASSIST_RANDOM_POINT,
+                    context.getString(R.string.mod_config_aim_assist_random_point),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isAimAssistRandomPoint())));
             configs.add(config(CFG_AIM_ASSIST_MAX_SPEED,
                     context.getString(R.string.mod_config_aim_assist_max_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
@@ -805,6 +819,16 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "false", "", "",
                     String.valueOf(manager.isTriggerBotOnlyCrit())));
+            configs.add(config(CFG_TRIGGER_BOT_ANTI_BOT,
+                    context.getString(R.string.mod_config_trigger_bot_anti_bot),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isTriggerBotAntiBot())));
+            configs.add(config(CFG_TRIGGER_BOT_RANDOM_POINT,
+                    context.getString(R.string.mod_config_trigger_bot_random_point),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isTriggerBotRandomPoint())));
         } else if (ModIds.VIRTUAL_CURSOR.equals(modId)) {
             configs.add(config(CFG_CURSOR_SENSITIVITY,
                     context.getString(R.string.mod_config_cursor_sensitivity_percent),
@@ -1075,6 +1099,12 @@ public final class InbuiltModuleProvider {
             case CFG_AIM_ASSIST_FAST_AIM_MAX_SPEED:
                 manager.setAimAssistFastAimMaxSpeed(parseInt(value, manager.getAimAssistFastAimMaxSpeed()));
                 break;
+            case CFG_AIM_ASSIST_ANTI_BOT:
+                manager.setAimAssistAntiBot(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_RANDOM_POINT:
+                manager.setAimAssistRandomPoint(parseBoolean(value));
+                break;
             case CFG_AIM_ASSIST_LEGIT:
                 manager.setAimAssistLegitMode(parseBoolean(value));
                 break;
@@ -1161,6 +1191,12 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_TRIGGER_BOT_ONLY_CRIT:
                 manager.setTriggerBotOnlyCrit(parseBoolean(value));
+                break;
+            case CFG_TRIGGER_BOT_ANTI_BOT:
+                manager.setTriggerBotAntiBot(parseBoolean(value));
+                break;
+            case CFG_TRIGGER_BOT_RANDOM_POINT:
+                manager.setTriggerBotRandomPoint(parseBoolean(value));
                 break;
             case CFG_CURSOR_SENSITIVITY:
                 manager.setCursorSensitivity(parseInt(value, manager.getCursorSensitivity()));

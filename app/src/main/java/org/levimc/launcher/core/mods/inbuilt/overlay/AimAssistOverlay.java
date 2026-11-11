@@ -46,6 +46,8 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setFastAim(manager.isAimAssistFastAim());
         AimAssistMod.setFastAimTime(manager.getAimAssistFastAimTime());
         AimAssistMod.setFastAimMaxSpeed(manager.getAimAssistFastAimMaxSpeed());
+        AimAssistMod.setAntiBot(manager.isAimAssistAntiBot());
+        AimAssistMod.setRandomAimPoint(manager.isAimAssistRandomPoint());
         EspMod.setFriendNames(manager.isFriendModuleEnabled()
                 ? manager.getFriendNames() : "");
     }

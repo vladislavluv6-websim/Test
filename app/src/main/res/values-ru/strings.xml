@@ -765,6 +765,8 @@
     <string name="mod_config_aim_assist_fast_aim">Быстрое наведение</string>
     <string name="mod_config_aim_assist_fast_aim_time">Время быстрого наведения (мс)</string>
     <string name="mod_config_aim_assist_fast_aim_speed">Скорость быстрого наведения (°/с)</string>
+    <string name="mod_config_aim_assist_anti_bot">Антибот (пропускать фейковых игроков)</string>
+    <string name="mod_config_aim_assist_random_point">Случайная точка наведения и удара</string>
     <string name="mod_config_aim_assist_grace">Запас удержания (кадры)</string>
     <string name="mod_config_aim_assist_max_speed">Макс. скорость поворота (°/с)</string>
     <string name="mod_config_aim_assist_smoothing">Плавность (1 = резко, 40 = мягко)</string>
@@ -782,6 +784,8 @@
     <string name="mod_config_trigger_bot_interval_jitter">Триггер бот: разброс интервала (мс)</string>
     <string name="mod_config_trigger_bot_skip_chance">Триггер бот: шанс пропуска (%)</string>
     <string name="mod_config_trigger_bot_only_crit">Триггер бот: только криты</string>
+    <string name="mod_config_trigger_bot_anti_bot">Триггер бот: антибот</string>
+    <string name="mod_config_trigger_bot_random_point">Триггер бот: случайная точка удара</string>
     <string name="aim_assist_mod_unavailable">Аим-ассист недоступен для этой версии игры</string>
     <string name="inbuilt_mod_chick_pet">Питомец-цыплёнок</string>
     <string name="inbuilt_mod_chick_pet_desc">Милый пиксельный цыплёнок, который гуляет, спит и убегает при касании!</string>

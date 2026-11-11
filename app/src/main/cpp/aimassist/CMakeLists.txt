@@ -4,6 +4,7 @@ project(aimassist LANGUAGES CXX)
 add_library(aimassist SHARED
         aimassist.cpp
         AimAssist.cpp
+        AntiBot.cpp
         ClientBridge.cpp
         Esp.cpp
         Fullbright.cpp

@@ -2,6 +2,7 @@
 
 #include <android/log.h>
 
+#include "AntiBot.hpp"
 #include "DiagLog.hpp"
 #include "Esp.hpp"
 
@@ -449,6 +450,19 @@ void AimAssist::setOnlyCrit(bool enabled) {
   }
 }
 
+void AimAssist::setAntiBot(bool enabled) {
+  {
+    std::lock_guard<std::mutex> lock(m_settingsMutex);
+    m_settings.antiBot = enabled;
+  }
+  AntiBot::instance().setEnabled(enabled);
+}
+
+void AimAssist::setRandomAimPoint(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.randomAimPoint = enabled;
+}
+
 void AimAssist::setTouchActive(bool) {
   // Ручной look больше не ставит наведение на паузу. View всё равно
   // перечитывается каждый кадр, поэтому цель не теряется.
@@ -573,6 +587,9 @@ void AimAssist::updateVisual(float dt) {
   if (settings.triggerBot || m_enabled.load(std::memory_order_acquire)) {
     m_bridge.fillNearbyActors(player, actorRange, m_actors);
   }
+  if (settings.antiBot) {
+    AntiBot::instance().update(m_actors, player);
+  }
   if (settings.triggerBot && haveEye) {
     updateTrigger(player, settings, current, eyeNow);
   } else {
@@ -626,6 +643,10 @@ void AimAssist::updateVisual(float dt) {
 
   // Высота цели задаётся режимом: голова / грудь / ноги.
   m_target.point = getTargetPoint(m_target.actor, settings.targetBone);
+  if (settings.randomAimPoint) {
+    m_target.point =
+        jitteredAimPoint(m_target.actor, m_target.point, settings.targetBone);
+  }
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -650,10 +671,25 @@ void AimAssist::updateVisual(float dt) {
   if (settings.fastAim) {
     if (m_lastAimActor != m_target.actor) {
       m_lastAimActor = m_target.actor;
-      m_aimEngageAtMs = aimNow + randomInt(60, 130);
+      m_aimEngageAtMs = aimNow + randomInt(45, 165);
+      m_fastTimeScale = randomFloat(0.82f, 1.22f);
+      m_fastSpeedScale = randomFloat(0.82f, 1.12f);
+      m_fastStealthScale = randomFloat(0.65f, 1.35f);
+      m_nextFastPauseMs = aimNow + randomInt(700, 1700);
+      m_fastPauseUntilMs = 0;
       resetHumanProfile();
     }
     if (aimNow < m_aimEngageAtMs) {
+      m_fastAimTurnApplied = false;
+      return;
+    }
+    if (aimNow >= m_nextFastPauseMs) {
+      m_nextFastPauseMs = aimNow + randomInt(900, 2100);
+      if (randomFloat(0.0f, 1.0f) < 0.18f) {
+        m_fastPauseUntilMs = aimNow + randomInt(35, 110);
+      }
+    }
+    if (aimNow < m_fastPauseUntilMs) {
       m_fastAimTurnApplied = false;
       return;
     }
@@ -911,6 +947,9 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
 
   if (!actorsAlreadyFilled) {
     m_bridge.fillNearbyActors(player, settings.range, m_actors);
+    if (settings.antiBot) {
+      AntiBot::instance().update(m_actors, player);
+    }
   }
 
   Target bestAngle{};
@@ -955,6 +994,10 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     if (settings.ignoreInvisible && isInvisible(actor)) continue;
     if (settings.teamCheck && isSameTeam(player, actor)) continue;
     if (playerActor && Esp::instance().isFriend(actor)) continue;
+    if (playerActor && settings.antiBot &&
+        AntiBot::instance().isBot(actor)) {
+      continue;
+    }
 
     Vec3 targetPosition{};
     if (!m_bridge.getPosition(actor, targetPosition)) continue;
@@ -1040,9 +1083,12 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     // Минимальное время удержания цели. Без него assist перескакивает
     // между двумя близкими целями каждый кадр (multi-aura паттерн).
     const int64_t switchNow = nowMs();
-    if (!directHit && settings.switchDelayMs > 0 &&
+    const int switchDelay = m_currentSwitchDelayMs > 0
+                                ? m_currentSwitchDelayMs
+                                : settings.switchDelayMs;
+    if (!directHit && switchDelay > 0 &&
         m_lastSwitchMs != 0 &&
-        switchNow - m_lastSwitchMs < settings.switchDelayMs) {
+        switchNow - m_lastSwitchMs < switchDelay) {
       better = false;
     }
   }
@@ -1075,6 +1121,10 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
       m_aimEngageAtMs = 0;
       m_lastAimActor = nullptr;
       m_lastSwitchMs = nowMs();
+      m_currentSwitchDelayMs =
+          std::max(35, settings.switchDelayMs + randomInt(-30, 60));
+      m_aimPointActor = nullptr;
+      m_nextAimPointMs = 0;
       m_serverViewSinceMs = 0;
       resetHumanProfile();
     }
@@ -1128,6 +1178,10 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
 
   void *lockedActor = nullptr;
   if (settings.targetLock && m_target.valid) lockedActor = m_target.actor;
+  if (lockedActor && settings.antiBot &&
+      AntiBot::instance().isBot(lockedActor)) {
+    lockedActor = nullptr;
+  }
 
   for (void *actor : m_actors) {
     if (!actor || actor == player) continue;
@@ -1138,6 +1192,10 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     if (settings.ignoreInvisible && isInvisible(actor)) continue;
     if (settings.teamCheck && isSameTeam(player, actor)) continue;
     if (playerActor && Esp::instance().isFriend(actor)) continue;
+    if (playerActor && settings.antiBot &&
+        AntiBot::instance().isBot(actor)) {
+      continue;
+    }
 
     Aabb bounds{};
     if (!m_bridge.getActorBounds(actor, bounds)) {
@@ -1248,10 +1306,18 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     m_triggerSinceMs = now;
     // Реакция на новую цель — со случайным разбросом, а не константа.
     m_triggerDelayForTargetMs = settings.triggerDelayMs;
-    if (settings.humanize && settings.triggerDelayJitterMs > 0) {
-      m_triggerDelayForTargetMs +=
-          randomInt(0, settings.triggerDelayJitterMs);
+    const int jitter = std::max(0, settings.triggerDelayJitterMs);
+    if (jitter > 0) {
+      m_triggerDelayForTargetMs += randomInt(0, jitter);
     }
+    const float reactionRoll = randomFloat(0.0f, 1.0f);
+    if (reactionRoll < 0.10f) {
+      m_triggerDelayForTargetMs += randomInt(90, 240);
+    } else if (reactionRoll < 0.18f) {
+      m_triggerDelayForTargetMs -= randomInt(15, 45);
+    }
+    m_triggerDelayForTargetMs =
+        std::max(25, std::min(650, m_triggerDelayForTargetMs));
   }
   // В режиме only crit окно падения короткое: не тратим его на полную
   // «человеческую» задержку и случайные пропуски.
@@ -1291,6 +1357,9 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     hitPoint.x = eye.x + dir.x * bestDistance;
     hitPoint.y = eye.y + dir.y * bestDistance;
     hitPoint.z = eye.z + dir.z * bestDistance;
+  }
+  if (settings.randomAimPoint) {
+    hitPoint = randomHitPoint(bestActor, hitPoint);
   }
 
   // Главная сетевая проверка: бьём только если ротация, которую сервер
@@ -1389,6 +1458,8 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     }
     if (settings.humanize && randomFloat(0.0f, 1.0f) < 0.08f) {
       next += randomInt(120, 320);
+    } else if (randomFloat(0.0f, 1.0f) < 0.10f) {
+      next -= randomInt(30, 90);
     }
     m_nextAttackAtMs =
         std::max(now + (settings.onlyCrit ? 80 : 120), next);
@@ -1489,7 +1560,8 @@ void AimAssist::updateFastAimStealth(const Settings &settings, float dt) {
   float scale = clampf((10.0f - err) / 6.0f, 0.0f, 1.0f);
   if (scale <= 0.001f) return;
 
-  const float sigma = clampf(settings.trackingNoiseDeg, 0.0f, 0.25f);
+  const float sigma = clampf(
+      settings.trackingNoiseDeg * m_fastStealthScale, 0.0f, 0.30f);
   if (sigma > 0.0001f && dt > 0.0f) {
     const float tau = 0.42f;
     const float a = dt / tau;
@@ -1501,10 +1573,11 @@ void AimAssist::updateFastAimStealth(const Settings &settings, float dt) {
   }
 
   if (now >= m_nextFastRestMs) {
-    const float rest = clampf(settings.restOffsetDeg, 0.0f, 0.35f);
+    const float rest = clampf(
+        settings.restOffsetDeg * m_fastStealthScale, 0.0f, 0.40f);
     m_restYaw = randomFloat(-rest, rest);
     m_restPitch = randomFloat(-rest, rest) * 0.55f;
-    m_nextFastRestMs = now + randomInt(700, 1600);
+    m_nextFastRestMs = now + randomInt(550, 1500);
   }
 
   m_target.yaw = normalizeYaw(m_target.yaw +
@@ -1552,7 +1625,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     const float strengthScale =
         clampf(settings.strength / 100.0f, 0.15f, 1.0f);
     const float timeMs =
-        clampf(settings.fastAimTimeMs / strengthScale, 12.0f, 200.0f);
+        clampf(settings.fastAimTimeMs / strengthScale * m_fastTimeScale,
+               12.0f, 200.0f);
     const float alpha = 1.0f - std::exp(-fastDt * 1000.0f / timeMs);
 
     float errYaw = shortestDelta(curYaw, targetYaw);
@@ -1563,7 +1637,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     float stepPitch = errPitch * alpha;
 
     const float maxSpeed =
-        clampf(settings.fastAimMaxSpeed * strengthScale, 300.0f, 4000.0f);
+        clampf(settings.fastAimMaxSpeed * strengthScale * m_fastSpeedScale,
+               300.0f, 4000.0f);
     const float maxStep = maxSpeed * fastDt;
     const float stepMag =
         std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
@@ -1886,6 +1961,51 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
   return point;
 }
 
+Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
+                                 TargetBone bone) {
+  const int64_t now = nowMs();
+  if (actor != m_aimPointActor || now >= m_nextAimPointMs) {
+    m_aimPointActor = actor;
+    const bool head = bone == TargetBone::Head;
+    const float horizontal = head ? 0.055f : 0.10f;
+    const float vertical = head ? 0.05f : 0.12f;
+    m_aimPointOffset.x = randomFloat(-horizontal, horizontal);
+    m_aimPointOffset.y = randomFloat(-vertical, vertical);
+    m_aimPointOffset.z = randomFloat(-horizontal, horizontal);
+    m_nextAimPointMs = now + randomInt(420, 1100);
+  }
+
+  Aabb bounds{};
+  if (!m_bridge.getActorBounds(actor, bounds)) return base;
+
+  Vec3 point{base.x + m_aimPointOffset.x,
+             base.y + m_aimPointOffset.y,
+             base.z + m_aimPointOffset.z};
+  const float marginX = std::min(0.08f, (bounds.max.x - bounds.min.x) * 0.2f);
+  const float marginY = std::min(0.08f, (bounds.max.y - bounds.min.y) * 0.2f);
+  const float marginZ = std::min(0.08f, (bounds.max.z - bounds.min.z) * 0.2f);
+  point.x = clampf(point.x, bounds.min.x + marginX, bounds.max.x - marginX);
+  point.y = clampf(point.y, bounds.min.y + marginY, bounds.max.y - marginY);
+  point.z = clampf(point.z, bounds.min.z + marginZ, bounds.max.z - marginZ);
+  return point;
+}
+
+Vec3 AimAssist::randomHitPoint(void *actor, const Vec3 &hitPoint) {
+  Aabb bounds{};
+  if (!m_bridge.getActorBounds(actor, bounds)) return hitPoint;
+
+  const float marginX = std::min(0.05f, (bounds.max.x - bounds.min.x) * 0.15f);
+  const float marginY = std::min(0.05f, (bounds.max.y - bounds.min.y) * 0.15f);
+  const float marginZ = std::min(0.05f, (bounds.max.z - bounds.min.z) * 0.15f);
+  Vec3 point{hitPoint.x + randomFloat(-0.05f, 0.05f),
+             hitPoint.y + randomFloat(-0.06f, 0.06f),
+             hitPoint.z + randomFloat(-0.05f, 0.05f)};
+  point.x = clampf(point.x, bounds.min.x + marginX, bounds.max.x - marginX);
+  point.y = clampf(point.y, bounds.min.y + marginY, bounds.max.y - marginY);
+  point.z = clampf(point.z, bounds.min.z + marginZ, bounds.max.z - marginZ);
+  return point;
+}
+
 Vec3 AimAssist::smoothedPoint(const Target &target,
                               const Settings &settings) {
   if (m_historyActor != target.actor) {
@@ -1940,6 +2060,15 @@ void AimAssist::clearTarget() {
   m_stableAimActor = nullptr;
   m_fastStealthActor = nullptr;
   m_nextFastRestMs = 0;
+  m_fastTimeScale = 1.0f;
+  m_fastSpeedScale = 1.0f;
+  m_fastStealthScale = 1.0f;
+  m_nextFastPauseMs = 0;
+  m_fastPauseUntilMs = 0;
+  m_aimPointActor = nullptr;
+  m_aimPointOffset = {};
+  m_nextAimPointMs = 0;
+  m_currentSwitchDelayMs = 0;
   resetHumanProfile();
   // m_onTarget принадлежит триггеру: очистка цели aim assist не должна
   // гасить триггер посреди кадра.

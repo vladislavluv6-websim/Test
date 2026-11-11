@@ -8,6 +8,7 @@
 #include <cstring>
 #include <string>
 
+#include "AntiBot.hpp"
 #include "GameEcs.hpp"
 #include "Memory.hpp"
 #include "Offsets.hpp"
@@ -737,6 +738,11 @@ bool Esp::isFriend(void *actor) {
   return m_friends.find(name) != m_friends.end();
 }
 
+std::string Esp::getActorName(void *actor) {
+  if (!actor) return {};
+  return actorName(actor, std::chrono::steady_clock::now());
+}
+
 std::string Esp::actorName(void *actor,
                            std::chrono::steady_clock::time_point now) {
   {
@@ -819,6 +825,7 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
     for (void *actor : m_actors) {
       if (!actor || actor == player) continue;
       if (!m_bridge.isPlayer(actor)) continue;
+      if (AntiBot::instance().isBot(actor)) continue;
 
       Aabb bounds{};
       if (!m_bridge.getActorBounds(actor, bounds)) continue;
@@ -909,6 +916,7 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
     if (!actor || actor == player) continue;
     const bool isPlayer = m_bridge.isPlayer(actor);
     if (isPlayer ? !showPlayers : !showMobs) continue;
+    if (isPlayer && AntiBot::instance().isBot(actor)) continue;
 
     Aabb bounds{};
     if (!m_bridge.getActorBounds(actor, bounds)) continue;
@@ -1112,6 +1120,7 @@ void Esp::render(void *levelRenderer, void *screenContext) {
       ? std::max(m_range.load(std::memory_order_relaxed), 64.0f)
       : m_range.load(std::memory_order_relaxed);
   m_bridge.fillNearbyActors(player, scanRange, m_actors);
+  AntiBot::instance().update(m_actors, player);
 
   if (nameTags) updateNameTags(player, playerRenderer, camera);
   if (espBoxes && javaBoxes) updateEspBoxes(player, playerRenderer, camera);
@@ -1152,6 +1161,7 @@ void Esp::render(void *levelRenderer, void *screenContext) {
 
     const bool isPlayer = m_bridge.isPlayer(actor);
     if (isPlayer && !showPlayers) continue;
+    if (isPlayer && AntiBot::instance().isBot(actor)) continue;
     if (!isPlayer) {
       if (!showMobs) continue;
       const uint32_t categories = m_bridge.getActorCategories(actor);

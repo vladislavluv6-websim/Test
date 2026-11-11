@@ -135,6 +135,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setOnlyCrit(onlyCrit);
         AimAssistMod.setTargetLock(manager.isAimAssistTargetLock());
         AimAssistMod.setAttackMissChance(skipChancePercent / 100.0f);
+        AimAssistMod.setAntiBot(manager.isTriggerBotAntiBot());
+        AimAssistMod.setRandomAimPoint(manager.isTriggerBotRandomPoint());
         AimAssistMod.setTriggerBot(true);
         EspMod.setFriendNames(manager.isFriendModuleEnabled()
                 ? manager.getFriendNames() : "");

@@ -211,6 +211,14 @@ public final class AimAssistMod {
         if (initialized) nativeSetOnlyCrit(enabled);
     }
 
+    public static void setAntiBot(boolean enabled) {
+        if (initialized) nativeSetAntiBot(enabled);
+    }
+
+    public static void setRandomAimPoint(boolean enabled) {
+        if (initialized) nativeSetRandomAimPoint(enabled);
+    }
+
     public static boolean isOnTarget() {
         return initialized && nativeIsOnTarget();
     }
@@ -282,6 +290,8 @@ public final class AimAssistMod {
     private static native void nativeSetServerViewGuard(boolean enabled);
     private static native void nativeSetSustainedTickDelta(float degrees);
     private static native void nativeSetOnlyCrit(boolean enabled);
+    private static native void nativeSetAntiBot(boolean enabled);
+    private static native void nativeSetRandomAimPoint(boolean enabled);
     private static native boolean nativeIsOnTarget();
     private static native void nativeSetTouchActive(boolean active);
     private static native void nativeNotifyCameraLook();

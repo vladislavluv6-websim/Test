@@ -78,6 +78,7 @@ public:
 
   void setFriendNames(const std::string &names);
   bool isFriend(void *actor);
+  std::string getActorName(void *actor);
 
   // Called from the LevelRenderer::renderLevel detour.
   void render(void *levelRenderer, void *screenContext);

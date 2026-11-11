@@ -758,6 +758,8 @@
     <string name="mod_config_aim_assist_fast_aim">Fast aim</string>
     <string name="mod_config_aim_assist_fast_aim_time">Fast aim time (ms)</string>
     <string name="mod_config_aim_assist_fast_aim_speed">Fast aim speed (°/s)</string>
+    <string name="mod_config_aim_assist_anti_bot">AntiBot (skip fake players)</string>
+    <string name="mod_config_aim_assist_random_point">Random aim point and hit point</string>
     <string name="mod_config_aim_assist_grace">Target grace (frames)</string>
     <string name="mod_config_aim_assist_max_speed">Max turn speed (°/s)</string>
     <string name="mod_config_aim_assist_smoothing">Smoothing (1 = sharp, 40 = silky)</string>
@@ -775,6 +777,8 @@
     <string name="mod_config_trigger_bot_interval_jitter">Trigger Bot: interval jitter (ms)</string>
     <string name="mod_config_trigger_bot_skip_chance">Trigger Bot: skip chance (%)</string>
     <string name="mod_config_trigger_bot_only_crit">Trigger Bot: critical hits only</string>
+    <string name="mod_config_trigger_bot_anti_bot">Trigger Bot: AntiBot</string>
+    <string name="mod_config_trigger_bot_random_point">Trigger Bot: random hit point</string>
     <string name="aim_assist_mod_unavailable">Aim assist is unavailable for this game version</string>
     <string name="inbuilt_mod_chick_pet">Chick Pet</string>
     <string name="inbuilt_mod_chick_pet_desc">A cute pixelated chick that walks around, sleeps, and runs when touched!</string>

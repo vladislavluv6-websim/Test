@@ -54,6 +54,10 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_FAST_AIM = "aim_assist_fast_aim";
     private static final String KEY_AIM_ASSIST_FAST_AIM_TIME = "aim_assist_fast_aim_time";
     private static final String KEY_AIM_ASSIST_FAST_AIM_MAX_SPEED = "aim_assist_fast_aim_max_speed";
+    private static final String KEY_AIM_ASSIST_ANTI_BOT = "aim_assist_anti_bot";
+    private static final String KEY_AIM_ASSIST_RANDOM_POINT = "aim_assist_random_point";
+    private static final String KEY_TRIGGER_BOT_ANTI_BOT = "trigger_bot_anti_bot";
+    private static final String KEY_TRIGGER_BOT_RANDOM_POINT = "trigger_bot_random_point";
     private static final String KEY_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String KEY_ESP_SHOW_MOBS = "esp_show_mobs";
     private static final String KEY_ESP_NAME_TAGS = "esp_name_tags";
@@ -162,6 +166,8 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_FAST_AIM = true;
     private static final int DEFAULT_AIM_ASSIST_FAST_AIM_TIME = 35;
     private static final int DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED = 2600;
+    private static final boolean DEFAULT_AIM_ASSIST_ANTI_BOT = true;
+    private static final boolean DEFAULT_AIM_ASSIST_RANDOM_POINT = true;
     private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
     private static final boolean DEFAULT_ESP_SHOW_MOBS = true;
     private static final boolean DEFAULT_ESP_NAME_TAGS = false;
@@ -272,6 +278,14 @@ public class InbuiltModManager {
                         DEFAULT_AIM_ASSIST_FAST_AIM_TIME)
                 .putInt(KEY_AIM_ASSIST_FAST_AIM_MAX_SPEED,
                         DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED)
+                .putBoolean(KEY_AIM_ASSIST_ANTI_BOT,
+                        DEFAULT_AIM_ASSIST_ANTI_BOT)
+                .putBoolean(KEY_AIM_ASSIST_RANDOM_POINT,
+                        DEFAULT_AIM_ASSIST_RANDOM_POINT)
+                .putBoolean(KEY_TRIGGER_BOT_ANTI_BOT,
+                        DEFAULT_AIM_ASSIST_ANTI_BOT)
+                .putBoolean(KEY_TRIGGER_BOT_RANDOM_POINT,
+                        DEFAULT_AIM_ASSIST_RANDOM_POINT)
                 .putInt(KEY_TRIGGER_BOT_DELAY, DEFAULT_TRIGGER_BOT_DELAY)
                 .putInt(KEY_TRIGGER_BOT_REACTION_JITTER, DEFAULT_TRIGGER_BOT_REACTION_JITTER)
                 .putInt(KEY_TRIGGER_BOT_TOLERANCE, DEFAULT_TRIGGER_BOT_TOLERANCE)
@@ -619,6 +633,48 @@ public class InbuiltModManager {
     public void setAimAssistFastAimMaxSpeed(int degPerSecond) {
         prefs.edit().putInt(KEY_AIM_ASSIST_FAST_AIM_MAX_SPEED,
                 Math.max(120, Math.min(4000, degPerSecond))).apply();
+    }
+
+    public boolean isAimAssistAntiBot() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_ANTI_BOT,
+                DEFAULT_AIM_ASSIST_ANTI_BOT);
+    }
+
+    public void setAimAssistAntiBot(boolean enabled) {
+        prefs.edit()
+                .putBoolean(KEY_AIM_ASSIST_ANTI_BOT, enabled)
+                .putBoolean(KEY_TRIGGER_BOT_ANTI_BOT, enabled)
+                .apply();
+    }
+
+    public boolean isTriggerBotAntiBot() {
+        return prefs.getBoolean(KEY_TRIGGER_BOT_ANTI_BOT,
+                isAimAssistAntiBot());
+    }
+
+    public void setTriggerBotAntiBot(boolean enabled) {
+        setAimAssistAntiBot(enabled);
+    }
+
+    public boolean isAimAssistRandomPoint() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_RANDOM_POINT,
+                DEFAULT_AIM_ASSIST_RANDOM_POINT);
+    }
+
+    public void setAimAssistRandomPoint(boolean enabled) {
+        prefs.edit()
+                .putBoolean(KEY_AIM_ASSIST_RANDOM_POINT, enabled)
+                .putBoolean(KEY_TRIGGER_BOT_RANDOM_POINT, enabled)
+                .apply();
+    }
+
+    public boolean isTriggerBotRandomPoint() {
+        return prefs.getBoolean(KEY_TRIGGER_BOT_RANDOM_POINT,
+                isAimAssistRandomPoint());
+    }
+
+    public void setTriggerBotRandomPoint(boolean enabled) {
+        setAimAssistRandomPoint(enabled);
     }
 
     public boolean isEspShowPlayers() {

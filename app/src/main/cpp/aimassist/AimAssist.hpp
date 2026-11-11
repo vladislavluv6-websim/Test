@@ -151,6 +151,9 @@ struct Settings {
   // по минимальному углу). Это самая шумная для анти-читов ветка.
   bool legitAttackOnly = true;
 
+  bool antiBot = true;
+  bool randomAimPoint = true;
+
   // ------------------------------------------------------------
   // Only crit
   // ------------------------------------------------------------
@@ -254,6 +257,8 @@ public:
   void setServerViewGuard(bool enabled);
   void setSustainedTickDelta(float degrees);
   void setOnlyCrit(bool enabled);
+  void setAntiBot(bool enabled);
+  void setRandomAimPoint(bool enabled);
   void setTouchActive(bool active);
   void notifyCameraLook();
   void setActivationHeld(bool held);
@@ -280,6 +285,8 @@ private:
   bool isInvisible(void *actor) const;
   bool isSameTeam(void *local, void *other) const;
   Vec3 getTargetPoint(void *actor, TargetBone bone) const;
+  Vec3 jitteredAimPoint(void *actor, const Vec3 &base, TargetBone bone);
+  Vec3 randomHitPoint(void *actor, const Vec3 &hitPoint);
   Angles calculateAnglesToPoint(const Vec3 &point) const;
   void findTargetInternal(void *player, const Settings &settings,
                           bool actorsAlreadyFilled = false);
@@ -406,6 +413,16 @@ private:
   // Random per-engagement profile for Fast aim (stealth mode): never reuse
   // the same time constant / speed / settle radius, otherwise ML heuristics
   // see a deterministic motor pattern across fights.
+  float m_fastTimeScale = 1.0f;
+  float m_fastSpeedScale = 1.0f;
+  float m_fastStealthScale = 1.0f;
+  int64_t m_nextFastPauseMs = 0;
+  int64_t m_fastPauseUntilMs = 0;
+
+  void *m_aimPointActor = nullptr;
+  Vec3 m_aimPointOffset{};
+  int64_t m_nextAimPointMs = 0;
+  int m_currentSwitchDelayMs = 0;
 
   mutable Vec3 m_eye{};
   std::minstd_rand m_rng{0x5EED1234u};
