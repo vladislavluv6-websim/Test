@@ -1635,7 +1635,7 @@ function selectDropdownOption(val) {
 // Account Popover Toggle
 function toggleAccountPopover() {
   const pop = document.getElementById('accountPopover');
-  pop.classList.toggle('open');
+  if (pop) pop.classList.toggle('open');
 }
 
 // RICH COLOR PICKER LOGIC
@@ -1662,7 +1662,8 @@ function openColorPopup(chipEl, event) {
 }
 
 function closeColorPicker() {
-  document.getElementById('colorPickerModal').classList.remove('open');
+  const modal = document.getElementById('colorPickerModal');
+  if (modal) modal.classList.remove('open');
 }
 
 function applyColor(hex) {
@@ -1694,10 +1695,12 @@ function setThemeAccent(hex) {
 // Close Popups on Outside Click
 window.addEventListener('click', (e) => {
   if (!e.target.closest('.account-popover') && !e.target.closest('.sidebar-account')) {
-    document.getElementById('accountPopover').classList.remove('open');
+    const pop = document.getElementById('accountPopover');
+    if (pop) pop.classList.remove('open');
   }
   if (!e.target.closest('.nl-modal-dropdown') && !e.target.closest('.nl-select-btn')) {
-    document.getElementById('modalDropdown').classList.remove('open');
+    const dd = document.getElementById('modalDropdown');
+    if (dd) dd.classList.remove('open');
   }
   if (!e.target.closest('.color-picker-modal') && !e.target.closest('.color-chip')) {
     closeColorPicker();
@@ -1705,8 +1708,10 @@ window.addEventListener('click', (e) => {
 });
 
 function closeAllPopups() {
-  document.getElementById('accountPopover').classList.remove('open');
-  document.getElementById('modalDropdown').classList.remove('open');
+  const pop = document.getElementById('accountPopover');
+  if (pop) pop.classList.remove('open');
+  const dd = document.getElementById('modalDropdown');
+  if (dd) dd.classList.remove('open');
   closeColorPicker();
 }
 
