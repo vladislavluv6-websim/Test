@@ -160,11 +160,7 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(resolveLaunchBackgroundColor()))
 
         if (savedInstanceState != null) {
-            trace.mark("MinecraftActivity finishing restored instance")
-            gameRuntimeStarted = true
-            super.onCreate(null)
-            finish()
-            return
+            trace.mark("MinecraftActivity restored instance, continuing launch")
         }
 
         try {
@@ -946,7 +942,10 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
 
     override fun tick() {
         super.tick()
-        overlayManager?.tick()
+        try {
+            overlayManager?.tick()
+        } catch (_: RuntimeException) {
+        }
     }
 
     override fun getDataDir(): File {

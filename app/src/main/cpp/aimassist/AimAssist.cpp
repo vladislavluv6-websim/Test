@@ -643,10 +643,6 @@ void AimAssist::updateVisual(float dt) {
 
   // Высота цели задаётся режимом: голова / грудь / ноги.
   m_target.point = getTargetPoint(m_target.actor, settings.targetBone);
-  if (settings.randomAimPoint) {
-    m_target.point =
-        jitteredAimPoint(m_target.actor, m_target.point, settings.targetBone);
-  }
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -667,7 +663,7 @@ void AimAssist::updateVisual(float dt) {
   Esp::instance().markTargetEspHit(m_target.actor);
 
   // Fast aim: без человеческого профиля и EMA позиции. Чистая экспонента
-  // плюс лимит скорости, лёгкий stealth-дрейф и бюджет на серверный тик.
+  // плюс лимит скорости и бюджет на серверный тик.
   if (settings.fastAim) {
     if (m_lastAimActor != m_target.actor) {
       m_lastAimActor = m_target.actor;
@@ -751,43 +747,12 @@ void AimAssist::updateVisual(float dt) {
   const Vec3 point = smoothedPoint(m_target, settings);
   Angles aim = calculateAnglesToPoint(point);
 
-  // Одноразовый перелёт: на захвате цель «пролетается» на несколько
-  // процентов начальной ошибки и затем доводится. Живая рука не тормозит
-  // точно в центре с первого движения.
   if (m_targetLockMs == 0) {
     m_targetLockMs = aimNow;
-    if (settings.humanize && settings.overshootFactor > 0.0f) {
-      const float curYaw = m_localYaw.load(std::memory_order_relaxed);
-      const float curPitch = m_localPitch.load(std::memory_order_relaxed);
-      const float dy = shortestDelta(curYaw, aim.yaw);
-      const float dp = aim.pitch - curPitch;
-      const float jitter = randomFloat(0.6f, 1.35f);
-      m_overYaw = clampf(dy * settings.overshootFactor * jitter, -6.0f, 6.0f);
-      m_overPitch =
-          clampf(dp * settings.overshootFactor * jitter, -4.0f, 4.0f);
-    }
   }
 
   if (settings.humanize) {
     updateHumanProfile(settings, dt, aimNow);
-    const float curYaw = m_localYaw.load(std::memory_order_relaxed);
-    const float curPitch = m_localPitch.load(std::memory_order_relaxed);
-    const float errYaw = shortestDelta(curYaw, aim.yaw);
-    const float errPitch = aim.pitch - curPitch;
-    const float err = std::sqrt(errYaw * errYaw + errPitch * errPitch);
-    const float speedFactor = clampf(m_lastFactor, 0.0f, 1.0f);
-    const float errFactor = clampf(err / 20.0f, 0.0f, 1.0f);
-    const float offsetScale =
-        (1.0f - 0.60f * speedFactor) * (1.0f - 0.40f * errFactor);
-    const float overScale = 1.0f - 0.45f * speedFactor;
-    aim.yaw = normalizeYaw(aim.yaw
-            + (m_restYaw + m_noiseYaw) * offsetScale + m_overYaw * overScale);
-    aim.pitch = clampf(aim.pitch
-            + (m_restPitch + m_noisePitch) * offsetScale + m_overPitch * overScale,
-            -89.9f, 89.9f);
-  }
-
-  if (settings.humanize) {
     updateFatigue(settings, aimNow);
   }
 
@@ -804,19 +769,6 @@ void AimAssist::updateVisual(float dt) {
       m_flickTicksLeft =
           std::max(m_flickTicksLeft, settings.flickTickBudget);
     }
-  }
-
-  // Jitter по умолчанию 0. Если включён — обновляем редко, не каждый кадр.
-  if (settings.randomJitterDeg > 0.0f) {
-    if (aimNow - m_lastJitterMs >= settings.randomJitterIntervalMs) {
-      m_lastJitterMs = aimNow;
-      std::uniform_real_distribution<float> dist(-settings.randomJitterDeg,
-                                                 settings.randomJitterDeg);
-      m_jitterYaw = dist(m_rng);
-      m_jitterPitch = dist(m_rng);
-    }
-    aim.yaw = normalizeYaw(aim.yaw + m_jitterYaw);
-    aim.pitch = clampf(aim.pitch + m_jitterPitch, -89.9f, 89.9f);
   }
 
   const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
@@ -1536,60 +1488,13 @@ void AimAssist::stabilizeFastAimAngles(float dt) {
   m_target.pitch = m_stableAimPitch;
 }
 
-void AimAssist::updateFastAimStealth(const Settings &settings, float dt) {
-  if (!settings.antiCheatMode) return;
-
-  const int64_t now = nowMs();
-  if (m_fastStealthActor != m_target.actor) {
-    m_fastStealthActor = m_target.actor;
-    m_noiseYaw = 0.0f;
-    m_noisePitch = 0.0f;
-    m_restYaw = 0.0f;
-    m_restPitch = 0.0f;
-    m_restTargetYaw = 0.0f;
-    m_restTargetPitch = 0.0f;
-    m_nextFastRestMs = 0;
-  }
-
-  const float curYaw = m_localYaw.load(std::memory_order_relaxed);
-  const float curPitch = m_localPitch.load(std::memory_order_relaxed);
-  const float errYaw = shortestDelta(curYaw, m_target.yaw);
-  const float errPitch = m_target.pitch - curPitch;
-  const float err = std::sqrt(errYaw * errYaw + errPitch * errPitch);
-
-  // На больших ошибках (флик/перезахват) не добавляем смещение, чтобы не
-  // менять скорость; у цели включаем плавный «человеческий» дрейф.
-  float scale = clampf((10.0f - err) / 6.0f, 0.0f, 1.0f);
-  if (scale <= 0.001f) return;
-
-  const float sigma = clampf(
-      settings.trackingNoiseDeg * m_fastStealthScale, 0.0f, 0.30f);
-  if (sigma > 0.0001f && dt > 0.0f) {
-    const float tau = 0.42f;
-    const float a = dt / tau;
-    const float k = sigma * std::sqrt(2.0f * a);
-    m_noiseYaw += -m_noiseYaw * a + randomFloat(-k, k);
-    m_noisePitch += -m_noisePitch * a + randomFloat(-k, k) * 0.65f;
-    m_noiseYaw = clampf(m_noiseYaw, -sigma * 2.5f, sigma * 2.5f);
-    m_noisePitch = clampf(m_noisePitch, -sigma * 2.5f, sigma * 2.5f);
-  }
-
-  if (now >= m_nextFastRestMs) {
-    const float rest = clampf(
-        settings.restOffsetDeg * m_fastStealthScale, 0.0f, 0.40f);
-    m_restTargetYaw = randomFloat(-rest, rest);
-    m_restTargetPitch = randomFloat(-rest, rest) * 0.55f;
-    m_nextFastRestMs = now + randomInt(750, 1900);
-  }
-  const float restBlend = clampf(dt * 3.2f, 0.0f, 1.0f);
-  m_restYaw += (m_restTargetYaw - m_restYaw) * restBlend;
-  m_restPitch += (m_restTargetPitch - m_restPitch) * restBlend;
-
-  m_target.yaw = normalizeYaw(m_target.yaw +
-                              (m_noiseYaw + m_restYaw) * scale);
-  m_target.pitch = clampf(m_target.pitch +
-                          (m_noisePitch + m_restPitch) * scale,
-                          -89.5f, 89.5f);
+void AimAssist::updateFastAimStealth(const Settings &, float) {
+  m_noiseYaw = 0.0f;
+  m_noisePitch = 0.0f;
+  m_restYaw = 0.0f;
+  m_restPitch = 0.0f;
+  m_restTargetYaw = 0.0f;
+  m_restTargetPitch = 0.0f;
 }
 
 // ============================================================
@@ -1767,52 +1672,21 @@ void AimAssist::resetHumanProfile() {
   m_targetLockMs = 0;
 }
 
-void AimAssist::updateHumanProfile(const Settings &settings, float dt,
-                                   int64_t now) {
-  dt = clampf(dt, 0.0f, kMaxDt);
-
-  // Медленная вариация силы/скорости движения руки.
+void AimAssist::updateHumanProfile(const Settings &settings, float, int64_t now) {
   if (now >= m_nextMotorMs) {
     const float var = clampf(settings.motorVariation, 0.0f, 0.45f);
     m_motorScale = randomFloat(1.0f - var, 1.0f + var);
     m_nextMotorMs = now + randomInt(180, 480);
   }
 
-  // Gauss-Markov (OU) шум сопровождения. В отличие от синусоид он не
-  // периодичен, но и не «дребезжит» каждый кадр: соседние значения
-  // коррелированы, поэтому детекторы jitter/направлений не видят
-  // искусственно высокой частоты смены знака.
-  const float sigma =
-      std::max(0.0f, settings.trackingNoiseDeg + settings.aimTremorDeg);
-  if (sigma > 0.0001f && dt > 0.0f) {
-    const float tau = 0.55f;
-    const float a = dt / tau;
-    const float k = sigma * std::sqrt(2.0f * a);
-    std::normal_distribution<float> normal(0.0f, 1.0f);
-    m_noiseYaw += -m_noiseYaw * a + normal(m_rng) * k;
-    m_noisePitch += -m_noisePitch * a + normal(m_rng) * k * 0.7f;
-    const float limit = sigma * 2.5f;
-    m_noiseYaw = clampf(m_noiseYaw, -limit, limit);
-    m_noisePitch = clampf(m_noisePitch, -limit, limit);
-  } else {
-    m_noiseYaw = 0.0f;
-    m_noisePitch = 0.0f;
-  }
-
-  if (now >= m_nextRestMs) {
-    const float rest = std::max(0.0f, settings.restOffsetDeg);
-    m_restTargetYaw = randomFloat(-rest, rest);
-    m_restTargetPitch = randomFloat(-rest, rest) * 0.6f;
-    m_nextRestMs = now + randomInt(700, 1700);
-  }
-  const float restBlend = clampf(dt * 3.2f, 0.0f, 1.0f);
-  m_restYaw += (m_restTargetYaw - m_restYaw) * restBlend;
-  m_restPitch += (m_restTargetPitch - m_restPitch) * restBlend;
-
-  // Перелёт затухает за ~0.18 с — это скорость коррекции живой руки.
-  const float decay = std::exp(-dt / 0.18f);
-  m_overYaw *= decay;
-  m_overPitch *= decay;
+  m_noiseYaw = 0.0f;
+  m_noisePitch = 0.0f;
+  m_restYaw = 0.0f;
+  m_restPitch = 0.0f;
+  m_restTargetYaw = 0.0f;
+  m_restTargetPitch = 0.0f;
+  m_overYaw = 0.0f;
+  m_overPitch = 0.0f;
 }
 
 void AimAssist::updateFatigue(const Settings &settings, int64_t now) {
@@ -1967,35 +1841,6 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
   point.x = (bounds.min.x + bounds.max.x) * 0.5f;
   point.z = (bounds.min.z + bounds.max.z) * 0.5f;
   point.y = bounds.min.y + (bounds.max.y - bounds.min.y) * fraction;
-  return point;
-}
-
-Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
-                                 TargetBone bone) {
-  const int64_t now = nowMs();
-  if (actor != m_aimPointActor || now >= m_nextAimPointMs) {
-    m_aimPointActor = actor;
-    const bool head = bone == TargetBone::Head;
-    const float horizontal = head ? 0.007f : 0.013f;
-    const float vertical = head ? 0.005f : 0.010f;
-    m_aimPointOffset.x = randomFloat(-horizontal, horizontal);
-    m_aimPointOffset.y = randomFloat(-vertical, vertical);
-    m_aimPointOffset.z = randomFloat(-horizontal, horizontal);
-    m_nextAimPointMs = now + randomInt(1600, 3200);
-  }
-
-  Aabb bounds{};
-  if (!m_bridge.getActorBounds(actor, bounds)) return base;
-
-  Vec3 point{base.x + m_aimPointOffset.x,
-             base.y + m_aimPointOffset.y,
-             base.z + m_aimPointOffset.z};
-  const float marginX = std::min(0.08f, (bounds.max.x - bounds.min.x) * 0.2f);
-  const float marginY = std::min(0.08f, (bounds.max.y - bounds.min.y) * 0.2f);
-  const float marginZ = std::min(0.08f, (bounds.max.z - bounds.min.z) * 0.2f);
-  point.x = clampf(point.x, bounds.min.x + marginX, bounds.max.x - marginX);
-  point.y = clampf(point.y, bounds.min.y + marginY, bounds.max.y - marginY);
-  point.z = clampf(point.z, bounds.min.z + marginZ, bounds.max.z - marginZ);
   return point;
 }
 

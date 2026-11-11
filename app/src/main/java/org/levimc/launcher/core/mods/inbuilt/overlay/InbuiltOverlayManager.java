@@ -87,6 +87,10 @@ public class InbuiltOverlayManager {
         instance = this;
     }
 
+    private boolean isActivityUsable() {
+        return !activity.isFinishing() && !activity.isDestroyed();
+    }
+
     public static InbuiltOverlayManager getInstance() {
         return instance;
     }
@@ -164,6 +168,7 @@ public class InbuiltOverlayManager {
     }
 
     public void showEnabledOverlays() {
+        if (!isActivityUsable()) return;
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
         if (!manager.isModMenuEnabled()) {
             refreshRuntimeVisibility();
@@ -225,7 +230,10 @@ public class InbuiltOverlayManager {
 
     private void showShortcutOnly(String modId) {
         if (modOverlayMap.containsKey(modId)) return;
-        showModOverlay(modId);
+        try {
+            showModOverlay(modId);
+        } catch (RuntimeException ignored) {
+        }
     }
 
     public void syncShortcutVisibility(String modId) {
@@ -857,6 +865,7 @@ public class InbuiltOverlayManager {
 
 
     public void hideAllOverlays() {
+        if (!isActivityUsable()) return;
         releaseModMenuShortcut();
         releaseKeybinds();
         for (BaseOverlayButton controller : keybindControllers.values()) controller.hide();
@@ -1071,6 +1080,14 @@ public class InbuiltOverlayManager {
     }
 
     public void applyConfigurationChanges(String modId) {
+        if (!isActivityUsable()) return;
+        try {
+            applyConfigurationChangesInternal(modId);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private void applyConfigurationChangesInternal(String modId) {
         BaseOverlayButton overlay = modOverlayMap.get(modId);
         if (overlay != null) {
             overlay.applyConfigurationChanges();
@@ -1303,6 +1320,14 @@ public class InbuiltOverlayManager {
     }
 
     public void tick() {
+        if (!isActivityUsable()) return;
+        try {
+            tickInternal();
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private void tickInternal() {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
         if (nameTagsOverlay != null) {
             nameTagsOverlay.setModuleEnabled(manager.isNameTagsEnabled());
@@ -1364,7 +1389,11 @@ public class InbuiltOverlayManager {
         lastVisibilityStateHash = stateHash;
 
         activity.runOnUiThread(() -> {
-            PojavControls.setHudVisible(!hideLauncherOverlays);
+            if (!isActivityUsable()) return;
+            try {
+                PojavControls.setHudVisible(!hideLauncherOverlays);
+            } catch (RuntimeException ignored) {
+            }
             LogcatOverlayManager logcatManager = LogcatOverlayManager.getInstance();
             if (logcatManager != null) logcatManager.setGameHudHidden(hideLauncherOverlays);
             if (modMenuButton != null) {
