@@ -67,7 +67,7 @@ public class InbuiltOverlayManager {
     private FpsDisplayOverlay fpsDisplayOverlay;
     private CpsDisplayOverlay cpsDisplayOverlay;
     private ModMenuButton modMenuButton;
-    private ModMenuOverlay modMenuOverlay;
+    private OnyxMenuOverlay modMenuOverlay;
     private boolean modMenuOpenedFromButton;
     private HudOverlay hudOverlay;
     private NameTagsOverlay nameTagsOverlay;
@@ -95,21 +95,9 @@ public class InbuiltOverlayManager {
         return instance;
     }
 
-    private ModMenuOverlay getOrCreateModMenuOverlay() {
+    private OnyxMenuOverlay getOrCreateModMenuOverlay() {
         if (modMenuOverlay == null) {
-            modMenuOverlay = new ModMenuOverlay(activity);
-            modMenuOverlay.setCallback(new ModMenuOverlay.ModMenuCallback() {
-                @Override
-                public void onModToggled(String modId, boolean enabled) {
-                }
-
-                @Override
-                public void onButtonOpacityChanged(int opacity) {
-                    if (modMenuButton != null) {
-                        modMenuButton.refreshOpacity();
-                    }
-                }
-            });
+            modMenuOverlay = new OnyxMenuOverlay(activity);
         }
         return modMenuOverlay;
     }
@@ -151,7 +139,7 @@ public class InbuiltOverlayManager {
         }
         activity.runOnUiThread(() -> {
             if (activity.isFinishing() || activity.isDestroyed()) return;
-            ModMenuOverlay overlay = getOrCreateModMenuOverlay();
+            OnyxMenuOverlay overlay = getOrCreateModMenuOverlay();
             if (overlay.isShowing()) {
                 modMenuOpenedFromButton = false;
                 overlay.hide();
@@ -188,7 +176,10 @@ public class InbuiltOverlayManager {
         y += step;
         if (manager.isOverlayShortcutVisible(ModIds.TARGET_ESP)) menuY += step;
         modPositionMap.put(ModIds.NAME_TAGS, y);
+        y += step;
         if (manager.isOverlayShortcutVisible(ModIds.NAME_TAGS)) menuY += step;
+        modPositionMap.put(ModIds.FRIEND, y);
+        if (manager.isOverlayShortcutVisible(ModIds.FRIEND)) menuY += step;
 
         for (String modId : STANDARD_SHORTCUT_MOD_IDS) {
             if (manager.isOverlayShortcutVisible(modId)) {
@@ -200,6 +191,9 @@ public class InbuiltOverlayManager {
         }
         if (manager.isOverlayShortcutVisible(ModIds.NAME_TAGS)) {
             ensureToggleShortcut(ModIds.NAME_TAGS);
+        }
+        if (manager.isOverlayShortcutVisible(ModIds.FRIEND)) {
+            ensureToggleShortcut(ModIds.FRIEND);
         }
 
         if (manager.resolveInbuiltModEnabled(ModIds.CHICK_PET, false)) {
@@ -219,7 +213,8 @@ public class InbuiltOverlayManager {
     }
 
     private boolean isShortcutModule(String modId) {
-        if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)) {
+        if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)
+                || ModIds.FRIEND.equals(modId)) {
             return true;
         }
         for (String id : STANDARD_SHORTCUT_MOD_IDS) {
@@ -240,7 +235,8 @@ public class InbuiltOverlayManager {
         if (modId == null || modId.isEmpty() || !isShortcutModule(modId)) return;
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
         if (manager.isOverlayShortcutVisible(modId)) {
-            if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)) {
+            if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)
+                    || ModIds.FRIEND.equals(modId)) {
                 ensureToggleShortcut(modId);
             } else {
                 showShortcutOnly(modId);
@@ -303,8 +299,9 @@ public class InbuiltOverlayManager {
         releaseModKeybind(modId);
         try {
             if (isShortcutModule(modId)) {
-                if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)) {
-                    if (wasEnabled) hideModOverlay(modId);
+                if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)
+                        || ModIds.FRIEND.equals(modId)) {
+                    if (wasEnabled && !ModIds.FRIEND.equals(modId)) hideModOverlay(modId);
                 } else {
                     BaseOverlayButton controller = modOverlayMap.get(modId);
                     if (controller != null) controller.onModuleConfigDisabled();

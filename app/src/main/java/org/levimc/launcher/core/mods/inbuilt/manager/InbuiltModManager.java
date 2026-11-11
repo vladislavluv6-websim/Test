@@ -214,6 +214,7 @@ public class InbuiltModManager {
     private static final int TUNING_REVISION = 6;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
+    private static final String KEY_ONYX_DEFAULTS_REVISION = "onyx_defaults_revision";
     private static final String KEY_SPEED_HOP_HEIGHT_REVISION = "speed_hop_height_revision";
     private static final String KEY_FRIEND_NAMES = "friend_names";
 
@@ -235,6 +236,20 @@ public class InbuiltModManager {
         migrateFov360();
         migrateSpeedHopHeight();
         migrateShortcutVisibility();
+        migrateOnyxDefaults();
+    }
+
+    private void migrateOnyxDefaults() {
+        if (prefs.getInt(KEY_ONYX_DEFAULTS_REVISION, 0) >= 1) return;
+        SharedPreferences.Editor editor = prefs.edit();
+        for (String modId : new String[]{
+                ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.ESP,
+                ModIds.FULLBRIGHT, ModIds.TRIGGER_BOT, ModIds.SWING,
+                ModIds.NAME_TAGS, ModIds.TARGET_ESP, ModIds.FRIEND}) {
+            editor.putBoolean(KEY_INBUILT_MOD_ENABLED_PREFIX + modId, false);
+            editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, false);
+        }
+        editor.putInt(KEY_ONYX_DEFAULTS_REVISION, 1).apply();
     }
 
     private void migrateSpeedHopHeight() {

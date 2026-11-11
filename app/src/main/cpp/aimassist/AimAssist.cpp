@@ -643,6 +643,10 @@ void AimAssist::updateVisual(float dt) {
 
   // Высота цели задаётся режимом: голова / грудь / ноги.
   m_target.point = getTargetPoint(m_target.actor, settings.targetBone);
+  if (settings.randomAimPoint) {
+    m_target.point =
+        jitteredAimPoint(m_target.actor, m_target.point, settings.targetBone);
+  }
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -1841,6 +1845,35 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
   point.x = (bounds.min.x + bounds.max.x) * 0.5f;
   point.z = (bounds.min.z + bounds.max.z) * 0.5f;
   point.y = bounds.min.y + (bounds.max.y - bounds.min.y) * fraction;
+  return point;
+}
+
+Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
+                                 TargetBone bone) {
+  const int64_t now = nowMs();
+  if (actor != m_aimPointActor || now >= m_nextAimPointMs) {
+    m_aimPointActor = actor;
+    const bool head = bone == TargetBone::Head;
+    const float horizontal = head ? 0.007f : 0.013f;
+    const float vertical = head ? 0.005f : 0.010f;
+    m_aimPointOffset.x = randomFloat(-horizontal, horizontal);
+    m_aimPointOffset.y = randomFloat(-vertical, vertical);
+    m_aimPointOffset.z = randomFloat(-horizontal, horizontal);
+    m_nextAimPointMs = now + randomInt(1600, 3200);
+  }
+
+  Aabb bounds{};
+  if (!m_bridge.getActorBounds(actor, bounds)) return base;
+
+  Vec3 point{base.x + m_aimPointOffset.x,
+             base.y + m_aimPointOffset.y,
+             base.z + m_aimPointOffset.z};
+  const float marginX = std::min(0.08f, (bounds.max.x - bounds.min.x) * 0.2f);
+  const float marginY = std::min(0.08f, (bounds.max.y - bounds.min.y) * 0.2f);
+  const float marginZ = std::min(0.08f, (bounds.max.z - bounds.min.z) * 0.2f);
+  point.x = clampf(point.x, bounds.min.x + marginX, bounds.max.x - marginX);
+  point.y = clampf(point.y, bounds.min.y + marginY, bounds.max.y - marginY);
+  point.z = clampf(point.z, bounds.min.z + marginZ, bounds.max.z - marginZ);
   return point;
 }
 

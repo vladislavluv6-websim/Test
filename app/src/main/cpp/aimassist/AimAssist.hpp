@@ -285,6 +285,7 @@ private:
   bool isInvisible(void *actor) const;
   bool isSameTeam(void *local, void *other) const;
   Vec3 getTargetPoint(void *actor, TargetBone bone) const;
+  Vec3 jitteredAimPoint(void *actor, const Vec3 &base, TargetBone bone);
   Vec3 randomHitPoint(void *actor, const Vec3 &hitPoint);
   Angles calculateAnglesToPoint(const Vec3 &point) const;
   void findTargetInternal(void *player, const Settings &settings,
