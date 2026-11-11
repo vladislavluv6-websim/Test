@@ -1546,6 +1546,8 @@ void AimAssist::updateFastAimStealth(const Settings &settings, float dt) {
     m_noisePitch = 0.0f;
     m_restYaw = 0.0f;
     m_restPitch = 0.0f;
+    m_restTargetYaw = 0.0f;
+    m_restTargetPitch = 0.0f;
     m_nextFastRestMs = 0;
   }
 
@@ -1575,10 +1577,13 @@ void AimAssist::updateFastAimStealth(const Settings &settings, float dt) {
   if (now >= m_nextFastRestMs) {
     const float rest = clampf(
         settings.restOffsetDeg * m_fastStealthScale, 0.0f, 0.40f);
-    m_restYaw = randomFloat(-rest, rest);
-    m_restPitch = randomFloat(-rest, rest) * 0.55f;
-    m_nextFastRestMs = now + randomInt(550, 1500);
+    m_restTargetYaw = randomFloat(-rest, rest);
+    m_restTargetPitch = randomFloat(-rest, rest) * 0.55f;
+    m_nextFastRestMs = now + randomInt(750, 1900);
   }
+  const float restBlend = clampf(dt * 3.2f, 0.0f, 1.0f);
+  m_restYaw += (m_restTargetYaw - m_restYaw) * restBlend;
+  m_restPitch += (m_restTargetPitch - m_restPitch) * restBlend;
 
   m_target.yaw = normalizeYaw(m_target.yaw +
                               (m_noiseYaw + m_restYaw) * scale);
@@ -1752,6 +1757,8 @@ void AimAssist::resetHumanProfile() {
   m_noisePitch = 0.0f;
   m_restYaw = 0.0f;
   m_restPitch = 0.0f;
+  m_restTargetYaw = 0.0f;
+  m_restTargetPitch = 0.0f;
   m_overYaw = 0.0f;
   m_overPitch = 0.0f;
   m_motorScale = 1.0f;
@@ -1792,13 +1799,15 @@ void AimAssist::updateHumanProfile(const Settings &settings, float dt,
     m_noisePitch = 0.0f;
   }
 
-  // Точка покоя не в математическом центре хитбокса и медленно блуждает.
   if (now >= m_nextRestMs) {
     const float rest = std::max(0.0f, settings.restOffsetDeg);
-    m_restYaw = randomFloat(-rest, rest);
-    m_restPitch = randomFloat(-rest, rest) * 0.6f;
-    m_nextRestMs = now + randomInt(500, 1400);
+    m_restTargetYaw = randomFloat(-rest, rest);
+    m_restTargetPitch = randomFloat(-rest, rest) * 0.6f;
+    m_nextRestMs = now + randomInt(700, 1700);
   }
+  const float restBlend = clampf(dt * 3.2f, 0.0f, 1.0f);
+  m_restYaw += (m_restTargetYaw - m_restYaw) * restBlend;
+  m_restPitch += (m_restTargetPitch - m_restPitch) * restBlend;
 
   // Перелёт затухает за ~0.18 с — это скорость коррекции живой руки.
   const float decay = std::exp(-dt / 0.18f);
@@ -1967,12 +1976,12 @@ Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
   if (actor != m_aimPointActor || now >= m_nextAimPointMs) {
     m_aimPointActor = actor;
     const bool head = bone == TargetBone::Head;
-    const float horizontal = head ? 0.055f : 0.10f;
-    const float vertical = head ? 0.05f : 0.12f;
+    const float horizontal = head ? 0.007f : 0.013f;
+    const float vertical = head ? 0.005f : 0.010f;
     m_aimPointOffset.x = randomFloat(-horizontal, horizontal);
     m_aimPointOffset.y = randomFloat(-vertical, vertical);
     m_aimPointOffset.z = randomFloat(-horizontal, horizontal);
-    m_nextAimPointMs = now + randomInt(420, 1100);
+    m_nextAimPointMs = now + randomInt(1600, 3200);
   }
 
   Aabb bounds{};

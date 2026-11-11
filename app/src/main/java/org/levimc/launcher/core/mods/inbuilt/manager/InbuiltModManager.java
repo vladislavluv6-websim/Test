@@ -189,7 +189,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_NAME_TAG_COLOR = 0xFF4E83FF;
     private static final int DEFAULT_NAME_TAG_SIZE = 11;
     private static final int DEFAULT_NAME_TAG_ARMOR_SIZE = 15;
-    private static final int DEFAULT_NAME_TAG_BLUR = 2;
+    private static final int DEFAULT_NAME_TAG_BLUR = 4;
     private static final boolean DEFAULT_NAME_TAG_SHOW_ARMOR = true;
     private static final boolean DEFAULT_NAME_TAG_SHOW_OFFHAND = true;
     private static final int DEFAULT_SWING_STYLE = 1;

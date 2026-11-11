@@ -21,6 +21,7 @@ import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
+import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.widget.Switch;
@@ -42,6 +43,7 @@ import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.inbuilt.ExternalModBridge;
 import org.levimc.launcher.core.mods.inbuilt.RuntimeConfigSchema;
 import org.levimc.launcher.core.mods.inbuilt.UnifiedMod;
+import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -481,7 +483,10 @@ final class RuntimeConfigView {
                 case "multi_choice": buildMultiChoice(card, node); break;
                 case "toggle_group": buildToggleGroup(card, node); break;
                 case "ordered_list": buildOrderedList(card, node); break;
-                case "text": buildText(card, node, false); break;
+                case "text":
+                    if ("friend_names".equals(node.key)) buildFriendList(card, node);
+                    else buildText(card, node, false);
+                    break;
                 case "multiline_text": buildText(card, node, true); break;
                 case "button": buildButton(card, node); break;
                 case "info": break;
@@ -1095,22 +1100,43 @@ final class RuntimeConfigView {
     private void showColorDialog(RuntimeConfigSchema.Node node, String initialValue, Button sourceButton) {
         int initial;
         try { initial = Color.parseColor(initialValue); } catch (Exception ignored) { initial = Color.WHITE; }
+        boolean nameTagBlur = "name_tag_color".equals(node.key);
+        InbuiltModManager manager = nameTagBlur
+                ? InbuiltModManager.getInstance(context) : null;
+        int originalBlur = manager != null ? manager.getNameTagBlur() : 0;
         LinearLayout box = new LinearLayout(context);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(6), dp(18), 0);
+        box.setPadding(dp(8), dp(6), dp(8), dp(2));
         int[] color = {initial};
-        box.addView(ColorPalette.create(context, initial,
-                node.colorAlpha, value -> color[0] = value));
-        new AlertDialog.Builder(context)
+        View palette = ColorPalette.create(context, initial, node.colorAlpha,
+                nameTagBlur,
+                manager != null ? manager.getNameTagBlur() : 0,
+                20,
+                value -> color[0] = value,
+                blur -> {
+                    if (manager != null) manager.setNameTagBlur(blur);
+                });
+        box.addView(palette, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ScrollView scroll = new ScrollView(context);
+        scroll.setFillViewport(false);
+        scroll.addView(box);
+        AlertDialog dialog = new AlertDialog.Builder(context)
                 .setTitle(node.title)
-                .setView(box)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                .setView(scroll)
+                .setNegativeButton(android.R.string.cancel, (d, which) -> {
+                    if (manager != null) manager.setNameTagBlur(originalBlur);
+                })
+                .setPositiveButton(android.R.string.ok, (d, which) -> {
                     String next = String.format(Locale.US, "#%08X", color[0]);
                     sourceButton.setText(next);
                     setValue(node.key, next);
                 })
-                .show();
+                .create();
+        dialog.setOnCancelListener(d -> {
+            if (manager != null) manager.setNameTagBlur(originalBlur);
+        });
+        dialog.show();
     }
 
     private interface IntConsumer { void accept(int value); }
@@ -1162,6 +1188,155 @@ final class RuntimeConfigView {
         });
         parent.addView(button, alignEnd());
     }
+
+    private void buildFriendList(LinearLayout parent, RuntimeConfigSchema.Node node) {
+        List<String> names = parseFriendNames(mod.getConfigValue(node.key, node.defaultValue));
+        LinearLayout inputRow = new LinearLayout(context);
+        inputRow.setOrientation(LinearLayout.HORIZONTAL);
+        inputRow.setGravity(Gravity.CENTER_VERTICAL);
+        EditText input = new EditText(context);
+        input.setHint(R.string.mod_friend_add_hint);
+        input.setTextColor(TEXT_PRIMARY);
+        input.setHintTextColor(TEXT_FAINT);
+        input.setTextSize(13);
+        input.setSingleLine(true);
+        input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        input.setBackground(roundRect(CONTROL, 7));
+        input.setPadding(dp(10), dp(7), dp(10), dp(7));
+        inputRow.addView(input, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button add = new Button(context);
+        add.setText(R.string.mod_friend_add);
+        add.setTextColor(ACCENT);
+        add.setTextSize(12);
+        add.setAllCaps(false);
+        add.setMinWidth(dp(72));
+        add.setMinimumWidth(dp(72));
+        add.setMinHeight(0);
+        add.setMinimumHeight(0);
+        add.setPadding(dp(12), dp(8), dp(12), dp(8));
+        add.setBackground(roundRect(0xFF1F2028, 7));
+        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        addParams.setMarginStart(dp(6));
+        inputRow.addView(add, addParams);
+        parent.addView(inputRow, matchWidth());
+
+        LinearLayout list = new LinearLayout(context);
+        list.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams listParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        listParams.topMargin = dp(6);
+        parent.addView(list, listParams);
+
+        TextView empty = new TextView(context);
+        empty.setText(R.string.mod_friend_empty);
+        empty.setTextColor(TEXT_SECONDARY);
+        empty.setTextSize(11);
+        empty.setPadding(dp(4), dp(4), dp(4), dp(2));
+        parent.addView(empty);
+
+        Runnable persist = () -> {
+            mod.updateConfig(node.key, joinFriendNames(names));
+            onConfigChanged.run();
+        };
+        final Runnable[] rebuildRef = new Runnable[1];
+        Runnable rebuild = () -> {
+            list.removeAllViews();
+            empty.setVisibility(names.isEmpty() ? View.VISIBLE : View.GONE);
+            for (String name : names) {
+                LinearLayout row = new LinearLayout(context);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dp(10), dp(6), dp(6), dp(6));
+                row.setBackground(roundRect(CONTROL, 7));
+                TextView label = new TextView(context);
+                label.setText(name);
+                label.setTextColor(FRIEND_COLOR);
+                label.setTextSize(12.5f);
+                label.setSingleLine(true);
+                label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                row.addView(label, new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                Button remove = new Button(context);
+                remove.setText("×");
+                remove.setTextColor(0xFFFF7A86);
+                remove.setTextSize(16);
+                remove.setAllCaps(false);
+                remove.setMinWidth(0);
+                remove.setMinimumWidth(0);
+                remove.setMinHeight(0);
+                remove.setMinimumHeight(0);
+                remove.setPadding(dp(10), 0, dp(10), dp(2));
+                remove.setBackground(roundRect(0xFF1F2028, 6));
+                remove.setContentDescription(context.getString(
+                        R.string.mod_friend_remove, name));
+                remove.setOnClickListener(v -> {
+                    names.remove(name);
+                    persist.run();
+                    rebuildRef[0].run();
+                });
+                row.addView(remove, new LinearLayout.LayoutParams(dp(38), dp(32)));
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
+                params.topMargin = dp(4);
+                list.addView(row, params);
+            }
+        };
+        Runnable addAction = () -> {
+            boolean changed = false;
+            for (String part : input.getText().toString().split("[,;\n\r\t]+")) {
+                String name = part.trim();
+                if (name.isEmpty() || containsFriend(names, name)) continue;
+                names.add(name);
+                changed = true;
+            }
+            input.setText("");
+            if (changed) {
+                persist.run();
+                rebuildRef[0].run();
+            }
+        };
+        add.setOnClickListener(v -> addAction.run());
+        input.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                addAction.run();
+                return true;
+            }
+            return false;
+        });
+        rebuildRef[0] = rebuild;
+        rebuild.run();
+    }
+
+    private List<String> parseFriendNames(String raw) {
+        List<String> names = new ArrayList<>();
+        if (raw == null) return names;
+        for (String part : raw.split("[,;\n\r\t]+")) {
+            String name = part.trim();
+            if (!name.isEmpty() && !containsFriend(names, name)) names.add(name);
+        }
+        return names;
+    }
+
+    private boolean containsFriend(List<String> names, String name) {
+        for (String existing : names) {
+            if (existing.equalsIgnoreCase(name)) return true;
+        }
+        return false;
+    }
+
+    private String joinFriendNames(List<String> names) {
+        StringBuilder joined = new StringBuilder();
+        for (int i = 0; i < names.size(); i++) {
+            if (i > 0) joined.append(", ");
+            joined.append(names.get(i));
+        }
+        return joined.toString();
+    }
+
+    private static final int FRIEND_COLOR = 0xFF55FF66;
 
     private void buildText(LinearLayout parent, RuntimeConfigSchema.Node node, boolean multiline) {
         EditText input = new EditText(context);

@@ -272,13 +272,19 @@ public class InbuiltOverlayManager {
             mainHandler.post(() -> handleModToggle(modId, enabled));
             return;
         }
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
         boolean wasEnabled = modActiveStates.getOrDefault(modId, false);
         modActiveStates.put(modId, enabled);
 
         if (enabled) {
             if (wasEnabled) return;
             boolean existed = modOverlayMap.containsKey(modId);
-            showModOverlay(modId);
+            try {
+                showModOverlay(modId);
+            } catch (RuntimeException ignored) {
+                modActiveStates.put(modId, false);
+                return;
+            }
             if (existed) {
                 BaseOverlayButton controller = modOverlayMap.get(modId);
                 if (controller != null) controller.onModuleConfigEnabled();
@@ -287,21 +293,24 @@ public class InbuiltOverlayManager {
         }
 
         releaseModKeybind(modId);
-        if (isShortcutModule(modId)) {
-            if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)) {
-                if (wasEnabled) hideModOverlay(modId);
-            } else {
-                BaseOverlayButton controller = modOverlayMap.get(modId);
-                if (controller != null) controller.onModuleConfigDisabled();
-                else if (wasEnabled) hideModOverlay(modId);
+        try {
+            if (isShortcutModule(modId)) {
+                if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)) {
+                    if (wasEnabled) hideModOverlay(modId);
+                } else {
+                    BaseOverlayButton controller = modOverlayMap.get(modId);
+                    if (controller != null) controller.onModuleConfigDisabled();
+                    else if (wasEnabled) hideModOverlay(modId);
+                }
+                return;
             }
-            return;
-        }
-        if (wasEnabled) {
-            hideModOverlay(modId);
-        } else {
-            BaseOverlayButton controller = keybindControllers.get(modId);
-            if (controller != null) controller.hide();
+            if (wasEnabled) {
+                hideModOverlay(modId);
+            } else {
+                BaseOverlayButton controller = keybindControllers.get(modId);
+                if (controller != null) controller.hide();
+            }
+        } catch (RuntimeException ignored) {
         }
     }
 

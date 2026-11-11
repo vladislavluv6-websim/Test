@@ -113,19 +113,19 @@ public final class ColorPalette {
         }
 
         private float squareSize(int width) {
-            float pad = dp(10);
-            float available = Math.max(dp(120), width - pad * 2f);
-            return Math.min(dp(260), available);
+            float pad = dp(8);
+            float available = Math.max(dp(96), width - pad * 2f);
+            return Math.min(dp(188), available);
         }
 
         private float contentHeight(int width) {
-            float pad = dp(10);
-            float y = pad + dp(38);
+            float pad = dp(8);
+            float y = pad + dp(34);
             y += squareSize(width);
-            y += dp(18) + dp(11);
-            if (withAlpha) y += dp(16) + dp(11);
-            if (withBlur) y += dp(16) + dp(11);
-            y += dp(20) + dp(34) + pad;
+            y += dp(14) + dp(10);
+            if (withAlpha) y += dp(12) + dp(10);
+            if (withBlur) y += dp(12) + dp(10);
+            y += dp(14) + dp(30) + pad;
             return y;
         }
 
@@ -137,31 +137,31 @@ public final class ColorPalette {
         }
 
         private void layoutRects() {
-            float pad = dp(10);
-            float top = pad + dp(38);
+            float pad = dp(8);
+            float top = pad + dp(34);
             float size = squareSize(getWidth());
             float left = pad + Math.max(0f, (getWidth() - pad * 2f - size) * 0.5f);
             svRect.set(left, top, left + size, top + size);
 
-            float y = svRect.bottom + dp(18);
-            hueRect.set(pad, y, getWidth() - pad, y + dp(11));
-            y = hueRect.bottom + dp(16);
+            float y = svRect.bottom + dp(14);
+            hueRect.set(pad, y, getWidth() - pad, y + dp(10));
+            y = hueRect.bottom + dp(12);
             if (withAlpha) {
-                alphaRect.set(pad, y, getWidth() - pad, y + dp(11));
-                y = alphaRect.bottom + dp(16);
+                alphaRect.set(pad, y, getWidth() - pad, y + dp(10));
+                y = alphaRect.bottom + dp(12);
             } else {
                 alphaRect.set(0, 0, 0, 0);
             }
             if (withBlur) {
-                blurRect.set(pad, y, getWidth() - pad, y + dp(11));
+                blurRect.set(pad, y, getWidth() - pad, y + dp(10));
                 y = blurRect.bottom;
             } else {
                 blurRect.set(0, 0, 0, 0);
                 y = withAlpha ? alphaRect.bottom : hueRect.bottom;
             }
-            float hexTop = y + dp(20);
-            hexRect.set(pad, hexTop, getWidth() - pad, hexTop + dp(34));
-            tabRect.set(pad, dp(8), pad + dp(150), dp(8) + dp(28));
+            float hexTop = y + dp(14);
+            hexRect.set(pad, hexTop, getWidth() - pad, hexTop + dp(30));
+            tabRect.set(pad, dp(6), pad + dp(120), dp(6) + dp(26));
         }
 
         @Override
@@ -180,13 +180,14 @@ public final class ColorPalette {
 
         private void drawTabs(Canvas canvas, float pad) {
             fill.setStyle(Paint.Style.FILL);
+            fill.setShader(null);
             fill.setColor(0xFF181B25);
             canvas.drawRoundRect(tabRect, dp(7), dp(7), fill);
             stroke.setStrokeWidth(dp(1));
             stroke.setColor(0xFF272B36);
             canvas.drawRoundRect(tabRect, dp(7), dp(7), stroke);
 
-            float sw = dp(16);
+            float sw = dp(14);
             float sx = tabRect.left + dp(7);
             float sy = tabRect.centerY() - sw * 0.5f;
             fill.setColor(color);
@@ -201,7 +202,7 @@ public final class ColorPalette {
             canvas.drawText(getContext().getString(R.string.color_palette_primary),
                     sx + sw + dp(8), baseline, text);
 
-            float radius = dp(11);
+            float radius = dp(10);
             float cx = tabRect.right + dp(18);
             fill.setColor(secondary);
             canvas.drawCircle(cx, tabRect.centerY(), radius, fill);

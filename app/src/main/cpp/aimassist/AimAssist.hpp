@@ -360,6 +360,8 @@ private:
   // Медленно блуждающая точка покоя относительно центра хитбокса.
   float m_restYaw = 0.0f;
   float m_restPitch = 0.0f;
+  float m_restTargetYaw = 0.0f;
+  float m_restTargetPitch = 0.0f;
   int64_t m_nextRestMs = 0;
   // Одноразовый перелёт при захвате цели (затухает экспоненциально).
   float m_overYaw = 0.0f;

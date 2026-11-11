@@ -1,5 +1,6 @@
 #include "GameEcs.hpp"
 
+#include <algorithm>
 #include <cerrno>
 #include <cmath>
 #include <cstddef>
@@ -57,7 +58,7 @@ constexpr uintptr_t kAttributeInstanceSize = 0x88;
 constexpr uintptr_t kAttributeCurrentMax = 0x78;
 constexpr uintptr_t kAttributeCurrentValue = 0x7C;
 constexpr size_t kHealthAttribute = 5;
-constexpr size_t kOffhandSlot = 1;
+constexpr size_t kOffhandSlot = 0;
 
 bool readable(const void *address, size_t size) {
   if (!address || reinterpret_cast<uintptr_t>(address) < 0x1000) return false;
@@ -201,6 +202,7 @@ bool setMoveJumping(void *actor, bool value) {
 namespace {
 
 constexpr uintptr_t kItemName = 0xD8;
+constexpr size_t kItemScanBytes = 0x180;
 
 bool readShortString(uintptr_t address, std::string &out) {
   uint8_t first = 0;
@@ -232,6 +234,106 @@ bool readShortString(uintptr_t address, std::string &out) {
   return true;
 }
 
+bool isItemNameChar(unsigned char ch) {
+  return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') ||
+         ch == '_' || ch == ':' || ch == '/' || ch == '.' || ch == '-';
+}
+
+bool plausibleItemName(const std::string &name, bool requireNamespace) {
+  if (name.size() < 3 || name.size() > 64) return false;
+  const size_t colon = name.find(':');
+  if (requireNamespace && colon == std::string::npos) return false;
+  if (colon != std::string::npos && colon + 1 >= name.size()) return false;
+  bool letter = false;
+  for (unsigned char ch : name) {
+    if (!isItemNameChar(ch)) return false;
+    if (ch >= 'a' && ch <= 'z') letter = true;
+  }
+  return letter;
+}
+
+size_t readPartial(uintptr_t address, uint8_t *out, size_t size) {
+  size_t done = 0;
+  while (done < size) {
+    const size_t chunk = std::min<size_t>(0x40, size - done);
+    if (!readValue(address + done, out + done, chunk)) break;
+    done += chunk;
+  }
+  return done;
+}
+
+bool shortStringFromBlock(const uint8_t *block, size_t available,
+                          size_t offset, std::string &out) {
+  if (offset >= available) return false;
+  const uint8_t first = block[offset];
+  const uint8_t *data = nullptr;
+  size_t size = 0;
+  if ((first & 1u) != 0) {
+    if (offset + 24 > available) return false;
+    uint64_t value = 0;
+    uintptr_t pointer = 0;
+    std::memcpy(&value, block + offset + 8, sizeof(value));
+    std::memcpy(&pointer, block + offset + 16, sizeof(pointer));
+    if (value == 0 || value > 64 || pointer < 0x1000) return false;
+    char buffer[65]{};
+    if (!readValue(pointer, buffer, static_cast<size_t>(value))) return false;
+    out.assign(buffer, static_cast<size_t>(value));
+    return true;
+  }
+  size = static_cast<size_t>(first >> 1);
+  if (size == 0 || size > 22 || offset + 1 + size > available) return false;
+  data = block + offset + 1;
+  out.assign(reinterpret_cast<const char *>(data), size);
+  return true;
+}
+
+bool readItemName(uintptr_t item, std::string &out) {
+  if (readShortString(item + kItemName, out) &&
+      plausibleItemName(out, false)) {
+    return true;
+  }
+  uint8_t block[kItemScanBytes]{};
+  const size_t available = readPartial(item, block, sizeof(block));
+  for (size_t offset = 0; offset + 24 <= available; offset += 8) {
+    if (offset == kItemName) continue;
+    std::string candidate;
+    if (shortStringFromBlock(block, available, offset, candidate) &&
+        plausibleItemName(candidate, true)) {
+      out = std::move(candidate);
+      return true;
+    }
+  }
+  for (size_t offset = 0; offset + 8 <= available; offset += 8) {
+    uintptr_t pointer = 0;
+    std::memcpy(&pointer, block + offset, sizeof(pointer));
+    if (pointer < 0x1000) continue;
+    char text[65]{};
+    if (!readValue(pointer, text, sizeof(text) - 1)) continue;
+    std::string candidate(text);
+    if (plausibleItemName(candidate, true)) {
+      out = std::move(candidate);
+      return true;
+    }
+  }
+  static const char kNamespace[] = "minecraft:";
+  for (size_t offset = 0; offset + sizeof(kNamespace) <= available; ++offset) {
+    if (std::memcmp(block + offset, kNamespace, sizeof(kNamespace) - 1) != 0) {
+      continue;
+    }
+    std::string candidate;
+    for (size_t i = offset; i < available && candidate.size() < 64; ++i) {
+      const unsigned char ch = block[i];
+      if (!isItemNameChar(ch)) break;
+      candidate.push_back(static_cast<char>(ch));
+    }
+    if (plausibleItemName(candidate, true)) {
+      out = std::move(candidate);
+      return true;
+    }
+  }
+  return false;
+}
+
 uint8_t armorMaterialFromName(const std::string &name) {
   if (name.empty()) return 0;
   auto has = [&name](const char *needle) {
@@ -261,7 +363,7 @@ bool readStackItemName(uintptr_t stack, std::string &out) {
       !readValue(counter, item) || item < 0x1000) {
     return false;
   }
-  return readShortString(item + kItemName, out);
+  return readItemName(item, out);
 }
 
 uint8_t armorMaterialForStack(uintptr_t stack) {

@@ -1279,8 +1279,8 @@ public class ModMenuOverlay {
                 int screenWidth = activity.getResources().getDisplayMetrics().widthPixels;
                 int screenHeight = activity.getResources().getDisplayMetrics().heightPixels;
                 int availableWidth = Math.max(1, screenWidth - dp(36));
-                int desiredWidth = Math.min(dp(430), Math.round(screenWidth * 0.44f));
-                int minimumWidth = Math.min(dp(312), availableWidth);
+                int desiredWidth = Math.min(dp(390), Math.round(screenWidth * 0.42f));
+                int minimumWidth = Math.min(dp(292), availableWidth);
                 params.width = Math.min(availableWidth, Math.max(minimumWidth, desiredWidth));
                 int availableHeight = Math.max(1, screenHeight - dp(24));
                 params.height = Math.min(dp(560), availableHeight);
@@ -1330,7 +1330,7 @@ public class ModMenuOverlay {
         }
         if (detailsPanel != null) {
             ViewGroup.LayoutParams params = detailsPanel.getLayoutParams();
-            params.width = compact ? ViewGroup.LayoutParams.MATCH_PARENT : dp(330);
+            params.width = compact ? ViewGroup.LayoutParams.MATCH_PARENT : dp(306);
             detailsPanel.setLayoutParams(params);
         }
         if (navCategories != null) {

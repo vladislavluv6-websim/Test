@@ -830,7 +830,7 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
       if (!m_bridge.getActorBounds(actor, bounds)) continue;
 
       const float dx = (bounds.min.x + bounds.max.x) * 0.5f - camera[0];
-      const float dy = bounds.max.y + 0.35f - camera[1];
+      const float dy = bounds.max.y + 0.12f - camera[1];
       const float dz = (bounds.min.z + bounds.max.z) * 0.5f - camera[2];
       const float depth = dx * fx + dy * fy + dz * fz;
       if (depth <= 0.15f) continue;
