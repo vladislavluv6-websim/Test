@@ -825,7 +825,6 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
     for (void *actor : m_actors) {
       if (!actor || actor == player) continue;
       if (!m_bridge.isPlayer(actor)) continue;
-      if (AntiBot::instance().isBot(actor)) continue;
 
       Aabb bounds{};
       if (!m_bridge.getActorBounds(actor, bounds)) continue;
@@ -855,8 +854,17 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
         }
         return count;
       }();
-      labels.push_back({labelX, labelY, depth, armorPieces, armorMask, 20.0f,
-                        std::move(name)});
+      NameTagLabel label;
+      label.x = labelX;
+      label.y = labelY;
+      label.distance = depth;
+      label.armorPieces = armorPieces;
+      label.armorMask = armorMask;
+      label.health = gameecs::readHealth(actor);
+      label.friendPlayer = isFriend(actor);
+      label.offhandItem = gameecs::offhandItemName(actor);
+      label.name = std::move(name);
+      labels.push_back(std::move(label));
       if (labels.size() >= 256) break;
     }
   }

@@ -1,6 +1,7 @@
 #include "GameEcs.hpp"
 
 #include <cerrno>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -37,6 +38,7 @@ constexpr entt::id_type kHashMoveInput = 0x018B1887;
 constexpr entt::id_type kHashOnGround = 0xC29078A0;
 constexpr entt::id_type kHashEquipment = 0xB06141A9;
 constexpr entt::id_type kHashActorData = 0xC67426F3;
+constexpr entt::id_type kHashAttributes = 0xB6B29444;
 
 constexpr uint8_t kMoveFlagSneakDown = 0;
 constexpr uint8_t kMoveFlagJumpDown = 7;
@@ -45,10 +47,17 @@ constexpr uint8_t kMoveFlagSprintDown = 8;
 constexpr uint8_t kMoveStateSprinting = 1;
 constexpr uint8_t kMoveStateJumping = 4;
 
+constexpr uintptr_t kEquipmentOffhandContainer = 0x00;
 constexpr uintptr_t kEquipmentArmorContainer = 0x08;
 constexpr uintptr_t kContainerItems = 0x140;
 constexpr uintptr_t kStackSize = 0x98;
 constexpr uintptr_t kStackCount = 0x22;
+constexpr uintptr_t kAttributesInstances = 0x18;
+constexpr uintptr_t kAttributeInstanceSize = 0x88;
+constexpr uintptr_t kAttributeCurrentMax = 0x78;
+constexpr uintptr_t kAttributeCurrentValue = 0x7C;
+constexpr size_t kHealthAttribute = 5;
+constexpr size_t kOffhandSlot = 1;
 
 bool readable(const void *address, size_t size) {
   if (!address || reinterpret_cast<uintptr_t>(address) < 0x1000) return false;
@@ -239,25 +248,98 @@ uint8_t armorMaterialFromName(const std::string &name) {
   return 9;
 }
 
-uint8_t armorMaterialForStack(uintptr_t stack) {
+bool readStackItemName(uintptr_t stack, std::string &out) {
   uint8_t count = 0;
   uint8_t valid = 0;
   if (!readValue(stack + kStackCount, count) || count == 0 ||
       !readValue(stack + kStackCount + 1, valid) || valid == 0) {
-    return 0;
+    return false;
   }
   uintptr_t counter = 0;
   uintptr_t item = 0;
   if (!readValue(stack + 0x8, counter) || counter < 0x1000 ||
       !readValue(counter, item) || item < 0x1000) {
+    return false;
+  }
+  return readShortString(item + kItemName, out);
+}
+
+uint8_t armorMaterialForStack(uintptr_t stack) {
+  std::string name;
+  if (!readStackItemName(stack, name)) {
+    uint8_t count = 0;
+    uint8_t valid = 0;
+    if (!readValue(stack + kStackCount, count) || count == 0 ||
+        !readValue(stack + kStackCount + 1, valid) || valid == 0) {
+      return 0;
+    }
     return 9;
   }
-  std::string name;
-  if (!readShortString(item + kItemName, name)) return 9;
   return armorMaterialFromName(name);
 }
 
 } // namespace
+
+
+float readHealth(void *actor) {
+  void *attributes = componentFor(actor, kHashAttributes);
+  if (!attributes) return 20.0f;
+  const auto base = reinterpret_cast<uintptr_t>(attributes);
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!readValue(base + kAttributesInstances, begin) ||
+      !readValue(base + kAttributesInstances + sizeof(void *), end)) {
+    return 20.0f;
+  }
+  if (begin < 0x1000 || end < begin) return 20.0f;
+  const size_t bytes = end - begin;
+  if (bytes < kAttributeInstanceSize * (kHealthAttribute + 1) ||
+      bytes % kAttributeInstanceSize != 0) {
+    return 20.0f;
+  }
+  const uintptr_t instance =
+      begin + kHealthAttribute * kAttributeInstanceSize;
+  float maxHealth = 0.0f;
+  float health = 0.0f;
+  if (!readValue(instance + kAttributeCurrentMax, maxHealth) ||
+      !readValue(instance + kAttributeCurrentValue, health)) {
+    return 20.0f;
+  }
+  if (!std::isfinite(maxHealth) || !std::isfinite(health) ||
+      maxHealth < 1.0f || maxHealth > 2048.0f || health < -0.01f ||
+      health > maxHealth + 0.01f) {
+    return 20.0f;
+  }
+  return health < 0.0f ? 0.0f : health;
+}
+
+std::string offhandItemName(void *actor) {
+  void *equipment = componentFor(actor, kHashEquipment);
+  if (!equipment) return {};
+  const auto base = reinterpret_cast<uintptr_t>(equipment);
+  uintptr_t container = 0;
+  if (!readValue(base + kEquipmentOffhandContainer, container) ||
+      container < 0x1000) {
+    return {};
+  }
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!readValue(container + kContainerItems, begin) ||
+      !readValue(container + kContainerItems + sizeof(void *), end)) {
+    return {};
+  }
+  if (begin < 0x1000 || end < begin) return {};
+  const size_t bytes = end - begin;
+  if (bytes < kStackSize * (kOffhandSlot + 1) ||
+      bytes % kStackSize != 0) {
+    return {};
+  }
+  std::string name;
+  if (!readStackItemName(begin + kOffhandSlot * kStackSize, name)) {
+    return {};
+  }
+  return name;
+}
 
 std::uint32_t armorMaterialMask(void *actor) {
   void *equipment = componentFor(actor, kHashEquipment);

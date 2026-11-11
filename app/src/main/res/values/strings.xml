@@ -707,6 +707,11 @@
     <string name="mod_config_target_esp_pulse">Pulse</string>
     <string name="mod_config_name_tag_style">Name tag style</string>
     <string name="mod_config_name_tag_color">Name tag color</string>
+    <string name="mod_config_name_tag_size">Name size</string>
+    <string name="mod_config_name_tag_armor_size">Armor size</string>
+    <string name="mod_config_name_tag_blur">Name blur</string>
+    <string name="mod_config_name_tag_show_armor">Show armor</string>
+    <string name="mod_config_name_tag_show_offhand">Show left-hand item</string>
     <string name="mod_config_name_tag_plate">Capsule</string>
     <string name="mod_config_name_tag_glass">HUD</string>
     <string name="mod_config_name_tag_neon">Glow</string>
@@ -724,6 +729,7 @@
 <string name="color_palette_primary">Primary</string>
     <string name="color_palette_secondary">Secondary</string>
     <string name="color_palette_hex">HEX</string>
+    <string name="color_palette_blur">Blur</string>
     <string name="mod_config_swing_amplitude">Swing amplitude</string>
     <string name="mod_config_target_esp_ghost">Ghost</string>
     <string name="mod_config_target_esp_square">Square</string>

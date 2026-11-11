@@ -714,6 +714,11 @@
     <string name="mod_config_target_esp_pulse">Пульс</string>
     <string name="mod_config_name_tag_style">Стиль ника</string>
     <string name="mod_config_name_tag_color">Цвет ника</string>
+    <string name="mod_config_name_tag_size">Размер ника</string>
+    <string name="mod_config_name_tag_armor_size">Размер брони</string>
+    <string name="mod_config_name_tag_blur">Размытие ника</string>
+    <string name="mod_config_name_tag_show_armor">Показывать броню</string>
+    <string name="mod_config_name_tag_show_offhand">Предмет в левой руке</string>
     <string name="mod_config_name_tag_plate">Капсула</string>
     <string name="mod_config_name_tag_glass">HUD</string>
     <string name="mod_config_name_tag_neon">Свечение</string>
@@ -731,6 +736,7 @@
 <string name="color_palette_primary">Основной</string>
     <string name="color_palette_secondary">Вторичный</string>
     <string name="color_palette_hex">HEX</string>
+    <string name="color_palette_blur">Размытие</string>
     <string name="mod_config_swing_amplitude">Амплитуда удара</string>
     <string name="mod_config_target_esp_ghost">Призрак</string>
     <string name="mod_config_target_esp_square">Квадрат</string>

@@ -21,16 +21,27 @@ import org.levimc.launcher.R;
 
 import java.util.Locale;
 
-/** Desktop-cheat style HSV palette: saturation/value field, hue and alpha bars. */
+/** Desktop-cheat style HSV palette: saturation/value field, hue, alpha and blur bars. */
 public final class ColorPalette {
     public interface Listener {
         void onColorChanged(int color);
     }
 
+    public interface BlurListener {
+        void onBlurChanged(int blur);
+    }
+
     private ColorPalette() {}
 
     public static View create(Context context, int initial, boolean withAlpha, Listener listener) {
-        PickerView picker = new PickerView(context, initial, withAlpha, listener);
+        return create(context, initial, withAlpha, false, 0, 20, listener, null);
+    }
+
+    public static View create(Context context, int initial, boolean withAlpha,
+                              boolean withBlur, int initialBlur, int maxBlur,
+                              Listener listener, BlurListener blurListener) {
+        PickerView picker = new PickerView(context, initial, withAlpha, withBlur,
+                initialBlur, maxBlur, listener, blurListener);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -43,32 +54,42 @@ public final class ColorPalette {
         private static final int REGION_SV = 1;
         private static final int REGION_HUE = 2;
         private static final int REGION_ALPHA = 3;
-        private static final int REGION_WHEEL = 4;
+        private static final int REGION_BLUR = 4;
 
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint small = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF svRect = new RectF();
-        private final RectF wheelRect = new RectF();
         private final RectF hueRect = new RectF();
         private final RectF alphaRect = new RectF();
+        private final RectF blurRect = new RectF();
         private final RectF tabRect = new RectF();
         private final RectF hexRect = new RectF();
         private final float density;
 
         private final boolean withAlpha;
+        private final boolean withBlur;
         private final Listener listener;
+        private final BlurListener blurListener;
+        private final int maxBlur;
         private final float[] hsv = new float[]{0f, 0f, 1f};
         private int alpha;
+        private int blur;
         private int color;
         private int secondary;
         private int activeRegion = REGION_NONE;
 
-        PickerView(Context context, int initial, boolean withAlpha, Listener listener) {
+        PickerView(Context context, int initial, boolean withAlpha, boolean withBlur,
+                   int initialBlur, int maxBlur, Listener listener,
+                   BlurListener blurListener) {
             super(context);
             this.withAlpha = withAlpha;
+            this.withBlur = withBlur;
             this.listener = listener != null ? listener : value -> {};
+            this.blurListener = blurListener != null ? blurListener : value -> {};
+            this.maxBlur = Math.max(1, maxBlur);
+            this.blur = Math.max(0, Math.min(this.maxBlur, initialBlur));
             this.density = context.getResources().getDisplayMetrics().density;
             Color.colorToHSV(initial, hsv);
             alpha = Color.alpha(initial);
@@ -91,17 +112,19 @@ public final class ColorPalette {
             return value * density;
         }
 
+        private float squareSize(int width) {
+            float pad = dp(10);
+            float available = Math.max(dp(120), width - pad * 2f);
+            return Math.min(dp(260), available);
+        }
+
         private float contentHeight(int width) {
             float pad = dp(10);
-            float available = Math.max(0f, width - pad * 2f);
-            float wheelSize = Math.min(dp(100), available * 0.36f);
-            float size = Math.min(available - wheelSize - dp(14), dp(205));
-            if (size < dp(120)) {
-                wheelSize = Math.max(dp(54), available * 0.30f);
-                size = Math.min(available - wheelSize - dp(10), dp(205));
-            }
-            float y = pad + dp(38) + size + dp(18) + dp(11);
+            float y = pad + dp(38);
+            y += squareSize(width);
+            y += dp(18) + dp(11);
             if (withAlpha) y += dp(16) + dp(11);
+            if (withBlur) y += dp(16) + dp(11);
             y += dp(20) + dp(34) + pad;
             return y;
         }
@@ -116,26 +139,27 @@ public final class ColorPalette {
         private void layoutRects() {
             float pad = dp(10);
             float top = pad + dp(38);
-            float available = Math.max(0f, getWidth() - pad * 2f);
-            float wheelSize = Math.min(dp(100), available * 0.36f);
-            float size = Math.min(available - wheelSize - dp(14), dp(205));
-            if (size < dp(120)) {
-                wheelSize = Math.max(dp(54), available * 0.30f);
-                size = Math.min(available - wheelSize - dp(10), dp(205));
-            }
-            svRect.set(pad, top, pad + size, top + size);
-            float wheelLeft = svRect.right + dp(14);
-            wheelRect.set(wheelLeft, top + (size - wheelSize) * 0.5f,
-                    wheelLeft + wheelSize, top + (size + wheelSize) * 0.5f);
+            float size = squareSize(getWidth());
+            float left = pad + Math.max(0f, (getWidth() - pad * 2f - size) * 0.5f);
+            svRect.set(left, top, left + size, top + size);
+
             float y = svRect.bottom + dp(18);
             hueRect.set(pad, y, getWidth() - pad, y + dp(11));
             y = hueRect.bottom + dp(16);
             if (withAlpha) {
                 alphaRect.set(pad, y, getWidth() - pad, y + dp(11));
+                y = alphaRect.bottom + dp(16);
             } else {
                 alphaRect.set(0, 0, 0, 0);
             }
-            float hexTop = (withAlpha ? alphaRect.bottom : hueRect.bottom) + dp(20);
+            if (withBlur) {
+                blurRect.set(pad, y, getWidth() - pad, y + dp(11));
+                y = blurRect.bottom;
+            } else {
+                blurRect.set(0, 0, 0, 0);
+                y = withAlpha ? alphaRect.bottom : hueRect.bottom;
+            }
+            float hexTop = y + dp(20);
             hexRect.set(pad, hexTop, getWidth() - pad, hexTop + dp(34));
             tabRect.set(pad, dp(8), pad + dp(150), dp(8) + dp(28));
         }
@@ -148,9 +172,9 @@ public final class ColorPalette {
 
             drawTabs(canvas, pad);
             drawSv(canvas);
-            drawWheel(canvas);
             drawHue(canvas);
             if (withAlpha) drawAlpha(canvas);
+            if (withBlur) drawBlur(canvas);
             drawHex(canvas);
         }
 
@@ -215,35 +239,6 @@ public final class ColorPalette {
             canvas.drawCircle(mx, my, dp(7), stroke);
         }
 
-        private void drawWheel(Canvas canvas) {
-            float cx = wheelRect.centerX();
-            float cy = wheelRect.centerY();
-            float radius = Math.min(wheelRect.width(), wheelRect.height()) * 0.5f;
-            int[] colors = new int[]{
-                    0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
-                    0xFF0000FF, 0xFFFF00FF, 0xFFFF0000};
-            fill.setShader(new android.graphics.SweepGradient(cx, cy, colors, null));
-            canvas.drawCircle(cx, cy, radius, fill);
-            fill.setShader(new android.graphics.RadialGradient(cx, cy, 0f,
-                    0xFFFFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
-            canvas.drawCircle(cx, cy, radius, fill);
-            fill.setShader(null);
-
-            stroke.setStrokeWidth(dp(1.2f));
-            stroke.setColor(0x663B4352);
-            canvas.drawCircle(cx, cy, radius, stroke);
-
-            float angle = (float) Math.toRadians(hsv[0]);
-            float thumbX = cx + (float) Math.cos(angle) * radius * hsv[1];
-            float thumbY = cy + (float) Math.sin(angle) * radius * hsv[1];
-            stroke.setStrokeWidth(dp(2.2f));
-            stroke.setColor(0xFF000000);
-            canvas.drawCircle(thumbX, thumbY, dp(6.5f), stroke);
-            stroke.setStrokeWidth(dp(1.4f));
-            stroke.setColor(0xFFFFFFFF);
-            canvas.drawCircle(thumbX, thumbY, dp(6.5f), stroke);
-        }
-
         private void drawHue(Canvas canvas) {
             int[] colors = new int[]{
                     0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
@@ -275,6 +270,27 @@ public final class ColorPalette {
                     alphaRect.height() * 0.5f, fill);
             fill.setShader(null);
             drawBarThumb(canvas, alphaRect, alpha / 255f);
+        }
+
+        private void drawBlur(Canvas canvas) {
+            fill.setStyle(Paint.Style.FILL);
+            fill.setColor(0xFF181B25);
+            canvas.drawRoundRect(blurRect, blurRect.height() * 0.5f,
+                    blurRect.height() * 0.5f, fill);
+
+            int solid = Color.HSVToColor(Math.max(48, alpha), hsv);
+            fill.setShader(new LinearGradient(blurRect.left, 0f, blurRect.right, 0f,
+                    0x331A1D27, solid, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(blurRect, blurRect.height() * 0.5f,
+                    blurRect.height() * 0.5f, fill);
+            fill.setShader(null);
+
+            small.setColor(0xDDFFFFFF);
+            small.setTextAlign(Paint.Align.LEFT);
+            float baseline = blurRect.centerY() - (small.descent() + small.ascent()) * 0.5f;
+            canvas.drawText(getContext().getString(R.string.color_palette_blur),
+                    blurRect.left + dp(8), baseline, small);
+            drawBarThumb(canvas, blurRect, blur / (float) maxBlur);
         }
 
         private void drawBarThumb(Canvas canvas, RectF rect, float fraction) {
@@ -358,24 +374,26 @@ public final class ColorPalette {
 
         private int regionAt(float x, float y) {
             if (svRect.contains(x, y)) return REGION_SV;
-            if (wheelRect.contains(x, y)) return REGION_WHEEL;
             if (hueRect.contains(x, y)) return REGION_HUE;
             if (withAlpha && alphaRect.contains(x, y)) return REGION_ALPHA;
+            if (withBlur && blurRect.contains(x, y)) return REGION_BLUR;
             return REGION_NONE;
         }
 
         private void updateFromTouch(float x, float y) {
+            if (activeRegion == REGION_BLUR) {
+                int next = Math.round(clamp01((x - blurRect.left)
+                        / Math.max(1f, blurRect.width())) * maxBlur);
+                if (next != blur) {
+                    blur = next;
+                    invalidate();
+                    blurListener.onBlurChanged(blur);
+                }
+                return;
+            }
             if (activeRegion == REGION_SV) {
                 hsv[1] = clamp01((x - svRect.left) / Math.max(1f, svRect.width()));
                 hsv[2] = 1f - clamp01((y - svRect.top) / Math.max(1f, svRect.height()));
-            } else if (activeRegion == REGION_WHEEL) {
-                float dx = x - wheelRect.centerX();
-                float dy = y - wheelRect.centerY();
-                float radius = Math.max(1f, Math.min(wheelRect.width(),
-                        wheelRect.height()) * 0.5f);
-                float angle = (float) Math.toDegrees(Math.atan2(dy, dx));
-                hsv[0] = angle < 0f ? angle + 360f : angle;
-                hsv[1] = clamp01((float) Math.sqrt(dx * dx + dy * dy) / radius);
             } else if (activeRegion == REGION_HUE) {
                 hsv[0] = clamp01((x - hueRect.left) / Math.max(1f, hueRect.width())) * 360f;
                 if (hsv[0] >= 360f) hsv[0] = 359.9f;

@@ -20,6 +20,8 @@ struct NameTagLabel {
   int armorPieces = 0;
   uint32_t armorMask = 0;
   float health = 20.0f;
+  bool friendPlayer = false;
+  std::string offhandItem;
   std::string name;
 };
 

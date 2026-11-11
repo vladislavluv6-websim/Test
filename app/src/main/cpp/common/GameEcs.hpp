@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace gameecs {
 
@@ -30,6 +31,8 @@ bool setMoveJumping(void *actor, bool value);
 bool hasArmor(void *actor);
 int armorPieceCount(void *actor);
 std::uint32_t armorMaterialMask(void *actor);
+float readHealth(void *actor);
+std::string offhandItemName(void *actor);
 bool isInvisible(void *actor);
 bool setSprintingFlag(void *actor, bool value);
 

@@ -21,11 +21,13 @@ import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.preloader.PreloaderInput;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 public class NameTagsOverlay extends View {
-    private static final String TAG = "NameTagsOverlay";
     private static final String[] MATERIALS = {
             "", "leather", "chainmail", "iron", "gold", "diamond",
             "netherite", "copper", "turtle", "other"
@@ -33,6 +35,7 @@ public class NameTagsOverlay extends View {
     private static final String[] PIECES = {
             "helmet", "chestplate", "leggings", "boots"
     };
+    private static final int FRIEND_COLOR = 0xFF55FF66;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -41,11 +44,18 @@ public class NameTagsOverlay extends View {
     private final Paint accentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final android.graphics.Path heartPath = new android.graphics.Path();
     private final Bitmap[][] armorIcons = new Bitmap[MATERIALS.length][PIECES.length];
+    private final Map<String, Bitmap> itemIcons = new HashMap<>();
     private final ColorFilter leatherFilter =
             new PorterDuffColorFilter(0xFFA0643C, PorterDuff.Mode.MULTIPLY);
     private final ColorFilter otherFilter =
             new PorterDuffColorFilter(0xFF8B8F98, PorterDuff.Mode.MULTIPLY);
     private float density = 1f;
+    private int nameColor = 0xFF4E83FF;
+    private int nameSize = 11;
+    private int armorSize = 15;
+    private int nameBlur = 2;
+    private boolean showArmor = true;
+    private boolean showOffhand = true;
     private boolean attached;
     private volatile boolean showing;
     private volatile boolean moduleEnabled = true;
@@ -71,23 +81,29 @@ public class NameTagsOverlay extends View {
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setElevation(90f);
         density = activity.getResources().getDisplayMetrics().density;
-        textPaint.setColor(Color.WHITE);
         textPaint.setTextAlign(Paint.Align.LEFT);
         textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        textPaint.setTextSize(13f * density);
-        textPaint.setShadowLayer(3f, 0f, 1f, 0xCC000000);
-        healthPaint.setColor(0xFFFF6B6B);
         healthPaint.setTextAlign(Paint.Align.LEFT);
         healthPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        healthPaint.setTextSize(11f * density);
-        healthPaint.setShadowLayer(3f, 0f, 1f, 0xCC000000);
         iconPaint.setFilterBitmap(false);
         iconPaint.setDither(false);
         accentPaint.setStyle(Paint.Style.FILL);
+        loadConfig();
     }
 
     public void applyConfigurationChanges() {
+        loadConfig();
         invalidate();
+    }
+
+    private void loadConfig() {
+        InbuiltModManager manager = InbuiltModManager.getInstance(getContext());
+        nameColor = manager.getNameTagColor();
+        nameSize = manager.getNameTagSize();
+        armorSize = manager.getNameTagArmorSize();
+        nameBlur = manager.getNameTagBlur();
+        showArmor = manager.isNameTagShowArmor();
+        showOffhand = manager.isNameTagShowOffhand();
     }
 
     public void show() {
@@ -151,6 +167,7 @@ public class NameTagsOverlay extends View {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         attached = true;
+        loadConfig();
         InbuiltModManager manager = InbuiltModManager.getInstance(getContext());
         moduleEnabled = manager.isNameTagsEnabled();
         EspMod.initializeAsync(ok -> {
@@ -212,6 +229,7 @@ public class NameTagsOverlay extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (!moduleEnabled || labels.length == 0) return;
+        applyTextStyle();
         for (String entry : labels) {
             if (entry == null) continue;
             String[] parts = entry.split("\t", -1);
@@ -222,8 +240,18 @@ public class NameTagsOverlay extends View {
                 int armorPieces = 0;
                 float health = 20f;
                 int armorMask = 0;
+                boolean friend = false;
+                String offhand = "";
                 String name;
-                if (parts.length >= 7) {
+                if (parts.length >= 9) {
+                    armorPieces = Math.max(0, Math.min(4,
+                            Integer.parseInt(parts[3].trim())));
+                    health = Float.parseFloat(parts[4]);
+                    armorMask = (int) Long.parseLong(parts[5].trim(), 16);
+                    friend = "1".equals(parts[6].trim());
+                    offhand = parts[7];
+                    name = parts[8];
+                } else if (parts.length >= 7) {
                     armorPieces = Math.max(0, Math.min(4,
                             Integer.parseInt(parts[3].trim())));
                     health = Float.parseFloat(parts[4]);
@@ -241,24 +269,41 @@ public class NameTagsOverlay extends View {
                     name = parts.length >= 4 ? parts[3] : "";
                 }
                 if (name.isEmpty()) continue;
-                drawLabel(canvas, x, y, name, health, armorPieces, armorMask);
+                drawLabel(canvas, x, y, name, health, armorPieces, armorMask,
+                        friend, offhand);
             } catch (NumberFormatException ignored) {
             }
         }
     }
 
+    private void applyTextStyle() {
+        textPaint.setTextSize(nameSize * density);
+        healthPaint.setTextSize(Math.max(8, nameSize - 1) * density);
+        if (nameBlur > 0) {
+            float radius = nameBlur * density;
+            int shadow = 0x66000000;
+            textPaint.setShadowLayer(radius, 0f, dp(1f), shadow);
+            healthPaint.setShadowLayer(radius, 0f, dp(1f), shadow);
+        } else {
+            textPaint.clearShadowLayer();
+            healthPaint.clearShadowLayer();
+        }
+    }
+
     private void drawLabel(Canvas canvas, float x, float y, String name,
-                           float health, int armorPieces, int armorMask) {
-        final float iconSize = 15f * density;
+                           float health, int armorPieces, int armorMask,
+                           boolean friend, String offhand) {
         final float iconGap = 1.5f * density;
         final float hpGap = 5f * density;
-        final float heartSize = 7f * density;
+        final float heartSize = Math.max(6f, nameSize * 0.62f) * density;
+        final float iconSize = Math.max(8, armorSize) * density;
+        final float itemGap = 4f * density;
 
-        textPaint.setTextSize(13f * density);
-        healthPaint.setTextSize(11f * density);
         String hpText = formatHealth(health);
         float nameWidth = textPaint.measureText(name);
         float hpWidth = healthPaint.measureText(hpText);
+        Bitmap item = showOffhand ? itemIcon(offhand) : null;
+        float itemWidth = item != null ? iconSize + itemGap : 0f;
 
         int iconCount = 0;
         for (int slot = 0; slot < 4; slot++) {
@@ -267,10 +312,11 @@ public class NameTagsOverlay extends View {
         if (iconCount == 0) iconCount = Math.min(4, Math.max(0, armorPieces));
         float iconsWidth = iconCount > 0
                 ? iconCount * iconSize + (iconCount - 1) * iconGap : 0f;
-        float iconsBottom = y - dp(2f);
+        float textTop = y + textPaint.ascent();
+        float iconsBottom = textTop - dp(4f);
         float iconsTop = iconsBottom - iconSize;
 
-        if (armorMask != 0) {
+        if (showArmor && armorMask != 0) {
             float cursor = x - iconsWidth * 0.5f;
             for (int slot = 0; slot < 4; slot++) {
                 int material = (armorMask >>> (slot * 8)) & 0xFF;
@@ -286,7 +332,7 @@ public class NameTagsOverlay extends View {
                 cursor += iconSize + iconGap;
             }
             iconPaint.setColorFilter(null);
-        } else {
+        } else if (showArmor && iconCount > 0) {
             float cursor = x - iconsWidth * 0.5f;
             for (int i = 0; i < iconCount; i++) {
                 Bitmap icon = armorIcon(3, i);
@@ -301,18 +347,25 @@ public class NameTagsOverlay extends View {
             iconPaint.setColorFilter(null);
         }
 
-        float lineWidth = nameWidth + hpGap + heartSize + dp(2f) + hpWidth;
+        float lineWidth = itemWidth + nameWidth + hpGap + heartSize + dp(2f) + hpWidth;
         float left = x - lineWidth * 0.5f;
-        float baseline = y;
+        if (item != null) {
+            canvas.drawBitmap(item, null,
+                    new android.graphics.RectF(left, y - iconSize + dp(2f),
+                            left + iconSize, y + dp(2f)), iconPaint);
+            left += itemWidth;
+        }
+
+        textPaint.setColor(friend ? FRIEND_COLOR : nameColor);
         textPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText(name, left, baseline, textPaint);
+        canvas.drawText(name, left, y, textPaint);
 
         float heartLeft = left + nameWidth + hpGap;
-        float heartTop = baseline - heartSize * 0.82f;
+        float heartTop = y - heartSize * 0.82f;
         drawHeart(canvas, heartLeft, heartTop, heartSize, 0xFFFF5B67);
         healthPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText(hpText, heartLeft + heartSize + dp(2f), baseline,
-                healthPaint);
+        canvas.drawText(hpText, heartLeft + heartSize + dp(2f), y, healthPaint);
+        iconPaint.setColorFilter(null);
     }
 
     private String formatHealth(float health) {
@@ -320,6 +373,88 @@ public class NameTagsOverlay extends View {
         return Math.abs(health - Math.round(health)) < 0.05f
                 ? String.format(Locale.US, "%.0f", health)
                 : String.format(Locale.US, "%.1f", health);
+    }
+
+    private Bitmap itemIcon(String raw) {
+        String key = itemKey(raw);
+        if (key.isEmpty()) return null;
+        if (itemIcons.containsKey(key)) return itemIcons.get(key);
+        Bitmap bitmap = null;
+        for (String candidate : itemCandidates(key)) {
+            int resource = getResources().getIdentifier(
+                    "item_" + candidate, "drawable", getContext().getPackageName());
+            if (resource != 0) {
+                bitmap = BitmapFactory.decodeResource(getResources(), resource);
+                break;
+            }
+        }
+        itemIcons.put(key, bitmap);
+        return bitmap;
+    }
+
+    private String itemKey(String raw) {
+        if (raw == null) return "";
+        String key = raw.trim().toLowerCase(Locale.US).replace(' ', '_');
+        int colon = key.indexOf(':');
+        if (colon >= 0) key = key.substring(colon + 1);
+        return key;
+    }
+
+    private String[] itemCandidates(String key) {
+        ArrayList<String> out = new ArrayList<>();
+        out.add(key);
+        if (key.endsWith("_bucket")) {
+            out.add("bucket_" + key.substring(0, key.length() - 7));
+        }
+        if (key.endsWith("_boat")) {
+            out.add("boat_" + key.substring(0, key.length() - 5));
+        }
+        if (key.startsWith("wooden_")) {
+            out.add("wood_" + key.substring(7));
+        }
+        if (key.startsWith("golden_")) {
+            out.add("gold_" + key.substring(7));
+        }
+        if (key.startsWith("cooked_")) {
+            out.add(key.substring(7) + "_cooked");
+        }
+        if (key.startsWith("raw_")) {
+            out.add(key.substring(4) + "_raw");
+        }
+        if (key.equals("totem_of_undying")) {
+            out.add("totem");
+        }
+        if (key.equals("enchanted_book")) {
+            out.add("book_enchanted");
+        }
+        if (key.equals("writable_book")) {
+            out.add("book_writable");
+        }
+        if (key.equals("written_book")) {
+            out.add("book_written");
+        }
+        if (key.equals("potion")) {
+            out.add("potion_bottle_drinkable");
+        }
+        if (key.equals("splash_potion")) {
+            out.add("potion_bottle_splash");
+        }
+        if (key.equals("lingering_potion")) {
+            out.add("potion_bottle_lingering");
+        }
+        if (key.equals("golden_apple")) {
+            out.add("apple_golden");
+        }
+        if (key.equals("enchanted_golden_apple")) {
+            out.add("apple_golden");
+        }
+        if (key.startsWith("music_disc_")) {
+            out.add("record_" + key.substring(11));
+        }
+        if (key.endsWith("_spawn_egg")) {
+            out.add("spawn_egg");
+        }
+        return out.toArray(new String[0]);
     }
 
     private Bitmap armorIcon(int material, int slot) {

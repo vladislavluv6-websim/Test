@@ -70,6 +70,11 @@ public class InbuiltModManager {
     private static final String KEY_TARGET_ESP_STYLE = "target_esp_style";
     private static final String KEY_NAME_TAG_STYLE = "name_tag_style";
     private static final String KEY_NAME_TAG_COLOR = "name_tag_color";
+    private static final String KEY_NAME_TAG_SIZE = "name_tag_size";
+    private static final String KEY_NAME_TAG_ARMOR_SIZE = "name_tag_armor_size";
+    private static final String KEY_NAME_TAG_BLUR = "name_tag_blur";
+    private static final String KEY_NAME_TAG_SHOW_ARMOR = "name_tag_show_armor";
+    private static final String KEY_NAME_TAG_SHOW_OFFHAND = "name_tag_show_offhand";
     private static final String KEY_SWING_STYLE = "swing_style";
     private static final String KEY_SWING_SPEED = "swing_speed";
     private static final String KEY_SWING_AMPLITUDE = "swing_amplitude";
@@ -182,6 +187,11 @@ public class InbuiltModManager {
     private static final int DEFAULT_TARGET_ESP_HOLD = 650;
     private static final int DEFAULT_NAME_TAG_STYLE = 0;
     private static final int DEFAULT_NAME_TAG_COLOR = 0xFF4E83FF;
+    private static final int DEFAULT_NAME_TAG_SIZE = 11;
+    private static final int DEFAULT_NAME_TAG_ARMOR_SIZE = 15;
+    private static final int DEFAULT_NAME_TAG_BLUR = 2;
+    private static final boolean DEFAULT_NAME_TAG_SHOW_ARMOR = true;
+    private static final boolean DEFAULT_NAME_TAG_SHOW_OFFHAND = true;
     private static final int DEFAULT_SWING_STYLE = 1;
     private static final int DEFAULT_SWING_SPEED = 100;
     private static final int DEFAULT_SWING_AMPLITUDE = 100;
@@ -837,6 +847,55 @@ public class InbuiltModManager {
 
     public void setNameTagColor(int argb) {
         prefs.edit().putInt(KEY_NAME_TAG_COLOR, argb).apply();
+    }
+
+    public int getNameTagSize() {
+        return Math.max(7, Math.min(24,
+                prefs.getInt(KEY_NAME_TAG_SIZE, DEFAULT_NAME_TAG_SIZE)));
+    }
+
+    public void setNameTagSize(int size) {
+        prefs.edit().putInt(KEY_NAME_TAG_SIZE,
+                Math.max(7, Math.min(24, size))).apply();
+    }
+
+    public int getNameTagArmorSize() {
+        return Math.max(8, Math.min(30,
+                prefs.getInt(KEY_NAME_TAG_ARMOR_SIZE,
+                        DEFAULT_NAME_TAG_ARMOR_SIZE)));
+    }
+
+    public void setNameTagArmorSize(int size) {
+        prefs.edit().putInt(KEY_NAME_TAG_ARMOR_SIZE,
+                Math.max(8, Math.min(30, size))).apply();
+    }
+
+    public int getNameTagBlur() {
+        return Math.max(0, Math.min(20,
+                prefs.getInt(KEY_NAME_TAG_BLUR, DEFAULT_NAME_TAG_BLUR)));
+    }
+
+    public void setNameTagBlur(int blur) {
+        prefs.edit().putInt(KEY_NAME_TAG_BLUR,
+                Math.max(0, Math.min(20, blur))).apply();
+    }
+
+    public boolean isNameTagShowArmor() {
+        return prefs.getBoolean(KEY_NAME_TAG_SHOW_ARMOR,
+                DEFAULT_NAME_TAG_SHOW_ARMOR);
+    }
+
+    public void setNameTagShowArmor(boolean enabled) {
+        prefs.edit().putBoolean(KEY_NAME_TAG_SHOW_ARMOR, enabled).apply();
+    }
+
+    public boolean isNameTagShowOffhand() {
+        return prefs.getBoolean(KEY_NAME_TAG_SHOW_OFFHAND,
+                DEFAULT_NAME_TAG_SHOW_OFFHAND);
+    }
+
+    public void setNameTagShowOffhand(boolean enabled) {
+        prefs.edit().putBoolean(KEY_NAME_TAG_SHOW_OFFHAND, enabled).apply();
     }
 
     public int getTargetEspColor() {

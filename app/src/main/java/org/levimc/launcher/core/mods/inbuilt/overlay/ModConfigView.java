@@ -19,6 +19,7 @@ import androidx.appcompat.app.AlertDialog;
 
 import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.inbuilt.UnifiedMod;
+import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 
 import java.util.List;
 
@@ -203,12 +204,23 @@ public class ModConfigView {
                     headerRow.addView(colorPreview, previewParams);
                     container.addView(headerRow);
 
-                    View palette = ColorPalette.create(context, initialColor, true, color -> {
-                        gd.setColor(color);
-                        colorPreview.setBackground(gd);
-                        mod.updateConfig(cfg, String.format("#%08X", color));
-                        wrappedOnConfigChanged.run();
-                    });
+                    boolean nameTagBlur = "name_tag_color".equals(cfg.key);
+                    InbuiltModManager manager = nameTagBlur
+                            ? InbuiltModManager.getInstance(context) : null;
+                    View palette = ColorPalette.create(context, initialColor, true,
+                            nameTagBlur, manager != null ? manager.getNameTagBlur() : 0,
+                            20,
+                            color -> {
+                                gd.setColor(color);
+                                colorPreview.setBackground(gd);
+                                mod.updateConfig(cfg, String.format("#%08X", color));
+                                wrappedOnConfigChanged.run();
+                            },
+                            blur -> {
+                                InbuiltModManager.getInstance(context)
+                                        .setNameTagBlur(blur);
+                                wrappedOnConfigChanged.run();
+                            });
                     LinearLayout.LayoutParams paletteParams = new LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                     paletteParams.leftMargin = (int)(4 * density);
@@ -299,75 +311,6 @@ public class ModConfigView {
         TextView title = createLabel(context, cfg.displayName, density);
         section.addView(title);
 
-        LinearLayout list = new LinearLayout(context);
-        list.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams listParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        listParams.leftMargin = (int) (4 * density);
-        section.addView(list, listParams);
-
-        TextView empty = new TextView(context);
-        empty.setText(R.string.mod_friend_empty);
-        empty.setTextColor(0xFF9296A2);
-        empty.setTextSize(13);
-        empty.setPadding((int) (4 * density), (int) (6 * density),
-                (int) (4 * density), (int) (6 * density));
-        section.addView(empty);
-
-        final Runnable[] rebuild = new Runnable[1];
-        final Runnable[] persist = new Runnable[1];
-        persist[0] = () -> {
-            StringBuilder joined = new StringBuilder();
-            for (int i = 0; i < names.size(); i++) {
-                if (i > 0) joined.append(", ");
-                joined.append(names.get(i));
-            }
-            mod.updateConfig(cfg, joined.toString());
-            onConfigChanged.run();
-        };
-        rebuild[0] = () -> {
-            list.removeAllViews();
-            empty.setVisibility(names.isEmpty() ? View.VISIBLE : View.GONE);
-            for (int i = 0; i < names.size(); i++) {
-                final String name = names.get(i);
-                LinearLayout row = new LinearLayout(context);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-                row.setPadding((int) (8 * density), (int) (2 * density),
-                        (int) (2 * density), (int) (2 * density));
-
-                TextView label = new TextView(context);
-                label.setText(name);
-                label.setTextColor(0xFFD9DBE2);
-                label.setTextSize(14);
-                label.setSingleLine(true);
-                label.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                row.addView(label, new LinearLayout.LayoutParams(
-                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-                Button remove = new Button(context);
-                remove.setText("\u00D7");
-                remove.setTextSize(18);
-                remove.setTextColor(0xFFFF6B6B);
-                remove.setMinWidth(0);
-                remove.setMinimumWidth(0);
-                remove.setPadding((int) (10 * density), 0, (int) (10 * density), 0);
-                remove.setBackgroundTintList(ColorStateList.valueOf(0xFF2A1518));
-                remove.setContentDescription(context.getString(
-                        R.string.mod_friend_remove, name));
-                remove.setOnClickListener(v -> {
-                    names.remove(name);
-                    persist[0].run();
-                    rebuild[0].run();
-                });
-                row.addView(remove, new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT));
-                list.addView(row);
-            }
-        };
-
         LinearLayout inputRow = new LinearLayout(context);
         inputRow.setOrientation(LinearLayout.HORIZONTAL);
         inputRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -397,6 +340,63 @@ public class ModConfigView {
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         addParams.leftMargin = (int) (6 * density);
         inputRow.addView(add, addParams);
+
+        LinearLayout list = new LinearLayout(context);
+        list.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams listParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        listParams.leftMargin = (int) (4 * density);
+        listParams.topMargin = (int) (4 * density);
+        section.addView(list, listParams);
+
+        TextView empty = new TextView(context);
+        empty.setText(R.string.mod_friend_empty);
+        empty.setTextColor(0xFF9296A2);
+        empty.setTextSize(13);
+        empty.setPadding((int) (4 * density), (int) (6 * density),
+                (int) (4 * density), (int) (6 * density));
+        section.addView(empty);
+
+        final Runnable[] rebuild = new Runnable[1];
+        final Runnable[] persist = new Runnable[1];
+        persist[0] = () -> {
+            StringBuilder joined = new StringBuilder();
+            for (int i = 0; i < names.size(); i++) {
+                if (i > 0) joined.append(", ");
+                joined.append(names.get(i));
+            }
+            mod.updateConfig(cfg, joined.toString());
+            onConfigChanged.run();
+        };
+        rebuild[0] = () -> {
+            list.removeAllViews();
+            empty.setVisibility(names.isEmpty() ? View.VISIBLE : View.GONE);
+            for (int i = 0; i < names.size(); i++) {
+                final String name = names.get(i);
+                Button button = new Button(context);
+                button.setText(name);
+                button.setAllCaps(false);
+                button.setTextSize(14);
+                button.setTextColor(0xFF55FF66);
+                button.setGravity(android.view.Gravity.CENTER);
+                button.setSingleLine(true);
+                button.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                button.setBackgroundTintList(ColorStateList.valueOf(0xFF1F2028));
+                button.setContentDescription(context.getString(
+                        R.string.mod_friend_remove, name));
+                button.setOnClickListener(v -> {
+                    names.remove(name);
+                    persist[0].run();
+                    rebuild[0].run();
+                });
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                params.topMargin = (int) (4 * density);
+                list.addView(button, params);
+            }
+        };
 
         Runnable addNames = () -> {
             String raw = input.getText().toString();

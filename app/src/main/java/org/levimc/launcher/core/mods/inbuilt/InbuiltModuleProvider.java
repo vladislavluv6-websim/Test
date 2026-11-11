@@ -83,6 +83,10 @@ public final class InbuiltModuleProvider {
     private static final String CFG_ESP_ARMORED_COLOR = "esp_armored_color";
     private static final String CFG_NAME_TAG_STYLE = "name_tag_style";
     private static final String CFG_NAME_TAG_COLOR = "name_tag_color";
+    private static final String CFG_NAME_TAG_SIZE = "name_tag_size";
+    private static final String CFG_NAME_TAG_ARMOR_SIZE = "name_tag_armor_size";
+    private static final String CFG_NAME_TAG_SHOW_ARMOR = "name_tag_show_armor";
+    private static final String CFG_NAME_TAG_SHOW_OFFHAND = "name_tag_show_offhand";
     private static final String CFG_SWING_STYLE = "swing_style";
     private static final String CFG_SWING_SPEED = "swing_speed";
     private static final String CFG_SWING_AMPLITUDE = "swing_amplitude";
@@ -722,22 +726,31 @@ public final class InbuiltModuleProvider {
                     "100", "0", "150",
                     String.valueOf(manager.getSwingAmplitude())));
         } else if (ModIds.NAME_TAGS.equals(modId)) {
-            configs.add(config(CFG_NAME_TAG_STYLE,
-                    context.getString(R.string.mod_config_name_tag_style),
-                    UnifiedMod.ConfigType.RADIO,
-                    "0",
-                    context.getString(R.string.mod_config_name_tag_plate) + ","
-                            + context.getString(R.string.mod_config_name_tag_glass) + ","
-                            + context.getString(R.string.mod_config_name_tag_neon) + ","
-                            + context.getString(R.string.mod_config_name_tag_minimal) + ","
-                            + context.getString(R.string.mod_config_name_tag_bracket),
-                    "",
-                    String.valueOf(manager.getNameTagStyle())));
             configs.add(config(CFG_NAME_TAG_COLOR,
                     context.getString(R.string.mod_config_name_tag_color),
                     UnifiedMod.ConfigType.COLOR,
                     formatColor(manager.getNameTagColor()), "", "",
                     formatColor(manager.getNameTagColor())));
+            configs.add(config(CFG_NAME_TAG_SIZE,
+                    context.getString(R.string.mod_config_name_tag_size),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "11", "7", "24",
+                    String.valueOf(manager.getNameTagSize())));
+            configs.add(config(CFG_NAME_TAG_ARMOR_SIZE,
+                    context.getString(R.string.mod_config_name_tag_armor_size),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "15", "8", "30",
+                    String.valueOf(manager.getNameTagArmorSize())));
+            configs.add(config(CFG_NAME_TAG_SHOW_ARMOR,
+                    context.getString(R.string.mod_config_name_tag_show_armor),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isNameTagShowArmor())));
+            configs.add(config(CFG_NAME_TAG_SHOW_OFFHAND,
+                    context.getString(R.string.mod_config_name_tag_show_offhand),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isNameTagShowOffhand())));
         } else if (ModIds.TARGET_ESP.equals(modId)) {
             configs.add(config(CFG_TARGET_ESP_STYLE,
                     context.getString(R.string.mod_config_target_esp_style),
@@ -1140,6 +1153,19 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_NAME_TAG_COLOR:
                 manager.setNameTagColor(parseColor(value, manager.getNameTagColor()));
+                break;
+            case CFG_NAME_TAG_SIZE:
+                manager.setNameTagSize(parseInt(value, manager.getNameTagSize()));
+                break;
+            case CFG_NAME_TAG_ARMOR_SIZE:
+                manager.setNameTagArmorSize(parseInt(value,
+                        manager.getNameTagArmorSize()));
+                break;
+            case CFG_NAME_TAG_SHOW_ARMOR:
+                manager.setNameTagShowArmor(parseBoolean(value));
+                break;
+            case CFG_NAME_TAG_SHOW_OFFHAND:
+                manager.setNameTagShowOffhand(parseBoolean(value));
                 break;
             case CFG_SWING_STYLE:
                 manager.setSwingStyle(parseInt(value, manager.getSwingStyle()));
