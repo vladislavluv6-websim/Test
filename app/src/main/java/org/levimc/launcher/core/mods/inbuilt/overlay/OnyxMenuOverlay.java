@@ -245,6 +245,10 @@ public class OnyxMenuOverlay {
             root.addView(view, params);
             attachedToWindow = true;
         }
+        try {
+            view.onResume();
+        } catch (Throwable ignored) {
+        }
     }
 
     private void detachFromWindow() {
@@ -254,6 +258,10 @@ public class OnyxMenuOverlay {
             fallbackRoot = null;
             attachedToWindow = false;
             return;
+        }
+        try {
+            view.onPause();
+        } catch (Throwable ignored) {
         }
         try {
             if (wmParams != null && windowManager != null) {
