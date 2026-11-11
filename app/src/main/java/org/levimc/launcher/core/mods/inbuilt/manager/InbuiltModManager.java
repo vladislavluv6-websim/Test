@@ -134,8 +134,8 @@ public class InbuiltModManager {
     private static final int DEFAULT_SPEED_RESET_INTERVAL = 3500;
     private static final int DEFAULT_SPEED_MAX_RESET_TICKS = 3;
     private static final boolean DEFAULT_SPEED_HOP_ENABLED = true;
-    private static final int DEFAULT_SPEED_HOP_HEIGHT = 1100;
-    private static final float DEFAULT_SPEED_HOP_HEIGHT_EXACT = 1.10f;
+    private static final int DEFAULT_SPEED_HOP_HEIGHT = 420;
+    private static final float DEFAULT_SPEED_HOP_HEIGHT_EXACT = 0.42f;
     private static final int DEFAULT_SPEED_HOP_INTERVAL = 1;
     private static final boolean DEFAULT_SPEED_MASK_Y = false;
     private static final int DEFAULT_SPEED_PHANTOM_HOLD = 3;
@@ -228,12 +228,12 @@ public class InbuiltModManager {
     }
 
     private void migrateSpeedHopHeight() {
-        if (prefs.getInt(KEY_SPEED_HOP_HEIGHT_REVISION, 0) >= 2) return;
+        if (prefs.getInt(KEY_SPEED_HOP_HEIGHT_REVISION, 0) >= 3) return;
         prefs.edit()
                 .putInt(KEY_SPEED_HOP_HEIGHT, DEFAULT_SPEED_HOP_HEIGHT)
                 .putFloat(KEY_SPEED_HOP_HEIGHT_EXACT,
                         DEFAULT_SPEED_HOP_HEIGHT_EXACT)
-                .putInt(KEY_SPEED_HOP_HEIGHT_REVISION, 2)
+                .putInt(KEY_SPEED_HOP_HEIGHT_REVISION, 3)
                 .apply();
     }
 

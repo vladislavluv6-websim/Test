@@ -29,6 +29,7 @@ bool setMoveJumping(void *actor, bool value);
 
 bool hasArmor(void *actor);
 int armorPieceCount(void *actor);
+std::uint32_t armorMaterialMask(void *actor);
 bool isInvisible(void *actor);
 bool setSprintingFlag(void *actor, bool value);
 

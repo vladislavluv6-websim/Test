@@ -43,12 +43,14 @@ public final class ColorPalette {
         private static final int REGION_SV = 1;
         private static final int REGION_HUE = 2;
         private static final int REGION_ALPHA = 3;
+        private static final int REGION_WHEEL = 4;
 
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint small = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF svRect = new RectF();
+        private final RectF wheelRect = new RectF();
         private final RectF hueRect = new RectF();
         private final RectF alphaRect = new RectF();
         private final RectF tabRect = new RectF();
@@ -91,7 +93,13 @@ public final class ColorPalette {
 
         private float contentHeight(int width) {
             float pad = dp(10);
-            float size = Math.min(width - pad * 2f, dp(205));
+            float available = Math.max(0f, width - pad * 2f);
+            float wheelSize = Math.min(dp(100), available * 0.36f);
+            float size = Math.min(available - wheelSize - dp(14), dp(205));
+            if (size < dp(120)) {
+                wheelSize = Math.max(dp(54), available * 0.30f);
+                size = Math.min(available - wheelSize - dp(10), dp(205));
+            }
             float y = pad + dp(38) + size + dp(18) + dp(11);
             if (withAlpha) y += dp(16) + dp(11);
             y += dp(20) + dp(34) + pad;
@@ -108,8 +116,17 @@ public final class ColorPalette {
         private void layoutRects() {
             float pad = dp(10);
             float top = pad + dp(38);
-            float size = Math.min(getWidth() - pad * 2f, dp(205));
+            float available = Math.max(0f, getWidth() - pad * 2f);
+            float wheelSize = Math.min(dp(100), available * 0.36f);
+            float size = Math.min(available - wheelSize - dp(14), dp(205));
+            if (size < dp(120)) {
+                wheelSize = Math.max(dp(54), available * 0.30f);
+                size = Math.min(available - wheelSize - dp(10), dp(205));
+            }
             svRect.set(pad, top, pad + size, top + size);
+            float wheelLeft = svRect.right + dp(14);
+            wheelRect.set(wheelLeft, top + (size - wheelSize) * 0.5f,
+                    wheelLeft + wheelSize, top + (size + wheelSize) * 0.5f);
             float y = svRect.bottom + dp(18);
             hueRect.set(pad, y, getWidth() - pad, y + dp(11));
             y = hueRect.bottom + dp(16);
@@ -131,6 +148,7 @@ public final class ColorPalette {
 
             drawTabs(canvas, pad);
             drawSv(canvas);
+            drawWheel(canvas);
             drawHue(canvas);
             if (withAlpha) drawAlpha(canvas);
             drawHex(canvas);
@@ -195,6 +213,35 @@ public final class ColorPalette {
             stroke.setStrokeWidth(dp(1.4f));
             stroke.setColor(0xFFFFFFFF);
             canvas.drawCircle(mx, my, dp(7), stroke);
+        }
+
+        private void drawWheel(Canvas canvas) {
+            float cx = wheelRect.centerX();
+            float cy = wheelRect.centerY();
+            float radius = Math.min(wheelRect.width(), wheelRect.height()) * 0.5f;
+            int[] colors = new int[]{
+                    0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
+                    0xFF0000FF, 0xFFFF00FF, 0xFFFF0000};
+            fill.setShader(new android.graphics.SweepGradient(cx, cy, colors, null));
+            canvas.drawCircle(cx, cy, radius, fill);
+            fill.setShader(new android.graphics.RadialGradient(cx, cy, 0f,
+                    0xFFFFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
+            canvas.drawCircle(cx, cy, radius, fill);
+            fill.setShader(null);
+
+            stroke.setStrokeWidth(dp(1.2f));
+            stroke.setColor(0x663B4352);
+            canvas.drawCircle(cx, cy, radius, stroke);
+
+            float angle = (float) Math.toRadians(hsv[0]);
+            float thumbX = cx + (float) Math.cos(angle) * radius * hsv[1];
+            float thumbY = cy + (float) Math.sin(angle) * radius * hsv[1];
+            stroke.setStrokeWidth(dp(2.2f));
+            stroke.setColor(0xFF000000);
+            canvas.drawCircle(thumbX, thumbY, dp(6.5f), stroke);
+            stroke.setStrokeWidth(dp(1.4f));
+            stroke.setColor(0xFFFFFFFF);
+            canvas.drawCircle(thumbX, thumbY, dp(6.5f), stroke);
         }
 
         private void drawHue(Canvas canvas) {
@@ -311,6 +358,7 @@ public final class ColorPalette {
 
         private int regionAt(float x, float y) {
             if (svRect.contains(x, y)) return REGION_SV;
+            if (wheelRect.contains(x, y)) return REGION_WHEEL;
             if (hueRect.contains(x, y)) return REGION_HUE;
             if (withAlpha && alphaRect.contains(x, y)) return REGION_ALPHA;
             return REGION_NONE;
@@ -320,6 +368,14 @@ public final class ColorPalette {
             if (activeRegion == REGION_SV) {
                 hsv[1] = clamp01((x - svRect.left) / Math.max(1f, svRect.width()));
                 hsv[2] = 1f - clamp01((y - svRect.top) / Math.max(1f, svRect.height()));
+            } else if (activeRegion == REGION_WHEEL) {
+                float dx = x - wheelRect.centerX();
+                float dy = y - wheelRect.centerY();
+                float radius = Math.max(1f, Math.min(wheelRect.width(),
+                        wheelRect.height()) * 0.5f);
+                float angle = (float) Math.toDegrees(Math.atan2(dy, dx));
+                hsv[0] = angle < 0f ? angle + 360f : angle;
+                hsv[1] = clamp01((float) Math.sqrt(dx * dx + dy * dy) / radius);
             } else if (activeRegion == REGION_HUE) {
                 hsv[0] = clamp01((x - hueRect.left) / Math.max(1f, hueRect.width())) * 360f;
                 if (hsv[0] >= 360f) hsv[0] = 359.9f;

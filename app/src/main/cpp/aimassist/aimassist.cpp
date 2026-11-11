@@ -442,9 +442,11 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetNameTags(
 
   for (size_t i = 0; i < labels.size(); ++i) {
     char coordinates[64]{};
-    std::snprintf(coordinates, sizeof(coordinates), "%.1f	%.1f	%.1f	%d	%.1f	",
+    std::snprintf(coordinates, sizeof(coordinates),
+                  "%.1f	%.1f	%.1f	%d	%.1f	%08X	",
                   labels[i].x, labels[i].y, labels[i].distance,
-                  labels[i].armorPieces, labels[i].health);
+                  labels[i].armorPieces, labels[i].health,
+                  labels[i].armorMask);
     const std::string entry = std::string(coordinates) + labels[i].name;
     jstring item = env->NewStringUTF(entry.c_str());
     if (item) {

@@ -119,6 +119,26 @@ bool safeWrite(uintptr_t address, const T &value) {
   return mem::write(address, value);
 }
 
+bool isLiveActor(void *actor) {
+  const auto base = reinterpret_cast<uintptr_t>(actor);
+  if (!isPlausiblePointer(base)) return false;
+  uintptr_t vtable = 0;
+  if (!safeRead(base, vtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
+    return false;
+  }
+  uintptr_t stateVector = 0;
+  if (!safeRead(base + offsets::kActorStateVectorComponent, stateVector) ||
+      !isPlausiblePointer(stateVector)) {
+    return false;
+  }
+  Vec3 position{};
+  if (!safeRead(stateVector + offsets::kStatePosition, position)) return false;
+  return std::isfinite(position.x) && std::isfinite(position.y) &&
+         std::isfinite(position.z) && std::fabs(position.x) < 3.0e7f &&
+         std::fabs(position.y) < 3.0e7f && std::fabs(position.z) < 3.0e7f;
+}
+
 // std::string в libc++ держит короткие строки inline (SSO), а длинные — в куче.
 // Имя action ("button.destroy_or_attack", 24 символа) всегда в куче, но
 // проверяем оба варианта, чтобы не зависеть от ABI-деталей строки.
@@ -1065,15 +1085,17 @@ void *clientUpdateDetour(void *client, bool value, bool second) {
     g_clientInstance.store(client, std::memory_order_relaxed);
     if (g_getLocalPlayer) {
       void *localPlayer = g_getLocalPlayer(client);
-      if (localPlayer) {
-        g_localPlayer.store(localPlayer, std::memory_order_relaxed);
-      }
+      g_localPlayer.store(isLiveActor(localPlayer) ? localPlayer : nullptr,
+                          std::memory_order_release);
     }
     // Скан touch-HUD (кнопка атаки) удалён: он читал гигабайты памяти в
     // фоне, из-за чего Android вешал ANR при старте, и относился к способу
     // «нажимать кнопку», который не используется.
     // ClientInstance::update вызывается в кадровом цикле.
     AimAssist::instance().onRender(frameDelta());
+  } else {
+    g_clientInstance.store(nullptr, std::memory_order_release);
+    g_localPlayer.store(nullptr, std::memory_order_release);
   }
   return result;
 }
@@ -1464,14 +1486,24 @@ void *ClientBridge::getClientInstance() const {
 }
 
 void *ClientBridge::getLocalPlayer() const {
-  void *cached = g_localPlayer.load(std::memory_order_acquire);
-  if (cached) return cached;
   void *client = g_clientInstance.load(std::memory_order_acquire);
-  if (!client || !g_getLocalPlayer) return nullptr;
-  void *player = g_getLocalPlayer(client);
-  if (player) {
-    g_localPlayer.store(player, std::memory_order_release);
+  if (!client || !g_getLocalPlayer) {
+    g_localPlayer.store(nullptr, std::memory_order_release);
+    return nullptr;
   }
+  uintptr_t clientVtable = 0;
+  if (!safeRead(reinterpret_cast<uintptr_t>(client), clientVtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(clientVtable))) {
+    g_clientInstance.store(nullptr, std::memory_order_release);
+    g_localPlayer.store(nullptr, std::memory_order_release);
+    return nullptr;
+  }
+  void *player = g_getLocalPlayer(client);
+  if (!isLiveActor(player)) {
+    g_localPlayer.store(nullptr, std::memory_order_release);
+    return nullptr;
+  }
+  g_localPlayer.store(player, std::memory_order_release);
   return player;
 }
 

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <sys/uio.h>
 #include <unistd.h>
 
@@ -188,7 +189,77 @@ bool setMoveJumping(void *actor, bool value) {
   return true;
 }
 
-int armorPieceCount(void *actor) {
+namespace {
+
+constexpr uintptr_t kItemName = 0xD8;
+
+bool readShortString(uintptr_t address, std::string &out) {
+  uint8_t first = 0;
+  if (!readValue(address, first)) return false;
+  uintptr_t data = 0;
+  size_t size = 0;
+  if ((first & 1u) != 0) {
+    uint64_t value = 0;
+    uintptr_t pointer = 0;
+    if (!readValue(address + 8, value) ||
+        !readValue(address + 16, pointer)) {
+      return false;
+    }
+    if (value == 0 || value > 64 || pointer < 0x1000) return false;
+    size = static_cast<size_t>(value);
+    data = pointer;
+  } else {
+    size = static_cast<size_t>(first >> 1);
+    if (size == 0 || size > 22) return false;
+    data = address + 1;
+  }
+  char buffer[65]{};
+  if (!readValue(data, buffer, size)) return false;
+  for (size_t i = 0; i < size; ++i) {
+    const unsigned char ch = static_cast<unsigned char>(buffer[i]);
+    if (ch < 0x20 || ch > 0x7E) return false;
+  }
+  out.assign(buffer, size);
+  return true;
+}
+
+uint8_t armorMaterialFromName(const std::string &name) {
+  if (name.empty()) return 0;
+  auto has = [&name](const char *needle) {
+    return name.find(needle) != std::string::npos;
+  };
+  if (has("netherite_")) return 6;
+  if (has("diamond_")) return 5;
+  if (has("golden_") || has("gold_")) return 4;
+  if (has("iron_")) return 3;
+  if (has("chainmail_")) return 2;
+  if (has("leather_")) return 1;
+  if (has("copper_")) return 7;
+  if (has("turtle_")) return 8;
+  return 9;
+}
+
+uint8_t armorMaterialForStack(uintptr_t stack) {
+  uint8_t count = 0;
+  uint8_t valid = 0;
+  if (!readValue(stack + kStackCount, count) || count == 0 ||
+      !readValue(stack + kStackCount + 1, valid) || valid == 0) {
+    return 0;
+  }
+  uintptr_t counter = 0;
+  uintptr_t item = 0;
+  if (!readValue(stack + 0x8, counter) || counter < 0x1000 ||
+      !readValue(counter, item) || item < 0x1000) {
+    return 9;
+  }
+  std::string name;
+  if (!readShortString(item + kItemName, name)) return 9;
+  return armorMaterialFromName(name);
+}
+
+} // namespace
+
+std::uint32_t armorMaterialMask(void *actor) {
   void *equipment = componentFor(actor, kHashEquipment);
   if (!equipment) return 0;
   const auto base = reinterpret_cast<uintptr_t>(equipment);
@@ -208,17 +279,22 @@ int armorPieceCount(void *actor) {
   if (bytes == 0 || bytes % kStackSize != 0) return 0;
   size_t slots = bytes / kStackSize;
   if (slots > 4) slots = 4;
-  int pieces = 0;
+  uint32_t mask = 0;
   for (size_t slot = 0; slot < slots; ++slot) {
-    // FillingContainer stores ItemStack objects inline; the item data starts
-    // at the stack address itself (see BedrockTools armorhud.cpp).
     const uintptr_t stack = begin + slot * kStackSize;
-    uint8_t count = 0;
-    uint8_t valid = 0;
-    if (readValue(stack + kStackCount, count) && count > 0 &&
-        readValue(stack + kStackCount + 1, valid) && valid != 0) {
-      ++pieces;
+    const uint8_t material = armorMaterialForStack(stack);
+    if (material != 0) {
+      mask |= static_cast<uint32_t>(material) << (slot * 8);
     }
+  }
+  return mask;
+}
+
+int armorPieceCount(void *actor) {
+  const uint32_t mask = armorMaterialMask(actor);
+  int pieces = 0;
+  for (int slot = 0; slot < 4; ++slot) {
+    if (((mask >> (slot * 8)) & 0xFFu) != 0) ++pieces;
   }
   return pieces;
 }

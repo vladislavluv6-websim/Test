@@ -1,9 +1,14 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorFilter;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.Typeface;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,40 +22,35 @@ import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.preloader.PreloaderInput;
 
 import java.util.Arrays;
+import java.util.Locale;
 
-/**
- * Прозрачный полноэкранный слой для ников игроков.
- *
- * <p>Экранные координаты и имена считает native на игровом потоке
- * (Esp::render), Java лишь рисует готовые подписи. Слой не перехватывает
- * касания и не мешает SurfaceView игры.</p>
- */
 public class NameTagsOverlay extends View {
-    public static final int STYLE_CAPSULE = 0;
-    public static final int STYLE_HUD = 1;
-    public static final int STYLE_GLOW = 2;
-    public static final int STYLE_SPLIT = 3;
-    public static final int STYLE_CYBER = 4;
-
     private static final String TAG = "NameTagsOverlay";
+    private static final String[] MATERIALS = {
+            "", "leather", "chainmail", "iron", "gold", "diamond",
+            "netherite", "copper", "turtle", "other"
+    };
+    private static final String[] PIECES = {
+            "helmet", "chestplate", "leggings", "boots"
+    };
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint backdropPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint healthPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint accentPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint distancePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint statPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final android.graphics.Path heartPath = new android.graphics.Path();
-    private final android.graphics.Path panelPath = new android.graphics.Path();
-    private final android.graphics.Path shieldPath = new android.graphics.Path();
+    private final Bitmap[][] armorIcons = new Bitmap[MATERIALS.length][PIECES.length];
+    private final ColorFilter leatherFilter =
+            new PorterDuffColorFilter(0xFFA0643C, PorterDuff.Mode.MULTIPLY);
+    private final ColorFilter otherFilter =
+            new PorterDuffColorFilter(0xFF8B8F98, PorterDuff.Mode.MULTIPLY);
     private float density = 1f;
     private boolean attached;
     private volatile boolean showing;
     private volatile boolean moduleEnabled = true;
     private String[] labels = new String[0];
     private boolean frameCallbackPosted;
-    private int style = STYLE_CAPSULE;
-    private int accent = 0xFF4E83FF;
 
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
@@ -70,36 +70,23 @@ public class NameTagsOverlay extends View {
         setFocusable(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setElevation(90f);
-        textPaint.setColor(Color.WHITE);
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        textPaint.setShadowLayer(3f, 0f, 1f, 0xCC000000);
         density = activity.getResources().getDisplayMetrics().density;
-        textPaint.setTextSize(12.5f * density);
-        distancePaint.setColor(0xFF9296A2);
-        distancePaint.setTextAlign(Paint.Align.CENTER);
-        distancePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        distancePaint.setTextSize(9f * density);
-        statPaint.setColor(0xFFD9DBE2);
-        statPaint.setTextAlign(Paint.Align.LEFT);
-        statPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        statPaint.setTextSize(8.5f * density);
-        backdropPaint.setColor(0xE012151E);
-        accentPaint.setStyle(Paint.Style.STROKE);
-        applySettings();
-    }
-
-    private void applySettings() {
-        InbuiltModManager manager = InbuiltModManager.getInstance(getContext());
-        style = manager.getNameTagStyle();
-        accent = manager.getNameTagColor();
-        accentPaint.setColor(accent);
-        textPaint.setColor((style == STYLE_GLOW || style == STYLE_CYBER)
-                ? accent : Color.WHITE);
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTextAlign(Paint.Align.LEFT);
+        textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        textPaint.setTextSize(13f * density);
+        textPaint.setShadowLayer(3f, 0f, 1f, 0xCC000000);
+        healthPaint.setColor(0xFFFF6B6B);
+        healthPaint.setTextAlign(Paint.Align.LEFT);
+        healthPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        healthPaint.setTextSize(11f * density);
+        healthPaint.setShadowLayer(3f, 0f, 1f, 0xCC000000);
+        iconPaint.setFilterBitmap(false);
+        iconPaint.setDither(false);
+        accentPaint.setStyle(Paint.Style.FILL);
     }
 
     public void applyConfigurationChanges() {
-        applySettings();
         invalidate();
     }
 
@@ -147,11 +134,6 @@ public class NameTagsOverlay extends View {
         }
     }
 
-    /**
-     * Синхронизирует состояние тумблера из настроек. Вызывается из
-     * {@link InbuiltOverlayManager#tick()} (20 Гц), поэтому сравнение
-     * обязательно.
-     */
     public void setModuleEnabled(boolean enabled) {
         if (moduleEnabled == enabled) return;
         moduleEnabled = enabled;
@@ -237,13 +219,19 @@ public class NameTagsOverlay extends View {
             try {
                 float x = Float.parseFloat(parts[0]);
                 float y = Float.parseFloat(parts[1]);
-                float distance = Float.parseFloat(parts[2]);
                 int armorPieces = 0;
                 float health = 20f;
+                int armorMask = 0;
                 String name;
-                if (parts.length >= 6) {
-                    armorPieces = Math.max(0,
-                            Math.min(4, Integer.parseInt(parts[3].trim())));
+                if (parts.length >= 7) {
+                    armorPieces = Math.max(0, Math.min(4,
+                            Integer.parseInt(parts[3].trim())));
+                    health = Float.parseFloat(parts[4]);
+                    armorMask = (int) Long.parseLong(parts[5].trim(), 16);
+                    name = parts[6];
+                } else if (parts.length >= 6) {
+                    armorPieces = Math.max(0, Math.min(4,
+                            Integer.parseInt(parts[3].trim())));
                     health = Float.parseFloat(parts[4]);
                     name = parts[5];
                 } else if (parts.length == 5) {
@@ -253,205 +241,115 @@ public class NameTagsOverlay extends View {
                     name = parts.length >= 4 ? parts[3] : "";
                 }
                 if (name.isEmpty()) continue;
-                drawLabel(canvas, x, y, name, distance, armorPieces, health);
+                drawLabel(canvas, x, y, name, health, armorPieces, armorMask);
             } catch (NumberFormatException ignored) {
             }
         }
     }
 
     private void drawLabel(Canvas canvas, float x, float y, String name,
-                           float distance, int armorPieces, float health) {
-        String hpText = String.format(java.util.Locale.US, "%.1f", health);
-        String distanceText = distance > 0f
-                ? String.format(java.util.Locale.US, "%.0f m", distance)
-                : "";
-        float nameSize = 13f * density;
-        textPaint.setTextSize(nameSize);
+                           float health, int armorPieces, int armorMask) {
+        final float iconSize = 15f * density;
+        final float iconGap = 1.5f * density;
+        final float hpGap = 5f * density;
+        final float heartSize = 7f * density;
+
+        textPaint.setTextSize(13f * density);
+        healthPaint.setTextSize(11f * density);
+        String hpText = formatHealth(health);
         float nameWidth = textPaint.measureText(name);
+        float hpWidth = healthPaint.measureText(hpText);
 
-        float heartSize = 8f * density;
-        float hpWidth = statPaint.measureText(hpText);
-        float shieldWidth = dp(4.4f);
-        float shieldHeight = dp(5.6f);
-        float shieldGap = dp(1.2f);
-        float armorWidth = 4 * shieldWidth + 3 * shieldGap;
-        float distanceWidth = distanceText.isEmpty()
-                ? 0f : distancePaint.measureText(distanceText);
-        float gap = dp(5f);
-        float statWidth = heartSize + dp(2f) + hpWidth + gap
-                + armorWidth + (distanceText.isEmpty() ? 0f : gap + distanceWidth);
-        float textWidth = Math.max(nameWidth, statWidth);
+        int iconCount = 0;
+        for (int slot = 0; slot < 4; slot++) {
+            if (((armorMask >>> (slot * 8)) & 0xFF) != 0) iconCount++;
+        }
+        if (iconCount == 0) iconCount = Math.min(4, Math.max(0, armorPieces));
+        float iconsWidth = iconCount > 0
+                ? iconCount * iconSize + (iconCount - 1) * iconGap : 0f;
+        float iconsBottom = y - dp(2f);
+        float iconsTop = iconsBottom - iconSize;
 
-        float padX = 9f * density;
-        float padY = 5f * density;
-        float left = x - textWidth * 0.5f - padX;
-        float right = x + textWidth * 0.5f + padX;
-        float nameHeight = textPaint.getTextSize();
-        float statHeight = statPaint.getTextSize();
-        float top = y - nameHeight - statHeight - padY * 2.1f;
-        float bottom = y + padY * 0.5f;
-        float radius = 5f * density;
-        float nameBaseline = top + padY + nameHeight * 0.82f;
-        float statBaseline = bottom - padY * 0.95f;
-
-        switch (style) {
-            case STYLE_HUD: {
-                backdropPaint.setColor(0xF20B0E16);
-                canvas.drawRoundRect(left, top, right, bottom, dp(3f), dp(3f),
-                        backdropPaint);
-                accentPaint.setStyle(Paint.Style.FILL);
-                accentPaint.setColor(accent);
-                canvas.drawRect(left + dp(3f), top,
-                        left + (right - left) * 0.58f, top + dp(2f), accentPaint);
-                accentPaint.setColor(0x552F3B52);
-                canvas.drawRect(right - dp(11f), top + dp(2f), right,
-                        top + dp(2.7f), accentPaint);
-                accentPaint.setStyle(Paint.Style.STROKE);
-                accentPaint.setStrokeWidth(1f * density);
-                accentPaint.setColor(0xFF252B38);
-                canvas.drawRoundRect(left, top, right, bottom, dp(3f), dp(3f),
-                        accentPaint);
-                break;
+        if (armorMask != 0) {
+            float cursor = x - iconsWidth * 0.5f;
+            for (int slot = 0; slot < 4; slot++) {
+                int material = (armorMask >>> (slot * 8)) & 0xFF;
+                if (material == 0) continue;
+                Bitmap icon = armorIcon(material, slot);
+                if (icon != null) {
+                    iconPaint.setColorFilter(material == 1 ? leatherFilter
+                            : material == 9 ? otherFilter : null);
+                    canvas.drawBitmap(icon, null,
+                            new android.graphics.RectF(cursor, iconsTop,
+                                    cursor + iconSize, iconsBottom), iconPaint);
+                }
+                cursor += iconSize + iconGap;
             }
-            case STYLE_GLOW: {
-                final int glow = (accent & 0x00FFFFFF) | 0x33000000;
-                final int edge = (accent & 0x00FFFFFF) | 0xCC000000;
-                backdropPaint.setColor(glow);
-                canvas.drawRoundRect(left - dp(1.5f), top - dp(1.5f),
-                        right + dp(1.5f), bottom + dp(1.5f),
-                        radius + dp(1.5f), radius + dp(1.5f), backdropPaint);
-                backdropPaint.setColor(0xCC090C13);
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius,
-                        backdropPaint);
-                accentPaint.setStyle(Paint.Style.STROKE);
-                accentPaint.setStrokeWidth(1.2f * density);
-                accentPaint.setColor(edge);
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius,
-                        accentPaint);
-                break;
+            iconPaint.setColorFilter(null);
+        } else {
+            float cursor = x - iconsWidth * 0.5f;
+            for (int i = 0; i < iconCount; i++) {
+                Bitmap icon = armorIcon(3, i);
+                if (icon != null) {
+                    iconPaint.setColorFilter(otherFilter);
+                    canvas.drawBitmap(icon, null,
+                            new android.graphics.RectF(cursor, iconsTop,
+                                    cursor + iconSize, iconsBottom), iconPaint);
+                }
+                cursor += iconSize + iconGap;
             }
-            case STYLE_SPLIT: {
-                backdropPaint.setColor(0x52070A10);
-                canvas.drawRoundRect(left, top, right, bottom, dp(2f), dp(2f),
-                        backdropPaint);
-                accentPaint.setStyle(Paint.Style.STROKE);
-                accentPaint.setStrokeWidth(1.2f * density);
-                accentPaint.setColor(accent);
-                canvas.drawLine(left, top, right, top, accentPaint);
-                canvas.drawLine(left, bottom, right, bottom, accentPaint);
-                accentPaint.setColor(0x66343C4D);
-                accentPaint.setStrokeWidth(1f * density);
-                float dividerY = top + padY + nameHeight + dp(1.2f);
-                canvas.drawLine(left + padX * 0.25f, dividerY,
-                        right - padX * 0.25f, dividerY, accentPaint);
-                break;
-            }
-            case STYLE_CYBER: {
-                float cut = dp(5f);
-                panelPath.reset();
-                panelPath.moveTo(left + cut, top);
-                panelPath.lineTo(right, top);
-                panelPath.lineTo(right, bottom - cut);
-                panelPath.lineTo(right - cut, bottom);
-                panelPath.lineTo(left, bottom);
-                panelPath.lineTo(left, top + cut);
-                panelPath.close();
-                backdropPaint.setColor(0xE60A0E17);
-                canvas.drawPath(panelPath, backdropPaint);
-                accentPaint.setStyle(Paint.Style.STROKE);
-                accentPaint.setStrokeWidth(1.1f * density);
-                accentPaint.setColor(accent);
-                canvas.drawPath(panelPath, accentPaint);
-                accentPaint.setStyle(Paint.Style.FILL);
-                accentPaint.setColor((accent & 0x00FFFFFF) | 0x66000000);
-                canvas.drawRect(left + cut, top + dp(3f),
-                        left + cut + dp(9f), top + dp(3.8f), accentPaint);
-                break;
-            }
-            case STYLE_CAPSULE:
-            default: {
-                float capsuleRadius = (bottom - top) * 0.5f;
-                backdropPaint.setColor(0xEE080B12);
-                canvas.drawRoundRect(left, top, right, bottom, capsuleRadius,
-                        capsuleRadius, backdropPaint);
-                accentPaint.setStyle(Paint.Style.STROKE);
-                accentPaint.setStrokeWidth(1f * density);
-                accentPaint.setColor((accent & 0x00FFFFFF) | 0x99000000);
-                canvas.drawRoundRect(left, top, right, bottom, capsuleRadius,
-                        capsuleRadius, accentPaint);
-                accentPaint.setStyle(Paint.Style.FILL);
-                accentPaint.setColor(accent);
-                canvas.drawRoundRect(left + dp(2.6f), top + dp(3.2f),
-                        left + dp(4.4f), bottom - dp(3.2f), dp(0.9f),
-                        dp(0.9f), accentPaint);
-                break;
-            }
+            iconPaint.setColorFilter(null);
         }
 
-        textPaint.setColor((style == STYLE_GLOW || style == STYLE_CYBER)
-                ? accent : Color.WHITE);
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText(name, x, nameBaseline, textPaint);
+        float lineWidth = nameWidth + hpGap + heartSize + dp(2f) + hpWidth;
+        float left = x - lineWidth * 0.5f;
+        float baseline = y;
+        textPaint.setTextAlign(Paint.Align.LEFT);
+        canvas.drawText(name, left, baseline, textPaint);
 
-        float statLeft = x - statWidth * 0.5f;
-        float iconTop = statBaseline - statHeight * 0.92f;
-        drawHeart(canvas, statLeft, iconTop, heartSize, 0xFF3DDC84);
-        statPaint.setColor((style == STYLE_GLOW || style == STYLE_CYBER)
-                ? 0xFFEAF2FF : 0xFFD9DBE2);
-        statPaint.setTextAlign(Paint.Align.LEFT);
-        float cursor = statLeft + heartSize + dp(2f);
-        canvas.drawText(hpText, cursor, statBaseline, statPaint);
-        cursor += hpWidth + gap;
+        float heartLeft = left + nameWidth + hpGap;
+        float heartTop = baseline - heartSize * 0.82f;
+        drawHeart(canvas, heartLeft, heartTop, heartSize, 0xFFFF5B67);
+        healthPaint.setTextAlign(Paint.Align.LEFT);
+        canvas.drawText(hpText, heartLeft + heartSize + dp(2f), baseline,
+                healthPaint);
+    }
 
-        for (int i = 0; i < 4; i++) {
-            drawArmorShield(canvas, cursor, statBaseline, shieldWidth,
-                    shieldHeight, i < armorPieces);
-            cursor += shieldWidth + shieldGap;
+    private String formatHealth(float health) {
+        if (!Float.isFinite(health)) health = 20f;
+        return Math.abs(health - Math.round(health)) < 0.05f
+                ? String.format(Locale.US, "%.0f", health)
+                : String.format(Locale.US, "%.1f", health);
+    }
+
+    private Bitmap armorIcon(int material, int slot) {
+        if (material <= 0 || material >= MATERIALS.length ||
+                slot < 0 || slot >= PIECES.length) {
+            return null;
         }
-
-        if (!distanceText.isEmpty()) {
-            cursor += gap - shieldGap;
-            distancePaint.setColor((style == STYLE_GLOW || style == STYLE_CYBER)
-                    ? 0xFFB9C7E6 : 0xFF9296A2);
-            distancePaint.setTextAlign(Paint.Align.LEFT);
-            canvas.drawText(distanceText, cursor, statBaseline, distancePaint);
+        Bitmap cached = armorIcons[material][slot];
+        if (cached != null) return cached;
+        int resource = getResources().getIdentifier(
+                "armor_" + MATERIALS[material] + "_" + PIECES[slot],
+                "drawable", getContext().getPackageName());
+        if (resource == 0 && material == 9) {
+            resource = getResources().getIdentifier(
+                    "armor_iron_" + PIECES[slot], "drawable",
+                    getContext().getPackageName());
         }
+        if (resource == 0 && material == 8) {
+            resource = getResources().getIdentifier(
+                    "armor_iron_" + PIECES[slot], "drawable",
+                    getContext().getPackageName());
+        }
+        if (resource == 0) return null;
+        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), resource);
+        armorIcons[material][slot] = bitmap;
+        return bitmap;
     }
 
     private float dp(float value) {
         return value * density;
-    }
-
-    private void drawArmorShield(Canvas canvas, float left, float baseline,
-                                 float width, float height, boolean filled) {
-        float top = baseline - height;
-        shieldPath.reset();
-        shieldPath.moveTo(left, top);
-        shieldPath.lineTo(left + width, top);
-        shieldPath.lineTo(left + width, top + height * 0.56f);
-        shieldPath.lineTo(left + width * 0.5f, top + height);
-        shieldPath.lineTo(left, top + height * 0.56f);
-        shieldPath.close();
-
-        if (filled) {
-            accentPaint.setStyle(Paint.Style.FILL);
-            accentPaint.setColor(0xFF4F8DFF);
-            accentPaint.setShadowLayer(dp(2.2f), 0f, 0f, 0x884F8DFF);
-            canvas.drawPath(shieldPath, accentPaint);
-            accentPaint.clearShadowLayer();
-            accentPaint.setStyle(Paint.Style.STROKE);
-            accentPaint.setStrokeWidth(dp(0.7f));
-            accentPaint.setColor(0xFFD7E7FF);
-            canvas.drawPath(shieldPath, accentPaint);
-        } else {
-            accentPaint.setStyle(Paint.Style.FILL);
-            accentPaint.setColor(0xFF252B36);
-            canvas.drawPath(shieldPath, accentPaint);
-            accentPaint.setStyle(Paint.Style.STROKE);
-            accentPaint.setStrokeWidth(dp(0.7f));
-            accentPaint.setColor(0xFF3B4352);
-            canvas.drawPath(shieldPath, accentPaint);
-        }
     }
 
     private void drawHeart(Canvas canvas, float left, float top, float size, int color) {
@@ -467,7 +365,6 @@ public class NameTagsOverlay extends View {
                 right + size * 0.08f, top + size * 0.55f,
                 centerX, bottom);
         heartPath.close();
-        accentPaint.setStyle(Paint.Style.FILL);
         accentPaint.setColor(color);
         canvas.drawPath(heartPath, accentPaint);
     }

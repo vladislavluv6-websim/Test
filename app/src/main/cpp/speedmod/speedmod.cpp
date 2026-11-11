@@ -112,7 +112,7 @@ std::atomic<float> g_gapMax{0.0f};
 std::atomic<int> g_resetIntervalMs{3500};
 std::atomic<int> g_maxResetTicks{3};
 std::atomic_bool g_hopEnabled{true};
-constexpr float kMiniJumpHeight = 1.10f;
+constexpr float kMiniJumpHeight = 0.42f;
 std::atomic<float> g_hopHeight{kMiniJumpHeight};
 std::atomic<int> g_hopInterval{1};
 std::atomic_bool g_maskY{false};
@@ -712,7 +712,7 @@ void applySpeed(void *actor) {
   }
 
   // Low hop / physical hop.
-  if (hopOn && onGround && !sneakBlocked &&
+  if (hopOn && onGround && vy <= 0.02f && !sneakBlocked &&
       tick - g_lastHopTick >= g_hopInterval.load(std::memory_order_relaxed)) {
     if (fakeMode) {
       g_lastHopTick = tick;
@@ -938,6 +938,19 @@ void *clientInstanceUpdateDetour(void *clientInstance, bool value) {
         resetAllState();
       }
       installBaseTickHook(localPlayer);
+    } else {
+      void *previous =
+          g_localPlayer.exchange(nullptr, std::memory_order_acq_rel);
+      if (previous) {
+        __android_log_print(ANDROID_LOG_INFO, kTag,
+                            "local player cleared on disconnect");
+        resetAllState();
+      }
+    }
+  } else {
+    g_clientLocalPlayer.store(nullptr, std::memory_order_release);
+    if (g_localPlayer.exchange(nullptr, std::memory_order_acq_rel)) {
+      resetAllState();
     }
   }
 

@@ -481,7 +481,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_SPEED_HOP_HEIGHT,
                     context.getString(R.string.mod_config_speed_hop_height),
                     UnifiedMod.ConfigType.SLIDER_FLOAT,
-                    "1.10", "0.10", "1.50",
+                    "0.42", "0.10", "1.50",
                     String.format(java.util.Locale.US, "%.8f",
                             manager.getSpeedHopHeight())));
             configs.add(config(CFG_SPEED_HOP_INTERVAL,
