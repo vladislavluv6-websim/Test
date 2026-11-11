@@ -69,6 +69,7 @@ public class InbuiltOverlayManager {
     private ModMenuButton modMenuButton;
     private OnyxMenuOverlay modMenuOverlay;
     private boolean modMenuOpenedFromButton;
+    private boolean menuPreloaded;
     private HudOverlay hudOverlay;
     private NameTagsOverlay nameTagsOverlay;
     private TargetEspOverlay targetEspOverlay;
@@ -216,6 +217,19 @@ public class InbuiltOverlayManager {
         modMenuButton.show(START_X, menuY + step);
         refreshExternalButtons();
         refreshRuntimeVisibility();
+        scheduleMenuPreload();
+    }
+
+    private void scheduleMenuPreload() {
+        if (menuPreloaded) return;
+        menuPreloaded = true;
+        mainHandler.postDelayed(() -> {
+            if (!isActivityUsable()) return;
+            try {
+                getOrCreateModMenuOverlay().preload();
+            } catch (Throwable ignored) {
+            }
+        }, 1500L);
     }
 
     private boolean isShortcutModule(String modId) {

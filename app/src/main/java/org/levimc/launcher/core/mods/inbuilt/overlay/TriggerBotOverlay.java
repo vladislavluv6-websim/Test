@@ -1,12 +1,8 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.app.Activity;
-import android.content.ContentValues;
-import android.net.Uri;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.widget.ImageButton;
 import android.widget.Toast;
@@ -20,11 +16,6 @@ import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.core.versions.GameVersion;
 import org.levimc.launcher.preloader.PreloaderInput;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.Random;
 
 public class TriggerBotOverlay extends BaseOverlayButton {
@@ -79,9 +70,6 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             if (gateOpen != nativeTriggerEnabled) {
                 nativeTriggerEnabled = gateOpen;
                 AimAssistMod.setTriggerBot(gateOpen);
-                appendDiag("java gate hud=" + hudOpen + " pause=" + pauseOpen
-                        + " menu=" + menuOpen + " modmenu=" + modMenu
-                        + " native=" + gateOpen);
             }
             triggerHandler.postDelayed(this, gateOpen ? 100L : 300L);
         }
@@ -148,11 +136,6 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         wantActive = true;
         if (initPending) return;
         initPending = true;
-        File external = activity.getExternalFilesDir(null);
-        if (external != null) {
-            AimAssistMod.setDiagLogPath(
-                    new File(external, "aimassist_diag.log").getAbsolutePath());
-        }
         // Удар идёт через нативный GameMode::attack, экранная кнопка больше
         // не нужна — позицию из options.txt не читаем.
         AimAssistMod.initializeAsync(ok -> {
@@ -177,9 +160,6 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     public void show(int startX, int startY) {
         if (!isActive && isSupportedVersion()
                 && InbuiltModManager.getInstance(activity).resolveInbuiltModEnabled(getModId(), false)) {
-            // Лог прошлой сессии мог остаться после краша — выгружаем его
-            // до того, как новый setDiagLogPath очистит файл.
-            exportDiagLog(false);
             requestActivate(false);
         }
         super.show(startX, startY);
@@ -201,62 +181,6 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         nativeTriggerEnabled = false;
         isActive = false;
         updateButtonState(false);
-        exportDiagLog(true);
-    }
-
-    /**
-     * Копирует файл диагностики в Download, чтобы его можно было забрать без
-     * доступа к /sdcard/Android/data (logcat на Android 13 показывает только
-     * логи своего uid).
-     */
-    private void exportDiagLog(boolean notify) {
-        if (android.os.Build.VERSION.SDK_INT < 29) return;
-        File external = activity.getExternalFilesDir(null);
-        if (external == null) return;
-        File source = new File(external, "aimassist_diag.log");
-        if (!source.exists() || source.length() == 0L) return;
-        try {
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, "aimassist_diag.txt");
-            values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH,
-                    Environment.DIRECTORY_DOWNLOADS);
-            activity.getContentResolver().delete(
-                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                    MediaStore.MediaColumns.DISPLAY_NAME + "=?",
-                    new String[]{"aimassist_diag.txt"});
-            Uri target = activity.getContentResolver().insert(
-                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-            if (target == null) return;
-            try (InputStream in = new FileInputStream(source);
-                 OutputStream out = activity.getContentResolver()
-                         .openOutputStream(target)) {
-                if (out == null) return;
-                byte[] buffer = new byte[8192];
-                int read;
-                while ((read = in.read(buffer)) > 0) {
-                    out.write(buffer, 0, read);
-                }
-            }
-            if (notify) {
-                Toast.makeText(activity, "aimassist_diag.txt → Download",
-                        Toast.LENGTH_SHORT).show();
-            }
-        } catch (Exception ignored) {
-        }
-    }
-
-    /** Дописывает строку в тот же файл диагностики, что пишет нативный мод. */
-    private void appendDiag(String line) {
-        try {
-            File dir = activity.getExternalFilesDir(null);
-            if (dir == null) return;
-            try (FileOutputStream out = new FileOutputStream(
-                    new File(dir, "aimassist_diag.log"), true)) {
-                out.write((line + "\n").getBytes());
-            }
-        } catch (Throwable ignored) {
-        }
     }
 
     private void startLoop() {
@@ -325,7 +249,6 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             nativeTriggerEnabled = false;
             isActive = false;
             updateButtonState(false);
-            exportDiagLog(true);
         }
     }
 }

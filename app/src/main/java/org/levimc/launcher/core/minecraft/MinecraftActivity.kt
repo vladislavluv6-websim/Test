@@ -594,27 +594,14 @@ class MinecraftActivity : MainActivity(), PojavControlsHost {
                     attackButtonNormY = y!!.coerceIn(0f, 1f)
                     touchInteractionModel = model
                     Log.i(TAG_ATTACK, "attack button x=$attackButtonNormX y=$attackButtonNormY model=$model from ${file.absolutePath}")
-                    appendAttackDiag("attack button x=$attackButtonNormX y=$attackButtonNormY model=$model src=${file.name}")
                     return true
                 }
             } catch (t: Throwable) {
                 Log.w(TAG_ATTACK, "read ${file.absolutePath} failed: ${t.message}")
-                appendAttackDiag("attack button read failed: ${t.message}")
             }
         }
         Log.w(TAG_ATTACK, "options.txt not found, default attack button x=$attackButtonNormX y=$attackButtonNormY")
-        appendAttackDiag("attack button not found, default x=$attackButtonNormX y=$attackButtonNormY")
         return false
-    }
-
-    /** Дописывает строку в тот же файл диагностики, что пишет нативный мод. */
-    private fun appendAttackDiag(line: String) {
-        try {
-            val dir = getExternalFilesDir(null) ?: return
-            FileOutputStream(File(dir, "aimassist_diag.log"), true)
-                .use { it.write((line + "\n").toByteArray()) }
-        } catch (ignored: Throwable) {
-        }
     }
 
     /**

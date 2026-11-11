@@ -65,15 +65,27 @@ public class OnyxMenuOverlay {
         }
         showing = true;
         try {
-            if (webView == null) {
-                createWebView();
-            } else {
-                attachToWindow();
-                refreshMods();
-            }
+            ensureWebView();
+            attachToWindow();
+            if (webView != null && attachedToWindow) webView.requestFocus();
+            refreshMods();
         } catch (Throwable error) {
             Log.e(TAG, "show failed", error);
             release();
+        }
+    }
+
+    public void preload() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post(this::preload);
+            return;
+        }
+        if (webView != null) return;
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+        try {
+            ensureWebView();
+        } catch (Throwable error) {
+            Log.e(TAG, "preload failed", error);
         }
     }
 
@@ -155,7 +167,8 @@ public class OnyxMenuOverlay {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private void createWebView() {
+    private void ensureWebView() {
+        if (webView != null) return;
         loadModules();
         MenuWebView view = new MenuWebView(activity, this::hide);
         view.setBackgroundColor(0xFF0D0F16);
@@ -174,6 +187,10 @@ public class OnyxMenuOverlay {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
+        settings.setSupportMultipleWindows(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setGeolocationEnabled(false);
+        settings.setSaveFormData(false);
         settings.setTextZoom(100);
         view.addJavascriptInterface(new OnyxGuiBridge(activity, this), BRIDGE_NAME);
         view.setWebViewClient(new WebViewClient() {
@@ -196,11 +213,7 @@ public class OnyxMenuOverlay {
             }
         });
         webView = view;
-        attachToWindow();
-        if (attachedToWindow) {
-            view.requestFocus();
-            view.loadUrl(ASSET_URL);
-        }
+        view.loadUrl(ASSET_URL);
     }
 
     private void attachToWindow() {

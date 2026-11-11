@@ -140,15 +140,6 @@
   }
 
   function cardHtml(mod) {
-    var settings = '';
-    if (mod.shortcut_supported !== false) {
-      settings += '<div class="setting-row shortcut-row">' +
-        '<span class="setting-label">Shortcut</span>' +
-        '<input class="nl-checkbox" type="checkbox" data-role="shortcut"' + (mod.shortcut ? ' checked' : '') + '>' +
-        '</div>';
-    }
-    var configs = mod.configs || [];
-    for (var i = 0; i < configs.length; i++) settings += rowHtml(mod, configs[i]);
     return '<div class="module-card" data-key="' + esc(mod.key) + '">' +
       '<div class="module-header">' +
         '<div class="module-left">' +
@@ -160,8 +151,129 @@
           '<div class="nl-toggle' + (mod.enabled ? ' active' : '') + '" data-role="module-toggle"><div class="nl-toggle-track"><div class="nl-toggle-thumb"></div></div></div>' +
         '</div>' +
       '</div>' +
-      '<div class="module-settings">' + settings + '</div>' +
+      '<div class="module-settings"></div>' +
     '</div>';
+  }
+
+  function buildSettings(card, mod) {
+    if (mod.built) return;
+    mod.built = true;
+    var settings = card.querySelector('.module-settings');
+    if (!settings) return;
+    var html = '';
+    if (mod.shortcut_supported !== false) {
+      html += '<div class="setting-row shortcut-row">' +
+        '<span class="setting-label">Shortcut</span>' +
+        '<input class="nl-checkbox" type="checkbox" data-role="shortcut"' + (mod.shortcut ? ' checked' : '') + '>' +
+        '</div>';
+    }
+    var configs = mod.configs || [];
+    for (var i = 0; i < configs.length; i++) html += rowHtml(mod, configs[i]);
+    settings.innerHTML = html;
+
+    var shortcut = settings.querySelector('[data-role="shortcut"]');
+    if (shortcut) {
+      shortcut.addEventListener('change', function () {
+        mod.shortcut = shortcut.checked;
+        bridge('setShortcut', mod.key, shortcut.checked);
+      });
+    }
+
+    settings.querySelectorAll('.setting-row[data-key]').forEach(function (row) {
+      var key = row.getAttribute('data-key');
+      var config = null;
+      for (var i = 0; i < mod.configs.length; i++) {
+        if (mod.configs[i].key === key) { config = mod.configs[i]; break; }
+      }
+      if (!config) return;
+      wireRow(row, mod, config);
+    });
+
+    updateDependencies(mod.key);
+  }
+
+  function ensureBuilt(card) {
+    if (!card) return;
+    var mod = state.byKey[card.getAttribute('data-key')];
+    if (mod && !mod.built) buildSettings(card, mod);
+  }
+
+  function wireRow(row, mod, config) {
+    var key = config.key;
+    var toggle = row.querySelector('[data-role="cfg-toggle"]');
+    if (toggle) {
+      toggle.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var on = !toggle.classList.contains('active');
+        setToggleState(toggle, on);
+        scheduleConfig(mod.key, key, on ? 'true' : 'false');
+      });
+    }
+
+    var slider = row.querySelector('[data-role="slider"]');
+    if (slider) wireSlider(slider, mod, config);
+
+    var choice = row.querySelector('[data-role="choice"]');
+    if (choice) {
+      choice.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var values = (config.options || []).map(function (option) {
+          return { value: option.value, label: option.label };
+        });
+        openChoice(choice, values, function (selected) {
+          scheduleConfig(mod.key, key, selected.value);
+        });
+      });
+    }
+
+    var chip = row.querySelector('[data-role="color"]');
+    if (chip) {
+      chip.addEventListener('click', function (event) {
+        event.stopPropagation();
+        openColor(chip, mod, config);
+      });
+    }
+
+    var keybind = row.querySelector('[data-role="keybind"]');
+    if (keybind) {
+      keybind.addEventListener('click', function (event) {
+        event.stopPropagation();
+        bridge('captureKeybind', mod.key, key);
+      });
+    }
+
+    var button = row.querySelector('[data-role="button"]');
+    if (button) {
+      button.addEventListener('click', function (event) {
+        event.stopPropagation();
+        bridge('setConfig', mod.key, key, '1');
+      });
+    }
+
+    var text = row.querySelector('[data-role="text"]');
+    if (text) {
+      text.addEventListener('change', function () {
+        scheduleConfig(mod.key, key, text.value);
+      });
+      text.addEventListener('click', function (event) { event.stopPropagation(); });
+    }
+  }
+
+  function wireCard(card, mod) {
+    card.querySelector('.module-header').addEventListener('click', function (event) {
+      if (event.target.closest('.module-controls')) return;
+      var expanded = card.classList.toggle('expanded');
+      if (expanded) ensureBuilt(card);
+    });
+
+    var moduleToggle = card.querySelector('[data-role="module-toggle"]');
+    moduleToggle.addEventListener('click', function (event) {
+      event.stopPropagation();
+      var on = !moduleToggle.classList.contains('active');
+      setToggleState(moduleToggle, on);
+      mod.enabled = on;
+      bridge('setEnabled', mod.key, on);
+    });
   }
 
   function flushConfig(modKey, configKey) {
@@ -202,98 +314,6 @@
   function setToggleState(toggle, on) {
     if (on) toggle.classList.add('active');
     else toggle.classList.remove('active');
-  }
-
-  function wireCard(card, mod) {
-    card.querySelector('.module-header').addEventListener('click', function (event) {
-      if (event.target.closest('.module-controls')) return;
-      card.classList.toggle('expanded');
-    });
-
-    var moduleToggle = card.querySelector('[data-role="module-toggle"]');
-    moduleToggle.addEventListener('click', function (event) {
-      event.stopPropagation();
-      var on = !moduleToggle.classList.contains('active');
-      setToggleState(moduleToggle, on);
-      mod.enabled = on;
-      bridge('setEnabled', mod.key, on);
-    });
-
-    var shortcut = card.querySelector('[data-role="shortcut"]');
-    if (shortcut) {
-      shortcut.addEventListener('change', function () {
-        mod.shortcut = shortcut.checked;
-        bridge('setShortcut', mod.key, shortcut.checked);
-      });
-    }
-
-    card.querySelectorAll('.setting-row[data-key]').forEach(function (row) {
-      var key = row.getAttribute('data-key');
-      var config = null;
-      for (var i = 0; i < mod.configs.length; i++) {
-        if (mod.configs[i].key === key) { config = mod.configs[i]; break; }
-      }
-      if (!config) return;
-
-      var toggle = row.querySelector('[data-role="cfg-toggle"]');
-      if (toggle) {
-        toggle.addEventListener('click', function (event) {
-          event.stopPropagation();
-          var on = !toggle.classList.contains('active');
-          setToggleState(toggle, on);
-          scheduleConfig(mod.key, key, on ? 'true' : 'false');
-        });
-      }
-
-      var slider = row.querySelector('[data-role="slider"]');
-      if (slider) wireSlider(slider, mod, config);
-
-      var choice = row.querySelector('[data-role="choice"]');
-      if (choice) {
-        choice.addEventListener('click', function (event) {
-          event.stopPropagation();
-          var options = config.options || [];
-          var values = options.map(function (option) { return { value: option.value, label: option.label }; });
-          openChoice(choice, values, function (selected) {
-            scheduleConfig(mod.key, key, selected.value);
-          });
-        });
-      }
-
-      var chip = row.querySelector('[data-role="color"]');
-      if (chip) {
-        chip.addEventListener('click', function (event) {
-          event.stopPropagation();
-          openColor(chip, mod, config);
-        });
-      }
-
-      var keybind = row.querySelector('[data-role="keybind"]');
-      if (keybind) {
-        keybind.addEventListener('click', function (event) {
-          event.stopPropagation();
-          bridge('captureKeybind', mod.key, key);
-        });
-      }
-
-      var button = row.querySelector('[data-role="button"]');
-      if (button) {
-        button.addEventListener('click', function (event) {
-          event.stopPropagation();
-          bridge('setConfig', mod.key, key, '1');
-        });
-      }
-
-      var text = row.querySelector('[data-role="text"]');
-      if (text) {
-        text.addEventListener('change', function () {
-          scheduleConfig(mod.key, key, text.value);
-        });
-        text.addEventListener('click', function (event) { event.stopPropagation(); });
-      }
-    });
-
-    updateDependencies(mod.key);
   }
 
   function wireSlider(track, mod, config) {
@@ -379,8 +399,7 @@
     dd.querySelectorAll('.dropdown-option').forEach(function (option) {
       option.addEventListener('click', function (event) {
         event.stopPropagation();
-        var index = parseInt(option.getAttribute('data-index'), 10);
-        selectChoice(index);
+        selectChoice(parseInt(option.getAttribute('data-index'), 10));
       });
     });
   }
@@ -439,6 +458,7 @@
       mod.key = mod.key || mod.id;
       mod.configs = mod.configs || [];
       mod.configValues = {};
+      mod.built = false;
       mod.configs.forEach(function (config) {
         mod.configValues[config.key] = String(configValue(mod, config));
       });
@@ -469,6 +489,12 @@
     if (labelView) labelView.textContent = label || 'None';
   };
 
+  var baseHandleSearch = window.handleSearch;
+  window.handleSearch = function (query) {
+    if (typeof baseHandleSearch === 'function') baseHandleSearch(query);
+    document.querySelectorAll('.module-card.expanded').forEach(ensureBuilt);
+  };
+
   window.toggleMenuVisibility = function () {
     bridge('hideMenu');
   };
@@ -478,10 +504,5 @@
     if (event.target.closest('.nl-modal-dropdown')) return;
     var dd = document.getElementById('modalDropdown');
     if (dd) dd.classList.remove('open');
-  });
-
-  document.addEventListener('DOMContentLoaded', function () {
-    var bg = document.querySelector('.bedrock-bg');
-    if (bg) bg.addEventListener('click', function () { bridge('hideMenu'); });
   });
 })();
