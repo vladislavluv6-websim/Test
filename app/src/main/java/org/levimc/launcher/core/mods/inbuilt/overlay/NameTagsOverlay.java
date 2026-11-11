@@ -113,11 +113,27 @@ public class NameTagsOverlay extends View {
         }
     };
 
+    private boolean paused;
+
+    private final Runnable resumeRunnable = this::postFrameCallback;
+
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
         public void doFrame(long frameTimeNanos) {
             frameCallbackPosted = false;
             if (!attached) return;
+            if (!gameplayVisible()) {
+                if (!paused) {
+                    paused = true;
+                    labels = new Label[0];
+                    lastRawLabels = new String[0];
+                    invalidate();
+                }
+                mainHandler.removeCallbacks(resumeRunnable);
+                mainHandler.postDelayed(resumeRunnable, 300L);
+                return;
+            }
+            paused = false;
             if (frameTimeNanos - lastPollNanos >= POLL_INTERVAL_NANOS) {
                 lastPollNanos = frameTimeNanos;
                 pollLabels();
@@ -184,6 +200,7 @@ public class NameTagsOverlay extends View {
         showing = false;
         attached = false;
         mainHandler.removeCallbacks(showRunnable);
+        mainHandler.removeCallbacks(resumeRunnable);
         try {
             Choreographer.getInstance().removeFrameCallback(frameCallback);
         } catch (RuntimeException ignored) {
@@ -237,11 +254,12 @@ public class NameTagsOverlay extends View {
     protected void onDetachedFromWindow() {
         attached = false;
         frameCallbackPosted = false;
+        mainHandler.removeCallbacks(showRunnable);
+        mainHandler.removeCallbacks(resumeRunnable);
         try {
             Choreographer.getInstance().removeFrameCallback(frameCallback);
         } catch (RuntimeException ignored) {
         }
-        mainHandler.removeCallbacks(showRunnable);
         super.onDetachedFromWindow();
     }
 

@@ -49,12 +49,29 @@ public class EspBoxesOverlay extends View {
     private int[] boxColor = new int[0];
     private int[] boxArmor = new int[0];
     private int boxCount;
+    private boolean paused;
+
+    private final Runnable resumeRunnable = () -> {
+        if (attached) postFrame();
+    };
 
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
         public void doFrame(long frameTimeNanos) {
             framePosted = false;
             if (!attached) return;
+            if (!gameplayVisible()) {
+                if (!paused) {
+                    paused = true;
+                    boxes = EMPTY;
+                    boxCount = 0;
+                    invalidate();
+                }
+                mainHandler.removeCallbacks(resumeRunnable);
+                mainHandler.postDelayed(resumeRunnable, 300L);
+                return;
+            }
+            paused = false;
             if (frameTimeNanos - lastPollNanos >= POLL_INTERVAL_NANOS) {
                 lastPollNanos = frameTimeNanos;
                 poll();
@@ -122,6 +139,7 @@ public class EspBoxesOverlay extends View {
         }
         showing = false;
         attached = false;
+        mainHandler.removeCallbacks(resumeRunnable);
         Choreographer.getInstance().removeFrameCallback(frameCallback);
         framePosted = false;
         boxes = EMPTY;
@@ -163,6 +181,7 @@ public class EspBoxesOverlay extends View {
     protected void onDetachedFromWindow() {
         attached = false;
         framePosted = false;
+        mainHandler.removeCallbacks(resumeRunnable);
         Choreographer.getInstance().removeFrameCallback(frameCallback);
         super.onDetachedFromWindow();
     }

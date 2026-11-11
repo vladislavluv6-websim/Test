@@ -54,12 +54,28 @@ public class TargetEspOverlay extends View {
     private long ageMs = -1;
     private boolean framePosted;
     private long lastPollNanos;
+    private boolean paused;
+
+    private final Runnable resumeRunnable = () -> {
+        if (attached) postFrame();
+    };
 
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
         public void doFrame(long frameTimeNanos) {
             framePosted = false;
             if (!attached) return;
+            if (!gameplayVisible()) {
+                if (!paused) {
+                    paused = true;
+                    ageMs = -1;
+                    invalidate();
+                }
+                mainHandler.removeCallbacks(resumeRunnable);
+                mainHandler.postDelayed(resumeRunnable, 300L);
+                return;
+            }
+            paused = false;
             if (frameTimeNanos - lastPollNanos >= POLL_INTERVAL_NANOS) {
                 lastPollNanos = frameTimeNanos;
                 poll();
@@ -132,6 +148,7 @@ public class TargetEspOverlay extends View {
         }
         showing = false;
         attached = false;
+        mainHandler.removeCallbacks(resumeRunnable);
         Choreographer.getInstance().removeFrameCallback(frameCallback);
         framePosted = false;
         EspMod.setTargetEsp(false);
@@ -182,6 +199,7 @@ public class TargetEspOverlay extends View {
     protected void onDetachedFromWindow() {
         attached = false;
         framePosted = false;
+        mainHandler.removeCallbacks(resumeRunnable);
         Choreographer.getInstance().removeFrameCallback(frameCallback);
         super.onDetachedFromWindow();
     }
