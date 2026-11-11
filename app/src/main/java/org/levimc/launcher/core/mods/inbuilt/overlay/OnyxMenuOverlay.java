@@ -3,7 +3,6 @@ package org.levimc.launcher.core.mods.inbuilt.overlay;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.Handler;
@@ -15,6 +14,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -40,11 +40,12 @@ public class OnyxMenuOverlay {
     private final Activity activity;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<UnifiedMod> modules = new ArrayList<>();
-    private WindowManager windowManager;
+    private final WindowManager windowManager;
     private WindowManager.LayoutParams wmParams;
     private WebView webView;
     private ViewGroup fallbackRoot;
     private boolean showing;
+    private boolean attachedToWindow;
     private boolean pageReady;
 
     public OnyxMenuOverlay(Activity activity) {
@@ -57,11 +58,23 @@ public class OnyxMenuOverlay {
             handler.post(this::show);
             return;
         }
+        if (activity.isFinishing() || activity.isDestroyed()) return;
         if (showing) {
             refreshMods();
             return;
         }
-        showInternal();
+        showing = true;
+        try {
+            if (webView == null) {
+                createWebView();
+            } else {
+                attachToWindow();
+                refreshMods();
+            }
+        } catch (Throwable error) {
+            Log.e(TAG, "show failed", error);
+            release();
+        }
     }
 
     public void hide() {
@@ -69,22 +82,24 @@ public class OnyxMenuOverlay {
             handler.post(this::hide);
             return;
         }
-        if (!showing && webView == null) return;
+        if (!showing && !attachedToWindow) return;
         showing = false;
-        pageReady = false;
+        detachFromWindow();
+    }
+
+    public void release() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post(this::release);
+            return;
+        }
+        showing = false;
+        detachFromWindow();
         WebView view = webView;
         webView = null;
+        pageReady = false;
         if (view != null) {
             try {
                 view.removeJavascriptInterface(BRIDGE_NAME);
-            } catch (Exception ignored) {
-            }
-            try {
-                if (wmParams != null && windowManager != null) {
-                    windowManager.removeView(view);
-                } else if (fallbackRoot != null) {
-                    fallbackRoot.removeView(view);
-                }
             } catch (Exception ignored) {
             }
             try {
@@ -92,8 +107,6 @@ public class OnyxMenuOverlay {
             } catch (Exception ignored) {
             }
         }
-        wmParams = null;
-        fallbackRoot = null;
     }
 
     public boolean isShowing() {
@@ -120,11 +133,15 @@ public class OnyxMenuOverlay {
     void updateKeybindLabel(String moduleKey, String configKey, String label) {
         WebView view = webView;
         if (view == null) return;
-        String script = "if(window.onyxKeybindResult)window.onyxKeybindResult("
-                + JSONObject.quote(moduleKey) + ","
-                + JSONObject.quote(configKey) + ","
-                + JSONObject.quote(label) + ");";
-        view.evaluateJavascript(script, null);
+        try {
+            String script = "if(window.onyxKeybindResult)window.onyxKeybindResult("
+                    + JSONObject.quote(moduleKey) + ","
+                    + JSONObject.quote(configKey) + ","
+                    + JSONObject.quote(label) + ");";
+            view.evaluateJavascript(script, null);
+        } catch (Throwable error) {
+            Log.e(TAG, "updateKeybindLabel failed", error);
+        }
     }
 
     private void loadModules() {
@@ -138,79 +155,128 @@ public class OnyxMenuOverlay {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private void showInternal() {
-        if (activity.isFinishing() || activity.isDestroyed()) return;
+    private void createWebView() {
         loadModules();
-        try {
-            MenuWebView view = new MenuWebView(activity, this::hide);
-            view.setBackgroundColor(Color.TRANSPARENT);
-            view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-            WebSettings settings = view.getSettings();
-            settings.setJavaScriptEnabled(true);
-            settings.setDomStorageEnabled(true);
-            settings.setAllowFileAccess(true);
-            settings.setAllowContentAccess(false);
-            settings.setAllowFileAccessFromFileURLs(true);
-            settings.setAllowUniversalAccessFromFileURLs(false);
-            settings.setMediaPlaybackRequiresUserGesture(false);
-            view.addJavascriptInterface(new OnyxGuiBridge(activity, this), BRIDGE_NAME);
-            view.setWebViewClient(new WebViewClient() {
-                @Override
-                public void onPageFinished(WebView web, String url) {
-                    pageReady = true;
+        MenuWebView view = new MenuWebView(activity, this::hide);
+        view.setBackgroundColor(0xFF0D0F16);
+        view.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        view.setVerticalScrollBarEnabled(false);
+        view.setHorizontalScrollBarEnabled(false);
+        view.setDrawingCacheEnabled(false);
+        WebSettings settings = view.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(false);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(false);
+        settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setSupportZoom(false);
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        settings.setTextZoom(100);
+        view.addJavascriptInterface(new OnyxGuiBridge(activity, this), BRIDGE_NAME);
+        view.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView web, String url) {
+                pageReady = true;
+                try {
                     pushModules();
+                } catch (Throwable error) {
+                    Log.e(TAG, "onPageFinished push failed", error);
                 }
-            });
-
-            DisplayMetrics dm = activity.getResources().getDisplayMetrics();
-            int panelWidth = Math.min(
-                    (int) (dm.widthPixels * 0.94f),
-                    (int) (720f * dm.density));
-            int panelHeight = Math.min(
-                    (int) (dm.heightPixels * 0.9f),
-                    (int) (470f * dm.density));
-            wmParams = new WindowManager.LayoutParams(
-                    Math.max(panelWidth, 1),
-                    Math.max(panelHeight, 1),
-                    WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                            | WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    PixelFormat.TRANSLUCENT);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                wmParams.layoutInDisplayCutoutMode =
-                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
             }
-            wmParams.gravity = Gravity.CENTER;
-            wmParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
-            wmParams.token = activity.getWindow().getDecorView().getWindowToken();
 
-            webView = view;
-            showing = true;
-            try {
-                windowManager.addView(view, wmParams);
-            } catch (Throwable windowError) {
-                ViewGroup root = activity.findViewById(android.R.id.content);
-                if (root == null) throw windowError;
-                wmParams = null;
-                fallbackRoot = root;
-                FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                        Math.max(panelWidth, 1), Math.max(panelHeight, 1));
-                params.gravity = Gravity.CENTER;
-                root.addView(view, params);
+            @Override
+            public boolean onRenderProcessGone(WebView web, RenderProcessGoneDetail detail) {
+                Log.w(TAG, "WebView renderer gone, didCrash="
+                        + (detail != null && detail.didCrash()));
+                release();
+                return true;
             }
+        });
+        webView = view;
+        attachToWindow();
+        if (attachedToWindow) {
             view.requestFocus();
             view.loadUrl(ASSET_URL);
-        } catch (Throwable error) {
-            Log.e(TAG, "showInternal failed", error);
-            hide();
         }
+    }
+
+    private void attachToWindow() {
+        WebView view = webView;
+        if (view == null || attachedToWindow) return;
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+
+        DisplayMetrics dm = activity.getResources().getDisplayMetrics();
+        int panelWidth = Math.max(1, Math.min(
+                (int) (dm.widthPixels * 0.94f),
+                (int) (720f * dm.density)));
+        int panelHeight = Math.max(1, Math.min(
+                (int) (dm.heightPixels * 0.9f),
+                (int) (470f * dm.density)));
+
+        wmParams = new WindowManager.LayoutParams(
+                panelWidth,
+                panelHeight,
+                WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                PixelFormat.OPAQUE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            wmParams.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
+        wmParams.gravity = Gravity.CENTER;
+        wmParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+        wmParams.token = activity.getWindow().getDecorView().getWindowToken();
+
+        try {
+            windowManager.addView(view, wmParams);
+            attachedToWindow = true;
+        } catch (Throwable windowError) {
+            wmParams = null;
+            ViewGroup root = activity.findViewById(android.R.id.content);
+            if (root == null) throw new RuntimeException(windowError);
+            fallbackRoot = root;
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                    panelWidth, panelHeight);
+            params.gravity = Gravity.CENTER;
+            root.addView(view, params);
+            attachedToWindow = true;
+        }
+    }
+
+    private void detachFromWindow() {
+        WebView view = webView;
+        if (view == null || !attachedToWindow) {
+            wmParams = null;
+            fallbackRoot = null;
+            attachedToWindow = false;
+            return;
+        }
+        try {
+            if (wmParams != null && windowManager != null) {
+                windowManager.removeView(view);
+            } else if (fallbackRoot != null) {
+                fallbackRoot.removeView(view);
+            }
+        } catch (Exception ignored) {
+        }
+        wmParams = null;
+        fallbackRoot = null;
+        attachedToWindow = false;
     }
 
     private void pushModules() {
         WebView view = webView;
-        if (view == null || !pageReady) return;
-        String json = buildModulesJson();
-        view.evaluateJavascript("if(window.onyxInit)window.onyxInit(" + json + ");", null);
+        if (view == null || !pageReady || !attachedToWindow) return;
+        try {
+            String json = buildModulesJson();
+            view.evaluateJavascript("if(window.onyxInit)window.onyxInit(" + json + ");", null);
+        } catch (Throwable error) {
+            Log.e(TAG, "pushModules failed", error);
+        }
     }
 
     private String buildModulesJson() {
@@ -228,7 +294,7 @@ public class OnyxMenuOverlay {
                 node.put("source", external ? "external" : "inbuilt");
                 node.put("category", categoryFor(mod));
                 node.put("shortcut_supported", !external);
-                node.put("shortcut", !external
+                node.put("shortcut", !external && manager != null
                         && manager.isOverlayShortcutVisible(mod.getId()));
 
                 JSONArray configs = new JSONArray();

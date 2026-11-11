@@ -2,6 +2,7 @@ package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.webkit.JavascriptInterface;
 
@@ -9,6 +10,8 @@ import org.levimc.launcher.core.mods.inbuilt.UnifiedMod;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 
 public class OnyxGuiBridge {
+    private static final String TAG = "OnyxGuiBridge";
+
     private final Activity activity;
     private final OnyxMenuOverlay overlay;
 
@@ -19,7 +22,7 @@ public class OnyxGuiBridge {
 
     @JavascriptInterface
     public void setEnabled(String moduleKey, boolean enabled) {
-        activity.runOnUiThread(() -> {
+        post(() -> {
             UnifiedMod mod = overlay.findModule(moduleKey);
             if (mod != null) mod.applyEnabled(enabled);
         });
@@ -27,7 +30,7 @@ public class OnyxGuiBridge {
 
     @JavascriptInterface
     public void setConfig(String moduleKey, String configKey, String value) {
-        activity.runOnUiThread(() -> {
+        post(() -> {
             UnifiedMod mod = overlay.findModule(moduleKey);
             if (mod != null) mod.updateConfig(configKey, value == null ? "" : value);
         });
@@ -35,7 +38,7 @@ public class OnyxGuiBridge {
 
     @JavascriptInterface
     public void setShortcut(String moduleKey, boolean visible) {
-        activity.runOnUiThread(() -> {
+        post(() -> {
             UnifiedMod mod = overlay.findModule(moduleKey);
             if (mod == null) return;
             if (mod.getSource() != UnifiedMod.Source.INBUILT) return;
@@ -50,12 +53,27 @@ public class OnyxGuiBridge {
 
     @JavascriptInterface
     public void captureKeybind(String moduleKey, String configKey) {
-        activity.runOnUiThread(() -> showKeybindDialog(moduleKey, configKey));
+        post(() -> showKeybindDialog(moduleKey, configKey));
     }
 
     @JavascriptInterface
     public void hideMenu() {
-        activity.runOnUiThread(overlay::hide);
+        post(overlay::hide);
+    }
+
+    private void post(Runnable action) {
+        try {
+            activity.runOnUiThread(() -> {
+                if (activity.isFinishing() || activity.isDestroyed()) return;
+                try {
+                    action.run();
+                } catch (Throwable error) {
+                    Log.e(TAG, "bridge action failed", error);
+                }
+            });
+        } catch (Throwable error) {
+            Log.e(TAG, "bridge post failed", error);
+        }
     }
 
     private void showKeybindDialog(String moduleKey, String configKey) {
@@ -78,8 +96,7 @@ public class OnyxGuiBridge {
             }
             if (!event.hasNoModifiers() && !KeyEvent.isModifierKey(keyCode)) return false;
             mod.updateConfig(configKey, String.valueOf(keyCode));
-            String label = keyLabel(keyCode);
-            overlay.updateKeybindLabel(moduleKey, configKey, label);
+            overlay.updateKeybindLabel(moduleKey, configKey, keyLabel(keyCode));
             dialog.dismiss();
             return true;
         });

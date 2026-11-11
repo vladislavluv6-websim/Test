@@ -109,7 +109,10 @@ public class InbuiltOverlayManager {
             if (activity.isFinishing() || activity.isDestroyed()) return;
             releaseKeybinds();
             modMenuOpenedFromButton = false;
-            getOrCreateModMenuOverlay().show();
+            try {
+                getOrCreateModMenuOverlay().show();
+            } catch (Throwable ignored) {
+            }
         });
     }
 
@@ -139,14 +142,17 @@ public class InbuiltOverlayManager {
         }
         activity.runOnUiThread(() -> {
             if (activity.isFinishing() || activity.isDestroyed()) return;
-            OnyxMenuOverlay overlay = getOrCreateModMenuOverlay();
-            if (overlay.isShowing()) {
-                modMenuOpenedFromButton = false;
-                overlay.hide();
-            } else {
-                releaseKeybinds();
-                modMenuOpenedFromButton = true;
-                overlay.show();
+            try {
+                OnyxMenuOverlay overlay = getOrCreateModMenuOverlay();
+                if (overlay.isShowing()) {
+                    modMenuOpenedFromButton = false;
+                    overlay.hide();
+                } else {
+                    releaseKeybinds();
+                    modMenuOpenedFromButton = true;
+                    overlay.show();
+                }
+            } catch (Throwable ignored) {
             }
         });
     }
@@ -923,7 +929,7 @@ public class InbuiltOverlayManager {
             gyroOverlay = null;
         }
         if (modMenuOverlay != null) {
-            modMenuOverlay.hide();
+            modMenuOverlay.release();
             modMenuOverlay = null;
             modMenuOpenedFromButton = false;
         }
