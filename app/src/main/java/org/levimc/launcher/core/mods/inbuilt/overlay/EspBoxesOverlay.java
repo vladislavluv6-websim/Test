@@ -213,9 +213,13 @@ public class EspBoxesOverlay extends View {
 
     private void poll() {
         String[] next = EMPTY;
-        if (moduleEnabled && gameplayVisible() && EspMod.isInitialized()) {
-            String[] nativeBoxes = EspMod.getEspBoxes();
-            if (nativeBoxes != null) next = nativeBoxes;
+        try {
+            if (moduleEnabled && gameplayVisible() && EspMod.isInitialized()) {
+                String[] nativeBoxes = EspMod.getEspBoxes();
+                if (nativeBoxes != null) next = nativeBoxes;
+            }
+        } catch (Throwable error) {
+            next = EMPTY;
         }
         if (Arrays.equals(boxes, next)) return;
         boxes = next;
@@ -262,11 +266,14 @@ public class EspBoxesOverlay extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (!moduleEnabled || style <= 0 || boxCount == 0) return;
-        for (int i = 0; i < boxCount; i++) {
-            drawBox(canvas, boxX[i], boxY[i], boxW[i], boxH[i], boxColor[i]);
-            if (boxArmor[i] > 0) {
-                drawArmorPips(canvas, boxX[i], boxY[i], boxW[i], boxArmor[i]);
+        try {
+            for (int i = 0; i < boxCount; i++) {
+                drawBox(canvas, boxX[i], boxY[i], boxW[i], boxH[i], boxColor[i]);
+                if (boxArmor[i] > 0) {
+                    drawArmorPips(canvas, boxX[i], boxY[i], boxW[i], boxArmor[i]);
+                }
             }
+        } catch (Throwable ignored) {
         }
     }
 

@@ -36,10 +36,12 @@ public class OnyxMenuOverlay {
     private static final String TAG = "OnyxMenuOverlay";
     private static final String ASSET_URL = "file:///android_asset/onyx_client_mobile.html";
     private static final String BRIDGE_NAME = "OnyxBridge";
+    private static final long IDLE_RELEASE_MS = 20000L;
 
     private final Activity activity;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<UnifiedMod> modules = new ArrayList<>();
+    private final Runnable idleReleaseRunnable;
     private final WindowManager windowManager;
     private WindowManager.LayoutParams wmParams;
     private WebView webView;
@@ -51,6 +53,9 @@ public class OnyxMenuOverlay {
     public OnyxMenuOverlay(Activity activity) {
         this.activity = activity;
         this.windowManager = (WindowManager) activity.getSystemService(Context.WINDOW_SERVICE);
+        this.idleReleaseRunnable = () -> {
+            if (!showing) release();
+        };
     }
 
     public void show() {
@@ -59,6 +64,7 @@ public class OnyxMenuOverlay {
             return;
         }
         if (activity.isFinishing() || activity.isDestroyed()) return;
+        handler.removeCallbacks(idleReleaseRunnable);
         if (showing) {
             refreshMods();
             return;
@@ -84,6 +90,7 @@ public class OnyxMenuOverlay {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         try {
             ensureWebView();
+            scheduleIdleRelease();
         } catch (Throwable error) {
             Log.e(TAG, "preload failed", error);
         }
@@ -97,6 +104,12 @@ public class OnyxMenuOverlay {
         if (!showing && !attachedToWindow) return;
         showing = false;
         detachFromWindow();
+        scheduleIdleRelease();
+    }
+
+    private void scheduleIdleRelease() {
+        handler.removeCallbacks(idleReleaseRunnable);
+        handler.postDelayed(idleReleaseRunnable, IDLE_RELEASE_MS);
     }
 
     public void release() {
@@ -104,6 +117,7 @@ public class OnyxMenuOverlay {
             handler.post(this::release);
             return;
         }
+        handler.removeCallbacks(idleReleaseRunnable);
         showing = false;
         detachFromWindow();
         WebView view = webView;

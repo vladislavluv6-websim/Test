@@ -773,14 +773,9 @@ public final class InbuiltModuleProvider {
                     context.getString(R.string.mod_config_target_esp_style),
                     UnifiedMod.ConfigType.RADIO,
                     "0",
-                    context.getString(R.string.mod_config_target_esp_crystal) + ","
-                            + context.getString(R.string.mod_config_target_esp_prism) + ","
-                            + context.getString(R.string.mod_config_target_esp_rune) + ","
-                            + context.getString(R.string.mod_config_target_esp_nova) + ","
-                            + context.getString(R.string.mod_config_target_esp_pulse) + ","
-                            + context.getString(R.string.mod_config_target_esp_hex) + ","
-                            + context.getString(R.string.mod_config_target_esp_orbit) + ","
-                            + context.getString(R.string.mod_config_target_esp_lock),
+                    context.getString(R.string.mod_config_target_esp_circle) + ","
+                            + context.getString(R.string.mod_config_target_esp_diamond) + ","
+                            + context.getString(R.string.mod_config_target_esp_sphere),
                     "",
                     String.valueOf(manager.getTargetEspStyle())));
             configs.add(config(CFG_TARGET_ESP_COLOR,

@@ -493,11 +493,12 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetTargetEsp(
       aimbot::Esp::instance().copyTargetEsp();
   if (!state.visible || !env) return nullptr;
   char buffer[96]{};
-  std::snprintf(buffer, sizeof(buffer), "%.1f	%.1f	%.1f	%.1f	%lld",
+  std::snprintf(buffer, sizeof(buffer), "%.1f\t%.1f\t%.1f\t%.1f\t%lld\t%.1f",
                 static_cast<double>(state.x), static_cast<double>(state.y),
                 static_cast<double>(state.width),
                 static_cast<double>(state.height),
-                static_cast<long long>(state.ageMs));
+                static_cast<long long>(state.ageMs),
+                static_cast<double>(state.yaw));
   return env->NewStringUTF(buffer);
 }
 

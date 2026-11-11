@@ -1084,6 +1084,7 @@ void Esp::updateTargetEsp(void *player, uintptr_t playerRenderer,
         state.width = maxX - minX;
         state.height = maxY - minY;
         state.ageMs = std::max<int64_t>(0, ageMs);
+        state.yaw = view.yaw;
       }
     }
   }

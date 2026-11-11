@@ -41,6 +41,7 @@ struct TargetEspState {
   float width = 0.0f;
   float height = 0.0f;
   int64_t ageMs = 0;
+  float yaw = 0.0f;
 };
 
 class Esp {

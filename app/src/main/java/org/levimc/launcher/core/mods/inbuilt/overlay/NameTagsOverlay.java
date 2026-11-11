@@ -300,7 +300,7 @@ public class NameTagsOverlay extends View {
             try {
                 String[] nativeLabels = EspMod.getNameTags();
                 if (nativeLabels != null) next = nativeLabels;
-            } catch (RuntimeException ignored) {
+            } catch (Throwable ignored) {
                 next = new String[0];
             }
         }
@@ -348,12 +348,15 @@ public class NameTagsOverlay extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (!moduleEnabled || labels.length == 0) return;
-        applyTextStyle();
-        for (Label label : labels) {
-            try {
-                drawLabel(canvas, label);
-            } catch (RuntimeException ignored) {
+        try {
+            applyTextStyle();
+            for (Label label : labels) {
+                try {
+                    drawLabel(canvas, label);
+                } catch (Throwable ignored) {
+                }
             }
+        } catch (Throwable ignored) {
         }
     }
 

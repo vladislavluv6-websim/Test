@@ -5,8 +5,9 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RadialGradient;
 import android.graphics.RectF;
-import android.graphics.Typeface;
+import android.graphics.Shader;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Choreographer;
@@ -19,19 +20,14 @@ import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.preloader.PreloaderInput;
 
 /**
- * Target ESP: рисуется только после удара TriggerBot по цели.
- * Native отдаёт экранный прямоугольник цели, Java рисует выбранную модель
- * (призрак, квадрат, круг, кристалл) с плавным появлением и затуханием.
+ * Target ESP: рисуется на цели, которую ведёт AimAssist/TriggerBot.
+ * Три модели: круг (качается вверх-вниз), ромб (вращается вместе с
+ * поворотом игрока) и сфера (стоит на месте).
  */
 public class TargetEspOverlay extends View {
-    public static final int STYLE_CRYSTAL = 0;
-    public static final int STYLE_PRISM = 1;
-    public static final int STYLE_RUNE = 2;
-    public static final int STYLE_NOVA = 3;
-    public static final int STYLE_PULSE = 4;
-    public static final int STYLE_HEX = 5;
-    public static final int STYLE_ORBIT = 6;
-    public static final int STYLE_LOCK = 7;
+    public static final int STYLE_CIRCLE = 0;
+    public static final int STYLE_DIAMOND = 1;
+    public static final int STYLE_SPHERE = 2;
 
     private static final long FADE_MS = 180L;
     private static final long POLL_INTERVAL_NANOS = 33_000_000L;
@@ -40,17 +36,18 @@ public class TargetEspOverlay extends View {
     private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     private final RectF rect = new RectF();
+    private final RectF shape = new RectF();
     private float density = 1f;
     private boolean attached;
     private volatile boolean showing;
     private volatile boolean moduleEnabled = true;
-    private int style = STYLE_CRYSTAL;
+    private int style = STYLE_CIRCLE;
     private int accent = 0xFF4E83FF;
     private long holdMs = 650L;
     private float x, y, w, h;
+    private float yawDeg;
     private long ageMs = -1;
     private boolean framePosted;
     private long lastPollNanos;
@@ -80,6 +77,7 @@ public class TargetEspOverlay extends View {
                 lastPollNanos = frameTimeNanos;
                 poll();
             }
+            if (ageMs >= 0) invalidate();
             postFrame();
         }
     };
@@ -95,21 +93,15 @@ public class TargetEspOverlay extends View {
         density = activity.getResources().getDisplayMetrics().density;
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(2f * density);
-        strokePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         glowPaint.setStyle(Paint.Style.STROKE);
         glowPaint.setStrokeWidth(7f * density);
         fillPaint.setStyle(Paint.Style.FILL);
-        textPaint.setColor(Color.WHITE);
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        textPaint.setTextSize(10f * density);
-        textPaint.setShadowLayer(3f, 0f, 1f, 0xCC000000);
         applySettings();
     }
 
     private void applySettings() {
         InbuiltModManager manager = InbuiltModManager.getInstance(getContext());
-        style = manager.getTargetEspStyle();
+        style = Math.max(0, Math.min(STYLE_SPHERE, manager.getTargetEspStyle()));
         accent = manager.getTargetEspColor();
         holdMs = Math.max(150, manager.getTargetEspHoldMs());
         EspMod.setTargetEspHold((int) holdMs);
@@ -231,30 +223,31 @@ public class TargetEspOverlay extends View {
 
     private void poll() {
         String raw = null;
-        if (moduleEnabled && gameplayVisible() && EspMod.isInitialized()) {
-            raw = EspMod.getTargetEsp();
+        try {
+            if (moduleEnabled && gameplayVisible() && EspMod.isInitialized()) {
+                raw = EspMod.getTargetEsp();
+            }
+        } catch (Throwable ignored) {
+            raw = null;
         }
-        boolean changed = false;
         if (raw == null || raw.isEmpty()) {
-            if (ageMs >= 0) {
-                ageMs = -1;
-                changed = true;
-            }
-        } else {
-            try {
-                String[] parts = raw.split("\\t");
-                if (parts.length >= 5) {
-                    x = Float.parseFloat(parts[0]);
-                    y = Float.parseFloat(parts[1]);
-                    w = Float.parseFloat(parts[2]);
-                    h = Float.parseFloat(parts[3]);
-                    ageMs = Long.parseLong(parts[4]);
-                    changed = true;
-                }
-            } catch (NumberFormatException ignored) {
-            }
+            if (ageMs >= 0) ageMs = -1;
+            return;
         }
-        if (changed) invalidate();
+        try {
+            String[] parts = raw.split("\t");
+            if (parts.length >= 5) {
+                x = Float.parseFloat(parts[0]);
+                y = Float.parseFloat(parts[1]);
+                w = Float.parseFloat(parts[2]);
+                h = Float.parseFloat(parts[3]);
+                ageMs = Long.parseLong(parts[4]);
+                if (parts.length >= 6) {
+                    yawDeg = Float.parseFloat(parts[5]);
+                }
+            }
+        } catch (NumberFormatException ignored) {
+        }
     }
 
     @Override
@@ -281,316 +274,95 @@ public class TargetEspOverlay extends View {
         int faint = Color.argb((int) (70 * alpha), Color.red(accent),
                 Color.green(accent), Color.blue(accent));
         strokePaint.setColor(color);
+        strokePaint.setStrokeWidth(2f * density);
         glowPaint.setColor(faint);
-        fillPaint.setColor(Color.argb((int) (26 * alpha), Color.red(accent),
+        glowPaint.setStrokeWidth(7f * density);
+        fillPaint.setShader(null);
+        fillPaint.setColor(Color.argb((int) (40 * alpha), Color.red(accent),
                 Color.green(accent), Color.blue(accent)));
 
         switch (style) {
-            case STYLE_PRISM:
-                drawPrism(canvas, alpha);
+            case STYLE_DIAMOND:
+                drawDiamond(canvas);
                 break;
-            case STYLE_RUNE:
-                drawRune(canvas, alpha);
+            case STYLE_SPHERE:
+                drawSphere(canvas, alpha);
                 break;
-            case STYLE_NOVA:
-                drawNova(canvas, alpha);
-                break;
-            case STYLE_PULSE:
-                drawPulse(canvas, alpha);
-                break;
-            case STYLE_HEX:
-                drawHex(canvas, alpha);
-                break;
-            case STYLE_ORBIT:
-                drawOrbit(canvas, alpha);
-                break;
-            case STYLE_LOCK:
-                drawLock(canvas, alpha);
-                break;
-            case STYLE_CRYSTAL:
+            case STYLE_CIRCLE:
             default:
-                drawCrystal(canvas, alpha);
+                drawCircle(canvas, alpha);
                 break;
         }
-    }
-
-    private void drawSquare(Canvas canvas, float alpha) {
-        float radius = 6f * density;
-        canvas.drawRoundRect(rect, radius, radius, fillPaint);
-        canvas.drawRoundRect(rect, radius, radius, glowPaint);
-        canvas.drawRoundRect(rect, radius, radius, strokePaint);
-        float arm = Math.min(rect.width(), rect.height()) * 0.22f;
-        strokePaint.setStrokeWidth(3f * density);
-        canvas.drawLine(rect.left, rect.top, rect.left + arm, rect.top, strokePaint);
-        canvas.drawLine(rect.left, rect.top, rect.left, rect.top + arm, strokePaint);
-        canvas.drawLine(rect.right, rect.top, rect.right - arm, rect.top, strokePaint);
-        canvas.drawLine(rect.right, rect.top, rect.right, rect.top + arm, strokePaint);
-        canvas.drawLine(rect.left, rect.bottom, rect.left + arm, rect.bottom, strokePaint);
-        canvas.drawLine(rect.left, rect.bottom, rect.left, rect.bottom - arm, strokePaint);
-        canvas.drawLine(rect.right, rect.bottom, rect.right - arm, rect.bottom, strokePaint);
-        canvas.drawLine(rect.right, rect.bottom, rect.right, rect.bottom - arm, strokePaint);
-        strokePaint.setStrokeWidth(2f * density);
     }
 
     private void drawCircle(Canvas canvas, float alpha) {
-        float rx = rect.width() * 0.5f;
-        float ry = rect.height() * 0.5f;
-        canvas.drawOval(rect, fillPaint);
-        canvas.drawOval(rect, glowPaint);
-        canvas.drawOval(rect, strokePaint);
-        float rotation = (ageMs % 1100L) / 1100f * 360f;
-        rectIns(rect, 5f * density);
-        path.reset();
-        path.addArc(rect, rotation, 70f);
-        strokePaint.setStrokeWidth(3f * density);
-        canvas.drawPath(path, strokePaint);
-        path.reset();
-        path.addArc(rect, rotation + 180f, 70f);
-        canvas.drawPath(path, strokePaint);
-        strokePaint.setStrokeWidth(2f * density);
-    }
-
-    private void drawGhost(Canvas canvas, float alpha) {
-        float pulse = (float) (0.5 + 0.5 * Math.sin(ageMs / 130.0));
-        for (int i = 3; i >= 0; i--) {
-            float trail = i * 7f * density;
-            float sway = (float) Math.sin((ageMs + i * 90) / 220.0) * 4f * density;
-            rectIns(rect, -trail);
-            glowPaint.setAlpha((int) ((34 + 16 * i) * alpha));
-            canvas.drawRoundRect(rect, 10f * density, 10f * density, glowPaint);
-            canvas.drawRoundRect(rect, 10f * density, 10f * density, strokePaint);
-            rectIns(rect, trail);
-            canvas.drawCircle(rect.left + sway, rect.top + rect.height() * (0.25f + 0.2f * i),
-                    2.5f * density, fillPaint);
-        }
-        glowPaint.setAlpha((int) (70 * alpha));
-        rectIns(rect, 2f * density);
-        canvas.drawRoundRect(rect, 8f * density, 8f * density, fillPaint);
-        float arm = Math.min(rect.width(), rect.height()) * 0.18f;
-        strokePaint.setStrokeWidth((2f + pulse) * density);
-        canvas.drawLine(rect.left, rect.centerY(), rect.left + arm, rect.centerY(), strokePaint);
-        canvas.drawLine(rect.right, rect.centerY(), rect.right - arm, rect.centerY(), strokePaint);
-        strokePaint.setStrokeWidth(2f * density);
-    }
-
-    private void drawCrystal(Canvas canvas, float alpha) {
+        float bob = (float) Math.sin(ageMs / 240.0) * 7f * density;
         float cx = rect.centerX();
-        float cy = rect.centerY();
-        float rotation = (ageMs % 1600L) / 1600f * 360f;
-        float radiusX = rect.width() * 0.52f;
-        float radiusY = rect.height() * 0.52f;
-        canvas.save();
-        canvas.rotate(rotation, cx, cy);
-        path.reset();
-        path.moveTo(cx, cy - radiusY);
-        path.lineTo(cx + radiusX, cy);
-        path.lineTo(cx, cy + radiusY);
-        path.lineTo(cx - radiusX, cy);
-        path.close();
-        canvas.drawPath(path, fillPaint);
-        canvas.drawPath(path, glowPaint);
-        canvas.drawPath(path, strokePaint);
-        canvas.restore();
-        canvas.save();
-        canvas.rotate(-rotation * 0.6f, cx, cy);
-        path.reset();
-        float small = 0.55f;
-        path.moveTo(cx, cy - radiusY * small);
-        path.lineTo(cx + radiusX * small, cy);
-        path.lineTo(cx, cy + radiusY * small);
-        path.lineTo(cx - radiusX * small, cy);
-        path.close();
-        strokePaint.setStrokeWidth(3f * density);
-        canvas.drawPath(path, strokePaint);
-        strokePaint.setStrokeWidth(2f * density);
-        canvas.restore();
-    }
-
-
-    private void drawPrism(Canvas canvas, float alpha) {
-        float cx = rect.centerX();
-        float cy = rect.centerY();
-        float rotation = (ageMs % 2200L) / 2200f * 360f;
-        float rx = rect.width() * 0.54f;
-        float ry = rect.height() * 0.54f;
-        canvas.save();
-        canvas.rotate(rotation, cx, cy);
-        for (int i = 0; i < 3; i++) {
-            canvas.save();
-            canvas.rotate(i * 60f, cx, cy);
-            path.reset();
-            path.moveTo(cx, cy - ry);
-            path.lineTo(cx + rx, cy);
-            path.lineTo(cx, cy + ry);
-            path.lineTo(cx - rx, cy);
-            path.close();
-            canvas.drawPath(path, i == 0 ? fillPaint : glowPaint);
-            canvas.drawPath(path, strokePaint);
-            canvas.restore();
-        }
-        canvas.restore();
-        path.reset();
-        path.addCircle(cx, cy, Math.min(rx, ry) * 0.16f, Path.Direction.CW);
-        canvas.drawPath(path, strokePaint);
-    }
-
-    private void drawRune(Canvas canvas, float alpha) {
-        float cx = rect.centerX();
-        float cy = rect.centerY();
+        float cy = rect.centerY() + bob;
         float radius = Math.min(rect.width(), rect.height()) * 0.56f;
-        float rotation = (ageMs % 2600L) / 2600f * 360f;
-        path.reset();
-        for (int i = 0; i <= 6; i++) {
-            double a = Math.toRadians(rotation + i * 60);
-            float px = cx + (float) Math.cos(a) * radius;
-            float py = cy + (float) Math.sin(a) * radius;
-            if (i == 0) path.moveTo(px, py); else path.lineTo(px, py);
-        }
-        path.close();
-        canvas.drawPath(path, fillPaint);
-        canvas.drawPath(path, glowPaint);
+        shape.set(cx - radius, cy - radius, cx + radius, cy + radius);
+        canvas.drawOval(shape, glowPaint);
+        canvas.drawOval(shape, strokePaint);
+
+        float spin = (ageMs % 1200L) / 1200f * 360f;
+        float inset = radius * 0.82f;
+        shape.set(cx - inset, cy - inset, cx + inset, cy + inset);
         strokePaint.setStrokeWidth(3f * density);
+        path.reset();
+        path.addArc(shape, spin, 68f);
+        canvas.drawPath(path, strokePaint);
+        path.reset();
+        path.addArc(shape, spin + 180f, 68f);
         canvas.drawPath(path, strokePaint);
         strokePaint.setStrokeWidth(2f * density);
-        for (int i = 0; i < 6; i++) {
-            double a = Math.toRadians(rotation + i * 60);
-            float px = cx + (float) Math.cos(a) * radius * 0.78f;
-            float py = cy + (float) Math.sin(a) * radius * 0.78f;
-            canvas.drawCircle(px, py, 2.5f * density, strokePaint);
-        }
     }
 
-    private void drawNova(Canvas canvas, float alpha) {
-        float cx = rect.centerX();
-        float cy = rect.centerY();
-        float radius = Math.min(rect.width(), rect.height()) * 0.58f;
-        float rotation = (ageMs % 1800L) / 1800f * 360f;
-        canvas.save();
-        canvas.rotate(rotation, cx, cy);
-        for (int i = 0; i < 8; i++) {
-            float len = (i % 2 == 0) ? radius : radius * 0.48f;
-            path.reset();
-            path.moveTo(cx, cy - len);
-            path.lineTo(cx + radius * 0.12f, cy);
-            path.lineTo(cx, cy + len);
-            path.lineTo(cx - radius * 0.12f, cy);
-            path.close();
-            canvas.drawPath(path, i % 2 == 0 ? glowPaint : strokePaint);
-            canvas.rotate(45f, cx, cy);
-        }
-        canvas.restore();
-        fillPaint.setAlpha((int) (42 * alpha));
-        canvas.drawCircle(cx, cy, radius * 0.22f, fillPaint);
-        canvas.drawCircle(cx, cy, radius * 0.22f, strokePaint);
-    }
-
-    private void drawPulse(Canvas canvas, float alpha) {
-        float cx = rect.centerX();
-        float cy = rect.centerY();
-        float base = Math.min(rect.width(), rect.height()) * 0.58f;
-        for (int i = 0; i < 3; i++) {
-            float phase = ((ageMs + i * 320L) % 960L) / 960f;
-            float radius = base * (0.45f + 0.55f * phase);
-            int a = (int) ((1f - phase) * 110 * alpha);
-            glowPaint.setAlpha(a);
-            canvas.drawCircle(cx, cy, radius, glowPaint);
-        }
-        glowPaint.setAlpha((int) (70 * alpha));
-        canvas.drawCircle(cx, cy, base * 0.42f, strokePaint);
-        canvas.drawCircle(cx, cy, base * 0.18f, fillPaint);
-        canvas.drawCircle(cx, cy, base * 0.18f, strokePaint);
-    }
-
-
-    private void drawHex(Canvas canvas, float alpha) {
-        float cx = rect.centerX();
-        float cy = rect.centerY();
-        float radius = Math.min(rect.width(), rect.height()) * 0.58f;
-        float rotation = (ageMs % 2400L) / 2400f * 360f;
-        for (int ring = 0; ring < 2; ring++) {
-            float r = radius * (ring == 0 ? 1f : 0.68f);
-            path.reset();
-            for (int i = 0; i <= 6; i++) {
-                double a = Math.toRadians(rotation + i * 60 + ring * 30);
-                float px = cx + (float) Math.cos(a) * r;
-                float py = cy + (float) Math.sin(a) * r;
-                if (i == 0) path.moveTo(px, py); else path.lineTo(px, py);
-            }
-            path.close();
-            canvas.drawPath(path, ring == 0 ? glowPaint : fillPaint);
-            strokePaint.setStrokeWidth((ring == 0 ? 2.5f : 2f) * density);
-            canvas.drawPath(path, strokePaint);
-        }
-        strokePaint.setStrokeWidth(2f * density);
-        for (int i = 0; i < 6; i++) {
-            double a = Math.toRadians(rotation + i * 60);
-            canvas.drawLine(cx, cy,
-                    cx + (float) Math.cos(a) * radius,
-                    cy + (float) Math.sin(a) * radius, glowPaint);
-        }
-    }
-
-    private void drawOrbit(Canvas canvas, float alpha) {
+    private void drawDiamond(Canvas canvas) {
         float cx = rect.centerX();
         float cy = rect.centerY();
         float rx = rect.width() * 0.56f;
-        float ry = rect.height() * 0.30f;
-        float rotation = (ageMs % 2000L) / 2000f * 360f;
+        float ry = rect.height() * 0.56f;
         canvas.save();
-        canvas.rotate(rotation, cx, cy);
-        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, glowPaint);
+        canvas.rotate(-yawDeg, cx, cy);
         path.reset();
-        path.addOval(cx - rx, cy - ry, cx + rx, cy + ry, Path.Direction.CW);
-        canvas.drawPath(path, strokePaint);
-        canvas.restore();
-        canvas.save();
-        canvas.rotate(-rotation * 0.8f + 90f, cx, cy);
-        canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, glowPaint);
-        canvas.restore();
-        for (int i = 0; i < 3; i++) {
-            double a = Math.toRadians(rotation + i * 120);
-            float px = cx + (float) Math.cos(a) * rx * 0.95f;
-            float py = cy + (float) Math.sin(a) * ry * 0.95f;
-            canvas.save();
-            canvas.rotate(rotation, cx, cy);
-            canvas.drawCircle(px, cy, 3f * density, fillPaint);
-            canvas.restore();
-        }
-        fillPaint.setAlpha((int) (36 * alpha));
-        canvas.drawCircle(cx, cy, Math.min(rx, ry) * 0.45f, fillPaint);
-    }
-
-    private void drawLock(Canvas canvas, float alpha) {
-        float inset = 3f * density;
-        rectIns(rect, inset);
-        float arm = Math.min(rect.width(), rect.height()) * 0.30f;
-        strokePaint.setStrokeWidth(2.5f * density);
-        canvas.drawLine(rect.left, rect.top, rect.left + arm, rect.top, strokePaint);
-        canvas.drawLine(rect.left, rect.top, rect.left, rect.top + arm, strokePaint);
-        canvas.drawLine(rect.right, rect.top, rect.right - arm, rect.top, strokePaint);
-        canvas.drawLine(rect.right, rect.top, rect.right, rect.top + arm, strokePaint);
-        canvas.drawLine(rect.left, rect.bottom, rect.left + arm, rect.bottom, strokePaint);
-        canvas.drawLine(rect.left, rect.bottom, rect.left, rect.bottom - arm, strokePaint);
-        canvas.drawLine(rect.right, rect.bottom, rect.right - arm, rect.bottom, strokePaint);
-        canvas.drawLine(rect.right, rect.bottom, rect.right, rect.bottom - arm, strokePaint);
-        float cx = rect.centerX();
-        float cy = rect.centerY();
-        float r = Math.min(rect.width(), rect.height()) * 0.16f;
-        float pulse = (float) (0.5 + 0.5 * Math.sin(ageMs / 140.0));
-        path.reset();
-        path.moveTo(cx, cy - r);
-        path.lineTo(cx + r, cy);
-        path.lineTo(cx, cy + r);
-        path.lineTo(cx - r, cy);
+        path.moveTo(cx, cy - ry);
+        path.lineTo(cx + rx, cy);
+        path.lineTo(cx, cy + ry);
+        path.lineTo(cx - rx, cy);
         path.close();
-        glowPaint.setAlpha((int) ((45 + 45 * pulse) * alpha));
+        canvas.drawPath(path, fillPaint);
         canvas.drawPath(path, glowPaint);
         canvas.drawPath(path, strokePaint);
+        float small = 0.5f;
+        path.reset();
+        path.moveTo(cx, cy - ry * small);
+        path.lineTo(cx + rx * small, cy);
+        path.lineTo(cx, cy + ry * small);
+        path.lineTo(cx - rx * small, cy);
+        path.close();
+        strokePaint.setStrokeWidth(3f * density);
+        canvas.drawPath(path, strokePaint);
         strokePaint.setStrokeWidth(2f * density);
-        rectIns(rect, -inset);
+        canvas.restore();
     }
 
-    private static void rectIns(RectF r, float inset) {
-        r.inset(inset, inset);
+    private void drawSphere(Canvas canvas, float alpha) {
+        float cx = rect.centerX();
+        float cy = rect.centerY();
+        float radius = Math.max(4f, Math.min(rect.width(), rect.height()) * 0.5f);
+        RadialGradient gradient = new RadialGradient(
+                cx - radius * 0.28f, cy - radius * 0.28f, radius * 1.2f,
+                new int[]{
+                        Color.argb((int) (110 * alpha), 255, 255, 255),
+                        Color.argb((int) (70 * alpha), Color.red(accent),
+                                Color.green(accent), Color.blue(accent)),
+                        Color.argb(0, Color.red(accent), Color.green(accent),
+                                Color.blue(accent))
+                },
+                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
+        fillPaint.setShader(gradient);
+        canvas.drawCircle(cx, cy, radius, fillPaint);
+        fillPaint.setShader(null);
+        canvas.drawCircle(cx, cy, radius, strokePaint);
     }
 }

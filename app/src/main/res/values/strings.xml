@@ -699,7 +699,7 @@
     <string name="inbuilt_mod_swing">Hit Animation</string>
     <string name="inbuilt_mod_swing_desc">Changes the swing animation for every hit</string>
     <string name="inbuilt_mod_target_esp">Target ESP</string>
-    <string name="inbuilt_mod_target_esp_desc">Highlights the current AimAssist target with one of 8 models: crystal, prism, rune, nova, pulse, hex, orbit, lock</string>
+    <string name="inbuilt_mod_target_esp_desc">Highlights the current AimAssist target with one of 3 models: circle, diamond, sphere</string>
     <string name="mod_config_target_esp_style">Model</string>
     <string name="mod_config_target_esp_prism">Prism</string>
     <string name="mod_config_target_esp_rune">Rune</string>
@@ -1259,4 +1259,6 @@
     <string name="mod_config_target_esp_hex">Hex</string>
     <string name="mod_config_target_esp_orbit">Orbit</string>
     <string name="mod_config_target_esp_lock">Lock</string>
+    <string name="mod_config_target_esp_diamond">Diamond</string>
+    <string name="mod_config_target_esp_sphere">Sphere</string>
 </resources>

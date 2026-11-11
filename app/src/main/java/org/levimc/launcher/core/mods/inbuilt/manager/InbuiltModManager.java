@@ -807,13 +807,13 @@ public class InbuiltModManager {
     }
 
     public int getTargetEspStyle() {
-        return Math.max(0, Math.min(7,
+        return Math.max(0, Math.min(2,
                 prefs.getInt(KEY_TARGET_ESP_STYLE, DEFAULT_TARGET_ESP_STYLE)));
     }
 
     public void setTargetEspStyle(int style) {
         prefs.edit().putInt(KEY_TARGET_ESP_STYLE,
-                Math.max(0, Math.min(7, style))).apply();
+                Math.max(0, Math.min(2, style))).apply();
     }
 
     public int getNameTagStyle() {
