@@ -1897,22 +1897,29 @@ bool ClientBridge::attackActor(void *actor, const Vec3 &hitPoint) {
     safeRead(p + offsets::kPlayerSwingTicks, counterBefore);
     safeRead(p + offsets::kPlayerSwingState, stateBefore);
 
-    constexpr uint8_t kAttackSwingSource = 2;
-    using SwingFn = bool (*)(void *, uint8_t);
+    constexpr int kAttackSwingSource = 2;
+    using SwingFn = int (*)(void *, int, int);
     const uintptr_t swingFn =
         gameBase + offsets::kPlayerSwingFnFileOffset;
-    const bool started =
-        reinterpret_cast<SwingFn>(swingFn)(swingPlayer, kAttackSwingSource);
 
     int32_t counterAfter = 0;
     uint16_t stateAfter = 0;
+    int started =
+        reinterpret_cast<SwingFn>(swingFn)(swingPlayer, 0, 0);
     safeRead(p + offsets::kPlayerSwingTicks, counterAfter);
     safeRead(p + offsets::kPlayerSwingState, stateAfter);
+
+    if (started <= 0 || (stateAfter & 0x100u) == 0) {
+      started =
+          reinterpret_cast<SwingFn>(swingFn)(swingPlayer, 0, kAttackSwingSource);
+      safeRead(p + offsets::kPlayerSwingTicks, counterAfter);
+      safeRead(p + offsets::kPlayerSwingState, stateAfter);
+    }
 
     // Some client builds reject the native start call (wrong source arg or a
     // gated handler). Seed the swing state directly so the module still
     // animates instead of silently doing nothing.
-    if (!started || (stateAfter & 0x100u) == 0) {
+    if (started <= 0 || (stateAfter & 0x100u) == 0) {
       safeWrite(p + offsets::kPlayerSwingTicks, static_cast<int32_t>(-1));
       safeWrite(p + offsets::kPlayerSwingState,
                 static_cast<uint16_t>(0x100u | kAttackSwingSource));

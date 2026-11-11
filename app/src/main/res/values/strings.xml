@@ -707,11 +707,11 @@
     <string name="mod_config_target_esp_pulse">Pulse</string>
     <string name="mod_config_name_tag_style">Name tag style</string>
     <string name="mod_config_name_tag_color">Name tag color</string>
-    <string name="mod_config_name_tag_plate">Plate</string>
-    <string name="mod_config_name_tag_glass">Glass</string>
-    <string name="mod_config_name_tag_neon">Neon</string>
-    <string name="mod_config_name_tag_minimal">Minimal</string>
-    <string name="mod_config_name_tag_bracket">Bracket</string>
+    <string name="mod_config_name_tag_plate">Capsule</string>
+    <string name="mod_config_name_tag_glass">HUD</string>
+    <string name="mod_config_name_tag_neon">Glow</string>
+    <string name="mod_config_name_tag_minimal">Split</string>
+    <string name="mod_config_name_tag_bracket">Cyber</string>
     <string name="mod_config_swing_style">Swing animation</string>
     <string name="mod_config_swing_default">Default</string>
     <string name="mod_config_swing_slow">Slow</string>

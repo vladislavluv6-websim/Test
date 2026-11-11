@@ -374,7 +374,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_OVERLAY_SHORTCUT,
                     context.getString(R.string.mod_config_overlay_shortcut),
                     UnifiedMod.ConfigType.TOGGLE,
-                    "true", "", "",
+                    "false", "", "",
                     String.valueOf(manager.isOverlayShortcutVisible(modId))));
         }
 
@@ -477,7 +477,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_SPEED_HOP_HEIGHT,
                     context.getString(R.string.mod_config_speed_hop_height),
                     UnifiedMod.ConfigType.SLIDER_FLOAT,
-                    "0.12824392", "0.10", "0.42",
+                    "0.1234", "0.10", "0.42",
                     String.format(java.util.Locale.US, "%.8f",
                             manager.getSpeedHopHeight())));
             configs.add(config(CFG_SPEED_HOP_INTERVAL,

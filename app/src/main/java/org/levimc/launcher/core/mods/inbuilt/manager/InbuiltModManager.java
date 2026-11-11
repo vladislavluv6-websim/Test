@@ -130,8 +130,8 @@ public class InbuiltModManager {
     private static final int DEFAULT_SPEED_RESET_INTERVAL = 2500;
     private static final int DEFAULT_SPEED_MAX_RESET_TICKS = 6;
     private static final boolean DEFAULT_SPEED_HOP_ENABLED = true;
-    private static final int DEFAULT_SPEED_HOP_HEIGHT = 128;
-    private static final float DEFAULT_SPEED_HOP_HEIGHT_EXACT = 0.12824392f;
+    private static final int DEFAULT_SPEED_HOP_HEIGHT = 123;
+    private static final float DEFAULT_SPEED_HOP_HEIGHT_EXACT = 0.1234f;
     private static final int DEFAULT_SPEED_HOP_INTERVAL = 0;
     private static final boolean DEFAULT_SPEED_MASK_Y = true;
     private static final int DEFAULT_SPEED_PHANTOM_HOLD = 3;
@@ -198,6 +198,7 @@ public class InbuiltModManager {
     private static final int TUNING_REVISION = 4;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
+    private static final String KEY_SPEED_HOP_HEIGHT_REVISION = "speed_hop_height_revision";
     private static final String KEY_FRIEND_NAMES = "friend_names";
 
     private static volatile InbuiltModManager instance;
@@ -216,19 +217,29 @@ public class InbuiltModManager {
         prefs.registerOnSharedPreferenceChangeListener(preferenceListener);
         migrateTuningDefaults();
         migrateFov360();
+        migrateSpeedHopHeight();
         migrateShortcutVisibility();
     }
 
+    private void migrateSpeedHopHeight() {
+        if (prefs.getInt(KEY_SPEED_HOP_HEIGHT_REVISION, 0) >= 1) return;
+        prefs.edit()
+                .putFloat(KEY_SPEED_HOP_HEIGHT_EXACT,
+                        DEFAULT_SPEED_HOP_HEIGHT_EXACT)
+                .putInt(KEY_SPEED_HOP_HEIGHT_REVISION, 1)
+                .apply();
+    }
+
     private void migrateShortcutVisibility() {
-        if (prefs.getInt(KEY_SHORTCUT_REVISION, 0) >= 2) return;
+        if (prefs.getInt(KEY_SHORTCUT_REVISION, 0) >= 3) return;
         SharedPreferences.Editor editor = prefs.edit();
         for (String modId : new String[]{
                 ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.ESP,
                 ModIds.FULLBRIGHT, ModIds.TRIGGER_BOT, ModIds.SWING,
                 ModIds.NAME_TAGS, ModIds.TARGET_ESP, ModIds.FRIEND}) {
-            editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
+            editor.putBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, false);
         }
-        editor.putInt(KEY_SHORTCUT_REVISION, 2).apply();
+        editor.putInt(KEY_SHORTCUT_REVISION, 3).apply();
     }
 
     private void migrateFov360() {
@@ -1048,8 +1059,8 @@ public class InbuiltModManager {
     }
 
     public boolean isOverlayShortcutVisible(String modId) {
-        if (modId == null || modId.isEmpty()) return true;
-        return prefs.getBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, true);
+        if (modId == null || modId.isEmpty()) return false;
+        return prefs.getBoolean(KEY_OVERLAY_SHORTCUT_PREFIX + modId, false);
     }
 
     public void setOverlayShortcutVisible(String modId, boolean visible) {

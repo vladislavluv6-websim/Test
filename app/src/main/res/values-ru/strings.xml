@@ -714,11 +714,11 @@
     <string name="mod_config_target_esp_pulse">Пульс</string>
     <string name="mod_config_name_tag_style">Стиль ника</string>
     <string name="mod_config_name_tag_color">Цвет ника</string>
-    <string name="mod_config_name_tag_plate">Плашка</string>
-    <string name="mod_config_name_tag_glass">Стекло</string>
-    <string name="mod_config_name_tag_neon">Неон</string>
-    <string name="mod_config_name_tag_minimal">Минимал</string>
-    <string name="mod_config_name_tag_bracket">Скобки</string>
+    <string name="mod_config_name_tag_plate">Капсула</string>
+    <string name="mod_config_name_tag_glass">HUD</string>
+    <string name="mod_config_name_tag_neon">Свечение</string>
+    <string name="mod_config_name_tag_minimal">Разделитель</string>
+    <string name="mod_config_name_tag_bracket">Кибер</string>
     <string name="mod_config_swing_style">Анимация удара</string>
     <string name="mod_config_swing_default">Обычная</string>
     <string name="mod_config_swing_slow">Медленная</string>

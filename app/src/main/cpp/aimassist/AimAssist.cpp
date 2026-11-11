@@ -650,6 +650,7 @@ void AimAssist::updateVisual(float dt) {
   if (settings.fastAim) {
     m_targetLockMs = aimNow;
     m_fastAimTurnApplied = false;
+    stabilizeFastAimAngles(dt);
     const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
     const float beforePitch = m_localPitch.load(std::memory_order_relaxed);
     applySmoothRotationInternal(m_target.yaw, m_target.pitch, dt, settings);
@@ -1425,6 +1426,39 @@ Angles AimAssist::calculateAnglesToPoint(const Vec3 &point) const {
   return angles;
 }
 
+void AimAssist::stabilizeFastAimAngles(float dt) {
+  if (!m_haveStableAim || m_stableAimActor != m_target.actor) {
+    m_haveStableAim = true;
+    m_stableAimActor = m_target.actor;
+    m_stableAimYaw = m_target.yaw;
+    m_stableAimPitch = m_target.pitch;
+    return;
+  }
+
+  const float errYaw = shortestDelta(m_stableAimYaw, m_target.yaw);
+  const float errPitch = m_target.pitch - m_stableAimPitch;
+  const float err = std::sqrt(errYaw * errYaw + errPitch * errPitch);
+
+  if (err > 6.0f) {
+    m_stableAimYaw = m_target.yaw;
+    m_stableAimPitch = m_target.pitch;
+    return;
+  }
+
+  // Малые дрожания сглаживаем, заметное движение цели пропускаем без
+  // задержки: alpha растёт до 1 уже на 0.35°, поэтому скорость доводки
+  // не меняется.
+  const float baseAlpha =
+      1.0f - std::exp(-clampf(dt, 0.0f, 0.05f) * 55.0f);
+  const float motion = clampf(err / 0.35f, 0.0f, 1.0f);
+  const float alpha = baseAlpha + (1.0f - baseAlpha) * motion;
+  m_stableAimYaw = normalizeYaw(m_stableAimYaw + errYaw * alpha);
+  m_stableAimPitch =
+      clampf(m_stableAimPitch + errPitch * alpha, -89.9f, 89.9f);
+  m_target.yaw = m_stableAimYaw;
+  m_target.pitch = m_stableAimPitch;
+}
+
 // ============================================================
 // Плавный довод
 // ============================================================
@@ -1828,6 +1862,8 @@ void AimAssist::clearTarget() {
   m_aimEngageAtMs = 0;
   m_targetLockMs = 0;
   m_serverViewSinceMs = 0;
+  m_haveStableAim = false;
+  m_stableAimActor = nullptr;
   resetHumanProfile();
   // m_onTarget принадлежит триггеру: очистка цели aim assist не должна
   // гасить триггер посреди кадра.

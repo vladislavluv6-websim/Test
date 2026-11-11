@@ -113,7 +113,7 @@ std::atomic<float> g_gapMax{0.45f};
 std::atomic<int> g_resetIntervalMs{2500};
 std::atomic<int> g_maxResetTicks{6};
 std::atomic_bool g_hopEnabled{true};
-constexpr float kMiniJumpHeight = 0.12824392f;
+constexpr float kMiniJumpHeight = 0.1234f;
 std::atomic<float> g_hopHeight{kMiniJumpHeight};
 std::atomic<int> g_hopInterval{0};
 std::atomic_bool g_maskY{true};

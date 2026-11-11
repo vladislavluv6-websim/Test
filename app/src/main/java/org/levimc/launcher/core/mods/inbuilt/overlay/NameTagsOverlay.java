@@ -26,11 +26,11 @@ import java.util.Arrays;
  * касания и не мешает SurfaceView игры.</p>
  */
 public class NameTagsOverlay extends View {
-    public static final int STYLE_PLATE = 0;
-    public static final int STYLE_GLASS = 1;
-    public static final int STYLE_NEON = 2;
-    public static final int STYLE_MINIMAL = 3;
-    public static final int STYLE_BRACKET = 4;
+    public static final int STYLE_CAPSULE = 0;
+    public static final int STYLE_HUD = 1;
+    public static final int STYLE_GLOW = 2;
+    public static final int STYLE_SPLIT = 3;
+    public static final int STYLE_CYBER = 4;
 
     private static final String TAG = "NameTagsOverlay";
 
@@ -41,13 +41,15 @@ public class NameTagsOverlay extends View {
     private final Paint distancePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint statPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final android.graphics.Path heartPath = new android.graphics.Path();
+    private final android.graphics.Path panelPath = new android.graphics.Path();
+    private final android.graphics.Path shieldPath = new android.graphics.Path();
     private float density = 1f;
     private boolean attached;
     private boolean showing;
     private boolean moduleEnabled = true;
     private String[] labels = new String[0];
     private boolean frameCallbackPosted;
-    private int style = STYLE_PLATE;
+    private int style = STYLE_CAPSULE;
     private int accent = 0xFF4E83FF;
 
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
@@ -92,7 +94,8 @@ public class NameTagsOverlay extends View {
         style = manager.getNameTagStyle();
         accent = manager.getNameTagColor();
         accentPaint.setColor(accent);
-        textPaint.setColor(style == STYLE_NEON ? accent : Color.WHITE);
+        textPaint.setColor((style == STYLE_GLOW || style == STYLE_CYBER)
+                ? accent : Color.WHITE);
     }
 
     public void applyConfigurationChanges() {
@@ -257,8 +260,10 @@ public class NameTagsOverlay extends View {
 
         float heartSize = 8f * density;
         float hpWidth = statPaint.measureText(hpText);
-        float pipWidth = 4f * dp(3.6f);
-        float armorWidth = 4 * dp(3.6f) + 3 * dp(1.5f);
+        float shieldWidth = dp(4.4f);
+        float shieldHeight = dp(5.6f);
+        float shieldGap = dp(1.2f);
+        float armorWidth = 4 * shieldWidth + 3 * shieldGap;
         float distanceWidth = distanceText.isEmpty()
                 ? 0f : distancePaint.measureText(distanceText);
         float gap = dp(5f);
@@ -279,88 +284,124 @@ public class NameTagsOverlay extends View {
         float statBaseline = bottom - padY * 0.95f;
 
         switch (style) {
-            case STYLE_GLASS:
-                backdropPaint.setColor(0x8A0D1018);
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+            case STYLE_HUD: {
+                backdropPaint.setColor(0xF20B0E16);
+                canvas.drawRoundRect(left, top, right, bottom, dp(3f), dp(3f),
+                        backdropPaint);
+                accentPaint.setStyle(Paint.Style.FILL);
+                accentPaint.setColor(accent);
+                canvas.drawRect(left + dp(3f), top,
+                        left + (right - left) * 0.58f, top + dp(2f), accentPaint);
+                accentPaint.setColor(0x552F3B52);
+                canvas.drawRect(right - dp(11f), top + dp(2f), right,
+                        top + dp(2.7f), accentPaint);
                 accentPaint.setStyle(Paint.Style.STROKE);
                 accentPaint.setStrokeWidth(1f * density);
-                accentPaint.setColor(0x66FFFFFF);
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
-                break;
-            case STYLE_NEON:
-                backdropPaint.setColor(0x660A0C12);
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
-                accentPaint.setStyle(Paint.Style.STROKE);
-                accentPaint.setStrokeWidth(1.5f * density);
-                accentPaint.setColor(accent);
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
-                break;
-            case STYLE_MINIMAL:
-                accentPaint.setStyle(Paint.Style.STROKE);
-                accentPaint.setStrokeWidth(1.5f * density);
-                accentPaint.setColor(accent);
-                canvas.drawLine(left, bottom, right, bottom, accentPaint);
-                break;
-            case STYLE_BRACKET: {
-                float arm = Math.min(9f * density, (bottom - top) * 0.45f);
-                accentPaint.setStyle(Paint.Style.STROKE);
-                accentPaint.setStrokeWidth(1.8f * density);
-                accentPaint.setColor(accent);
-                canvas.drawLine(left, top, left + arm, top, accentPaint);
-                canvas.drawLine(left, top, left, top + arm, accentPaint);
-                canvas.drawLine(right, top, right - arm, top, accentPaint);
-                canvas.drawLine(right, top, right, top + arm, accentPaint);
-                canvas.drawLine(left, bottom, left + arm, bottom, accentPaint);
-                canvas.drawLine(left, bottom, left, bottom - arm, accentPaint);
-                canvas.drawLine(right, bottom, right - arm, bottom, accentPaint);
-                canvas.drawLine(right, bottom, right, bottom - arm, accentPaint);
+                accentPaint.setColor(0xFF252B38);
+                canvas.drawRoundRect(left, top, right, bottom, dp(3f), dp(3f),
+                        accentPaint);
                 break;
             }
-            case STYLE_PLATE:
-            default:
-                backdropPaint.setColor(0xF00B0E15);
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius, backdropPaint);
+            case STYLE_GLOW: {
+                final int glow = (accent & 0x00FFFFFF) | 0x33000000;
+                final int edge = (accent & 0x00FFFFFF) | 0xCC000000;
+                backdropPaint.setColor(glow);
+                canvas.drawRoundRect(left - dp(1.5f), top - dp(1.5f),
+                        right + dp(1.5f), bottom + dp(1.5f),
+                        radius + dp(1.5f), radius + dp(1.5f), backdropPaint);
+                backdropPaint.setColor(0xCC090C13);
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius,
+                        backdropPaint);
+                accentPaint.setStyle(Paint.Style.STROKE);
+                accentPaint.setStrokeWidth(1.2f * density);
+                accentPaint.setColor(edge);
+                canvas.drawRoundRect(left, top, right, bottom, radius, radius,
+                        accentPaint);
+                break;
+            }
+            case STYLE_SPLIT: {
+                backdropPaint.setColor(0x52070A10);
+                canvas.drawRoundRect(left, top, right, bottom, dp(2f), dp(2f),
+                        backdropPaint);
+                accentPaint.setStyle(Paint.Style.STROKE);
+                accentPaint.setStrokeWidth(1.2f * density);
+                accentPaint.setColor(accent);
+                canvas.drawLine(left, top, right, top, accentPaint);
+                canvas.drawLine(left, bottom, right, bottom, accentPaint);
+                accentPaint.setColor(0x66343C4D);
+                accentPaint.setStrokeWidth(1f * density);
+                float dividerY = top + padY + nameHeight + dp(1.2f);
+                canvas.drawLine(left + padX * 0.25f, dividerY,
+                        right - padX * 0.25f, dividerY, accentPaint);
+                break;
+            }
+            case STYLE_CYBER: {
+                float cut = dp(5f);
+                panelPath.reset();
+                panelPath.moveTo(left + cut, top);
+                panelPath.lineTo(right, top);
+                panelPath.lineTo(right, bottom - cut);
+                panelPath.lineTo(right - cut, bottom);
+                panelPath.lineTo(left, bottom);
+                panelPath.lineTo(left, top + cut);
+                panelPath.close();
+                backdropPaint.setColor(0xE60A0E17);
+                canvas.drawPath(panelPath, backdropPaint);
+                accentPaint.setStyle(Paint.Style.STROKE);
+                accentPaint.setStrokeWidth(1.1f * density);
+                accentPaint.setColor(accent);
+                canvas.drawPath(panelPath, accentPaint);
+                accentPaint.setStyle(Paint.Style.FILL);
+                accentPaint.setColor((accent & 0x00FFFFFF) | 0x66000000);
+                canvas.drawRect(left + cut, top + dp(3f),
+                        left + cut + dp(9f), top + dp(3.8f), accentPaint);
+                break;
+            }
+            case STYLE_CAPSULE:
+            default: {
+                float capsuleRadius = (bottom - top) * 0.5f;
+                backdropPaint.setColor(0xEE080B12);
+                canvas.drawRoundRect(left, top, right, bottom, capsuleRadius,
+                        capsuleRadius, backdropPaint);
                 accentPaint.setStyle(Paint.Style.STROKE);
                 accentPaint.setStrokeWidth(1f * density);
-                accentPaint.setColor(0xFF20232E);
-                canvas.drawRoundRect(left, top, right, bottom, radius, radius, accentPaint);
+                accentPaint.setColor((accent & 0x00FFFFFF) | 0x99000000);
+                canvas.drawRoundRect(left, top, right, bottom, capsuleRadius,
+                        capsuleRadius, accentPaint);
+                accentPaint.setStyle(Paint.Style.FILL);
+                accentPaint.setColor(accent);
+                canvas.drawRoundRect(left + dp(2.6f), top + dp(3.2f),
+                        left + dp(4.4f), bottom - dp(3.2f), dp(0.9f),
+                        dp(0.9f), accentPaint);
                 break;
+            }
         }
 
-        textPaint.setColor(style == STYLE_NEON ? accent : Color.WHITE);
+        textPaint.setColor((style == STYLE_GLOW || style == STYLE_CYBER)
+                ? accent : Color.WHITE);
         textPaint.setTextAlign(Paint.Align.CENTER);
         canvas.drawText(name, x, nameBaseline, textPaint);
 
         float statLeft = x - statWidth * 0.5f;
         float iconTop = statBaseline - statHeight * 0.92f;
         drawHeart(canvas, statLeft, iconTop, heartSize, 0xFF3DDC84);
-        statPaint.setColor(style == STYLE_NEON ? accent : 0xFFD9DBE2);
+        statPaint.setColor((style == STYLE_GLOW || style == STYLE_CYBER)
+                ? 0xFFEAF2FF : 0xFFD9DBE2);
         statPaint.setTextAlign(Paint.Align.LEFT);
         float cursor = statLeft + heartSize + dp(2f);
         canvas.drawText(hpText, cursor, statBaseline, statPaint);
         cursor += hpWidth + gap;
 
         for (int i = 0; i < 4; i++) {
-            float pipW = dp(3.6f);
-            float pipH = dp(5f);
-            float pipTop = statBaseline - pipH;
-            if (i < armorPieces) {
-                accentPaint.setStyle(Paint.Style.FILL);
-                accentPaint.setColor(0xFF58A6FF);
-                canvas.drawRoundRect(cursor, pipTop, cursor + pipW,
-                        pipTop + pipH, dp(1f), dp(1f), accentPaint);
-            } else {
-                accentPaint.setStyle(Paint.Style.FILL);
-                accentPaint.setColor(0xFF303643);
-                canvas.drawRoundRect(cursor, pipTop, cursor + pipW,
-                        pipTop + pipH, dp(1f), dp(1f), accentPaint);
-            }
-            cursor += pipW + dp(1.5f);
+            drawArmorShield(canvas, cursor, statBaseline, shieldWidth,
+                    shieldHeight, i < armorPieces);
+            cursor += shieldWidth + shieldGap;
         }
 
         if (!distanceText.isEmpty()) {
-            cursor += gap - dp(1.5f);
-            distancePaint.setColor(style == STYLE_NEON ? accent : 0xFF9296A2);
+            cursor += gap - shieldGap;
+            distancePaint.setColor((style == STYLE_GLOW || style == STYLE_CYBER)
+                    ? 0xFFB9C7E6 : 0xFF9296A2);
             distancePaint.setTextAlign(Paint.Align.LEFT);
             canvas.drawText(distanceText, cursor, statBaseline, distancePaint);
         }
@@ -368,6 +409,38 @@ public class NameTagsOverlay extends View {
 
     private float dp(float value) {
         return value * density;
+    }
+
+    private void drawArmorShield(Canvas canvas, float left, float baseline,
+                                 float width, float height, boolean filled) {
+        float top = baseline - height;
+        shieldPath.reset();
+        shieldPath.moveTo(left, top);
+        shieldPath.lineTo(left + width, top);
+        shieldPath.lineTo(left + width, top + height * 0.56f);
+        shieldPath.lineTo(left + width * 0.5f, top + height);
+        shieldPath.lineTo(left, top + height * 0.56f);
+        shieldPath.close();
+
+        if (filled) {
+            accentPaint.setStyle(Paint.Style.FILL);
+            accentPaint.setColor(0xFF4F8DFF);
+            accentPaint.setShadowLayer(dp(2.2f), 0f, 0f, 0x884F8DFF);
+            canvas.drawPath(shieldPath, accentPaint);
+            accentPaint.clearShadowLayer();
+            accentPaint.setStyle(Paint.Style.STROKE);
+            accentPaint.setStrokeWidth(dp(0.7f));
+            accentPaint.setColor(0xFFD7E7FF);
+            canvas.drawPath(shieldPath, accentPaint);
+        } else {
+            accentPaint.setStyle(Paint.Style.FILL);
+            accentPaint.setColor(0xFF252B36);
+            canvas.drawPath(shieldPath, accentPaint);
+            accentPaint.setStyle(Paint.Style.STROKE);
+            accentPaint.setStrokeWidth(dp(0.7f));
+            accentPaint.setColor(0xFF3B4352);
+            canvas.drawPath(shieldPath, accentPaint);
+        }
     }
 
     private void drawHeart(Canvas canvas, float left, float top, float size, int color) {

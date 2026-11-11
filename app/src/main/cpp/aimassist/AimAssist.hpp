@@ -283,6 +283,7 @@ private:
   Angles calculateAnglesToPoint(const Vec3 &point) const;
   void findTargetInternal(void *player, const Settings &settings,
                           bool actorsAlreadyFilled = false);
+  void stabilizeFastAimAngles(float dt);
   void updateTrigger(void *player, const Settings &settings,
                      const ViewAngles &view, const Vec3 &eye);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,
@@ -392,6 +393,13 @@ private:
   // Fast aim сам вызывает applyTurnDelta; внешний onTick не должен
   // применять тот же шаг второй раз.
   bool m_fastAimTurnApplied = false;
+  // Fast aim: micro-фильтр углов цели. Гасит дрожание от 20-Гц
+  // интерполяции позиции/хитбокса, не меняя скорость доводки на больших
+  // ошибках (там значения сбрасываются напрямую).
+  bool m_haveStableAim = false;
+  void *m_stableAimActor = nullptr;
+  float m_stableAimYaw = 0.0f;
+  float m_stableAimPitch = 0.0f;
   // Random per-engagement profile for Fast aim (stealth mode): never reuse
   // the same time constant / speed / settle radius, otherwise ML heuristics
   // see a deterministic motor pattern across fights.
