@@ -115,7 +115,7 @@ struct Settings {
   float aimTremorDeg = 0.0f;
   // Верхний предел поворота за один серверный тик (50 мс). Защита от
   // «телепорт-снапов», которые ловят rotation-check'и.
-  float maxTickDeltaDeg = 26.0f;
+  float maxTickDeltaDeg = 32.0f;
 
   // ------------------------------------------------------------
   // Anti-cheat профиль (включён по умолчанию)
@@ -124,29 +124,29 @@ struct Settings {
   // разворачивается на цель за спиной: снапы на 90-180° — главный маркер
   // aim-эвристик.
   bool antiCheatMode = true;
-  float assistConeDeg = 360.0f;
+  float assistConeDeg = 90.0f;
   // Шум сопровождения (Gauss-Markov / OU): плавно «плавает» вокруг цели,
   // из-за чего траектория не является точной функцией угла до цели.
-  float trackingNoiseDeg = 0.0f;
+  float trackingNoiseDeg = 0.09f;
   // Постоянное смещение точки прицеливания от центра хитбокса. Игрок не
   // держит прицел математически точно в центре; это ломает проверки
   // "aim placement"/"target offset" и статистику идеальной точности.
-  float restOffsetDeg = 0.0f;
+  float restOffsetDeg = 0.15f;
   // Одноразовый перелёт при захвате новой цели (доля начальной ошибки).
   float overshootFactor = 0.07f;
   // Медленная вариация «моторной» скорости (доля единицы).
   float motorVariation = 0.22f;
   // Минимальное время удержания текущей цели перед переключением, мс.
-  int switchDelayMs = 0;
+  int switchDelayMs = 100;
   // Триггер: максимальный угол от прицела до центра цели для «мягкого»
   // добивания, если луч не попал в AABB. В legit-режиме не используется.
   float attackMaxAngleDeg = 2.0f;
   // Вероятность «промаха» (пропуска удара) для humanization.
-  float attackMissChance = 0.01f;
+  float attackMissChance = 0.02f;
   // Разброс интервала между ударами, мс (±).
-  int attackIntervalJitterMs = 60;
+  int attackIntervalJitterMs = 90;
   // Задержка реакции триггера на новую цель (разброс), мс.
-  int triggerDelayJitterMs = 40;
+  int triggerDelayJitterMs = 55;
   // Бить только когда луч реально пересекает хитбокс (без «добивания»
   // по минимальному углу). Это самая шумная для анти-читов ветка.
   bool legitAttackOnly = true;
@@ -284,6 +284,7 @@ private:
   void findTargetInternal(void *player, const Settings &settings,
                           bool actorsAlreadyFilled = false);
   void stabilizeFastAimAngles(float dt);
+  void updateFastAimStealth(const Settings &settings, float dt);
   void updateTrigger(void *player, const Settings &settings,
                      const ViewAngles &view, const Vec3 &eye);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,
@@ -397,6 +398,8 @@ private:
   // интерполяции позиции/хитбокса, не меняя скорость доводки на больших
   // ошибках (там значения сбрасываются напрямую).
   bool m_haveStableAim = false;
+  void *m_fastStealthActor = nullptr;
+  int64_t m_nextFastRestMs = 0;
   void *m_stableAimActor = nullptr;
   float m_stableAimYaw = 0.0f;
   float m_stableAimPitch = 0.0f;

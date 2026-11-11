@@ -653,7 +653,7 @@
     <string name="inbuilt_mod_speed">Speed Hack</string>
     <string name="inbuilt_mod_speed_desc">Speeds up with a chain of fast mini-jumps and packet masking</string>
     <string name="mod_config_speed_multiplier">Speed multiplier (%)</string>
-    <string name="mod_config_speed_s1_enabled">Speed S1 bypass (packet desync)</string>
+    <string name="mod_config_speed_s1_enabled">Speed bypass (safe profile)</string>
     <string name="mod_config_speed_mode">Where to accelerate</string>
     <string name="mod_config_speed_mode_air">Air</string>
     <string name="mod_config_speed_mode_ground">Ground</string>

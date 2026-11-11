@@ -645,12 +645,22 @@ void AimAssist::updateVisual(float dt) {
   // иначе без TriggerBot модуль всегда пустой.
   Esp::instance().markTargetEspHit(m_target.actor);
 
-  // Fast aim: без человеческого профиля, EMA позиции, шума, overshoot,
-  // мёртвой зоны и сетевого бюджета. Чистая экспонента + лимит скорости.
+  // Fast aim: без человеческого профиля и EMA позиции. Чистая экспонента
+  // плюс лимит скорости, лёгкий stealth-дрейф и бюджет на серверный тик.
   if (settings.fastAim) {
+    if (m_lastAimActor != m_target.actor) {
+      m_lastAimActor = m_target.actor;
+      m_aimEngageAtMs = aimNow + randomInt(60, 130);
+      resetHumanProfile();
+    }
+    if (aimNow < m_aimEngageAtMs) {
+      m_fastAimTurnApplied = false;
+      return;
+    }
     m_targetLockMs = aimNow;
     m_fastAimTurnApplied = false;
     stabilizeFastAimAngles(dt);
+    updateFastAimStealth(settings, dt);
     const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
     const float beforePitch = m_localPitch.load(std::memory_order_relaxed);
     applySmoothRotationInternal(m_target.yaw, m_target.pitch, dt, settings);
@@ -923,13 +933,9 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   // Fast aim с anti-cheat профилем не разворачивается за спину: снапы
   // на 90-180° — первый маркер rotation-check'ов. Без профиля — 360°.
   const float assistFov =
-      settings.fastAim
-          ? (settings.antiCheatMode
-                 ? std::max(60.0f, settings.assistConeDeg)
-                 : settings.fovDeg)
-          : (settings.antiCheatMode
-                 ? std::min(settings.fovDeg, settings.assistConeDeg)
-                 : settings.fovDeg);
+      settings.antiCheatMode
+          ? std::min(settings.fovDeg, settings.assistConeDeg)
+          : settings.fovDeg;
 
   Target current = m_target;
   bool currentStillValid = false;
@@ -1034,7 +1040,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     // Минимальное время удержания цели. Без него assist перескакивает
     // между двумя близкими целями каждый кадр (multi-aura паттерн).
     const int64_t switchNow = nowMs();
-    if (!settings.fastAim && !directHit && settings.switchDelayMs > 0 &&
+    if (!directHit && settings.switchDelayMs > 0 &&
         m_lastSwitchMs != 0 &&
         switchNow - m_lastSwitchMs < settings.switchDelayMs) {
       better = false;
@@ -1459,6 +1465,55 @@ void AimAssist::stabilizeFastAimAngles(float dt) {
   m_target.pitch = m_stableAimPitch;
 }
 
+void AimAssist::updateFastAimStealth(const Settings &settings, float dt) {
+  if (!settings.antiCheatMode) return;
+
+  const int64_t now = nowMs();
+  if (m_fastStealthActor != m_target.actor) {
+    m_fastStealthActor = m_target.actor;
+    m_noiseYaw = 0.0f;
+    m_noisePitch = 0.0f;
+    m_restYaw = 0.0f;
+    m_restPitch = 0.0f;
+    m_nextFastRestMs = 0;
+  }
+
+  const float curYaw = m_localYaw.load(std::memory_order_relaxed);
+  const float curPitch = m_localPitch.load(std::memory_order_relaxed);
+  const float errYaw = shortestDelta(curYaw, m_target.yaw);
+  const float errPitch = m_target.pitch - curPitch;
+  const float err = std::sqrt(errYaw * errYaw + errPitch * errPitch);
+
+  // На больших ошибках (флик/перезахват) не добавляем смещение, чтобы не
+  // менять скорость; у цели включаем плавный «человеческий» дрейф.
+  float scale = clampf((10.0f - err) / 6.0f, 0.0f, 1.0f);
+  if (scale <= 0.001f) return;
+
+  const float sigma = clampf(settings.trackingNoiseDeg, 0.0f, 0.25f);
+  if (sigma > 0.0001f && dt > 0.0f) {
+    const float tau = 0.42f;
+    const float a = dt / tau;
+    const float k = sigma * std::sqrt(2.0f * a);
+    m_noiseYaw += -m_noiseYaw * a + randomFloat(-k, k);
+    m_noisePitch += -m_noisePitch * a + randomFloat(-k, k) * 0.65f;
+    m_noiseYaw = clampf(m_noiseYaw, -sigma * 2.5f, sigma * 2.5f);
+    m_noisePitch = clampf(m_noisePitch, -sigma * 2.5f, sigma * 2.5f);
+  }
+
+  if (now >= m_nextFastRestMs) {
+    const float rest = clampf(settings.restOffsetDeg, 0.0f, 0.35f);
+    m_restYaw = randomFloat(-rest, rest);
+    m_restPitch = randomFloat(-rest, rest) * 0.55f;
+    m_nextFastRestMs = now + randomInt(700, 1600);
+  }
+
+  m_target.yaw = normalizeYaw(m_target.yaw +
+                              (m_noiseYaw + m_restYaw) * scale);
+  m_target.pitch = clampf(m_target.pitch +
+                          (m_noisePitch + m_restPitch) * scale,
+                          -89.5f, 89.5f);
+}
+
 // ============================================================
 // Плавный довод
 // ============================================================
@@ -1520,6 +1575,25 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     if (errMag < 0.01f) {
       stepYaw = errYaw;
       stepPitch = errPitch;
+    }
+
+    // Ограничение именно на серверный тик 20 Гц. Обычное сопровождение
+    // сюда не упирается, а длинные снапы Polar/ML видят как rotation-check.
+    if (settings.antiCheatMode) {
+      const float tickCap =
+          clampf(settings.maxTickDeltaDeg, 12.0f, 60.0f);
+      float ny = m_tickAccumYaw + stepYaw;
+      float np = m_tickAccumPitch + stepPitch;
+      const float mag = std::sqrt(ny * ny + np * np);
+      if (mag > tickCap && mag > 1e-5f) {
+        const float k = tickCap / mag;
+        ny *= k;
+        np *= k;
+        stepYaw = ny - m_tickAccumYaw;
+        stepPitch = np - m_tickAccumPitch;
+      }
+      m_tickAccumYaw += stepYaw;
+      m_tickAccumPitch += stepPitch;
     }
 
     m_localYaw.store(normalizeYaw(curYaw + stepYaw),
@@ -1864,6 +1938,8 @@ void AimAssist::clearTarget() {
   m_serverViewSinceMs = 0;
   m_haveStableAim = false;
   m_stableAimActor = nullptr;
+  m_fastStealthActor = nullptr;
+  m_nextFastRestMs = 0;
   resetHumanProfile();
   // m_onTarget принадлежит триггеру: очистка цели aim assist не должна
   // гасить триггер посреди кадра.

@@ -660,7 +660,7 @@
     <string name="inbuilt_mod_speed">Скорость</string>
     <string name="inbuilt_mod_speed_desc">Ускорение серией быстрых мини-прыжков с маскировкой пакетов</string>
     <string name="mod_config_speed_multiplier">Множитель скорости (%)</string>
-    <string name="mod_config_speed_s1_enabled">Обход Speed S1 (рассинхрон пакетов)</string>
+    <string name="mod_config_speed_s1_enabled">Обход Speed (безопасный профиль)</string>
     <string name="mod_config_speed_mode">Где ускорять</string>
     <string name="mod_config_speed_mode_air">В воздухе</string>
     <string name="mod_config_speed_mode_ground">На земле</string>

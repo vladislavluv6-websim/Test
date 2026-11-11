@@ -438,7 +438,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_SPEED_MODE,
                     context.getString(R.string.mod_config_speed_mode),
                     UnifiedMod.ConfigType.RADIO,
-                    "2",
+                    "0",
                     context.getString(R.string.mod_config_speed_mode_air) + ","
                             + context.getString(R.string.mod_config_speed_mode_ground) + ","
                             + context.getString(R.string.mod_config_speed_mode_both),
@@ -447,27 +447,27 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_SPEED_MOTION_BOOST,
                     context.getString(R.string.mod_config_speed_motion_boost),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "24", "1", "200",
+                    "4", "1", "200",
                     String.valueOf(manager.getSpeedMotionBoostRaw())));
             configs.add(config(CFG_SPEED_MAX_SPEED,
                     context.getString(R.string.mod_config_speed_max_speed),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "68", "28", "200",
+                    "34", "28", "200",
                     String.valueOf(manager.getSpeedMaxSpeedRaw())));
             configs.add(config(CFG_SPEED_GAP_MAX,
                     context.getString(R.string.mod_config_speed_gap_max),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "45", "15", "300",
+                    "0", "0", "300",
                     String.valueOf(manager.getSpeedGapMaxRaw())));
             configs.add(config(CFG_SPEED_RESET_INTERVAL,
                     context.getString(R.string.mod_config_speed_reset_interval),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "2500", "1000", "10000",
+                    "3500", "1000", "10000",
                     String.valueOf(manager.getSpeedResetInterval())));
             configs.add(config(CFG_SPEED_MAX_RESET_TICKS,
                     context.getString(R.string.mod_config_speed_max_reset_ticks),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "6", "2", "20",
+                    "3", "2", "20",
                     String.valueOf(manager.getSpeedMaxResetTicks())));
             configs.add(config(CFG_SPEED_HOP_ENABLED,
                     context.getString(R.string.mod_config_speed_hop_enabled),
@@ -477,18 +477,18 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_SPEED_HOP_HEIGHT,
                     context.getString(R.string.mod_config_speed_hop_height),
                     UnifiedMod.ConfigType.SLIDER_FLOAT,
-                    "0.1234", "0.10", "0.42",
+                    "1.10", "0.10", "1.50",
                     String.format(java.util.Locale.US, "%.8f",
                             manager.getSpeedHopHeight())));
             configs.add(config(CFG_SPEED_HOP_INTERVAL,
                     context.getString(R.string.mod_config_speed_hop_interval),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "0", "0", "20",
+                    "1", "0", "20",
                     String.valueOf(manager.getSpeedHopInterval())));
             configs.add(config(CFG_SPEED_MASK_Y,
                     context.getString(R.string.mod_config_speed_mask_y),
                     UnifiedMod.ConfigType.TOGGLE,
-                    "true", "", "",
+                    "false", "", "",
                     String.valueOf(manager.isSpeedMaskY())));
             configs.add(config(CFG_SPEED_PHANTOM_HOLD,
                     context.getString(R.string.mod_config_speed_phantom_hold),
@@ -503,7 +503,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_SPEED_CANCEL_CORRECTIONS,
                     context.getString(R.string.mod_config_speed_cancel_corrections),
                     UnifiedMod.ConfigType.TOGGLE,
-                    "true", "", "",
+                    "false", "", "",
                     String.valueOf(manager.isSpeedCancelCorrections())));
             configs.add(config(CFG_SPEED_PAUSE_ON_FALL,
                     context.getString(R.string.mod_config_speed_pause_on_fall),

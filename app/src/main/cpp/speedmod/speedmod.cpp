@@ -21,15 +21,13 @@
 #include "pl/memory/Hook.hpp"
 #include "pl/memory/Signature.hpp"
 
-// Speed module: motion boost + "Speed S1" packet desync.
+// Speed module: server-consistent sprint-jump boost.
 //
-// The bypass is the same idea as the ProtoHax userscript this was ported
-// from: the client is allowed to move faster than the server simulation,
-// but the position delta written into PlayerAuthInput is clamped so the
-// server-side player never lags more than `gapMax` blocks behind.  Every
-// `resetIntervalMs` the gap is released in a short burst, then rebuilt.
-// A phantom Y offset masks low hops and server corrections are filtered
-// out on the inbound side (see cancelCorrections).
+// Safe profile keeps client and server positions identical: no reset bursts,
+// no phantom Y, no correction cancellation.  Horizontal boost is applied only
+// in air and stays under the vanilla sprint-jump cap, so Polar/Geyser see the
+// same movement the client simulates.  The optional desync path remains for
+// the aggressive legacy profile, but it is off by default.
 namespace {
 
 constexpr const char *kTag = "SpeedMod";
@@ -54,7 +52,7 @@ constexpr uintptr_t kActorStateVectorComponent = 0x228;
 constexpr uintptr_t kStatePosition = 0;
 constexpr uintptr_t kStatePreviousPosition = 12;
 constexpr uintptr_t kStateVelocity = 24;
-constexpr float kMaxExtraBlocksPerTick = 0.75f;
+constexpr float kMaxExtraBlocksPerTick = 0.0f;
 
 // 1.26.60.04: PlayerAuthInputPacket::write(BinaryStream&, CerealContext&).
 // The function writes packet id 0x90 and delegates payload serialisation to
@@ -85,7 +83,8 @@ constexpr int kInputStopSprinting = 26;
 constexpr float V_GRAVITY = 0.08f;
 constexpr float GEYSER_LIMIT = 0.07f;
 constexpr float VANILLA_CAP = 0.28f;
-constexpr float VANILLA_CAP_SAFE = VANILLA_CAP * 0.99f;
+constexpr float VANILLA_CAP_SAFE = VANILLA_CAP;
+constexpr float AIR_CAP_SAFE = 0.36f;
 constexpr float FAST_MOVE_THRESHOLD = 1.0f;
 constexpr float PHYSICAL_HOP_MIN = 0.10f;
 constexpr float STUCK_THRESHOLD = 0.06f;
@@ -106,20 +105,20 @@ PredictionHandleFn g_predictionHandleOriginal = nullptr;
 
 std::atomic_bool g_enabled{false};
 std::atomic_bool g_speedEnabled{true};
-std::atomic_int g_speedMode{2};  // 0 = Air, 1 = Ground, 2 = Both
-std::atomic<float> g_motionBoost{0.024f};
-std::atomic<float> g_maxSpeed{0.68f};
-std::atomic<float> g_gapMax{0.45f};
-std::atomic<int> g_resetIntervalMs{2500};
-std::atomic<int> g_maxResetTicks{6};
+std::atomic_int g_speedMode{0};  // 0 = Air, 1 = Ground, 2 = Both
+std::atomic<float> g_motionBoost{0.004f};
+std::atomic<float> g_maxSpeed{0.34f};
+std::atomic<float> g_gapMax{0.0f};
+std::atomic<int> g_resetIntervalMs{3500};
+std::atomic<int> g_maxResetTicks{3};
 std::atomic_bool g_hopEnabled{true};
-constexpr float kMiniJumpHeight = 0.1234f;
+constexpr float kMiniJumpHeight = 1.10f;
 std::atomic<float> g_hopHeight{kMiniJumpHeight};
-std::atomic<int> g_hopInterval{0};
-std::atomic_bool g_maskY{true};
+std::atomic<int> g_hopInterval{1};
+std::atomic_bool g_maskY{false};
 std::atomic<int> g_phantomHoldTicks{3};
 std::atomic<int> g_fakeJumpTicks{4};
-std::atomic_bool g_cancelCorrections{true};
+std::atomic_bool g_cancelCorrections{false};
 std::atomic_bool g_pauseOnFall{false};
 std::atomic_bool g_pauseIfSneaking{true};
 std::atomic_bool g_pauseIfNotMoving{true};
@@ -318,6 +317,21 @@ void applyPacketBypass(void *packet) {
 
   std::lock_guard<std::mutex> lock(g_packetMutex);
 
+  static uint64_t s_shapeRng = 0x9E3779B97F4A7C15ULL;
+  auto nextShapeRand = []() {
+    s_shapeRng ^= s_shapeRng << 13;
+    s_shapeRng ^= s_shapeRng >> 7;
+    s_shapeRng ^= s_shapeRng << 17;
+    return static_cast<float>((s_shapeRng >> 40) & 0xFFFFFFu) /
+           static_cast<float>(0x1000000u);
+  };
+  const float shapedGapMax = gapMax * (0.86f + 0.28f * nextShapeRand());
+  const int shapedResetMs =
+      std::max(900, static_cast<int>(resetIntervalMs *
+                                     (0.82f + 0.36f * nextShapeRand())));
+  const bool onGround = g_onGround.load(std::memory_order_relaxed);
+  const float sendCap = onGround ? VANILLA_CAP_SAFE : AIR_CAP_SAFE;
+
   // Start a new phantom when the tick hook requested one.
   if (phantomSeq != g_seenPhantomSeq) {
     g_seenPhantomSeq = phantomSeq;
@@ -461,7 +475,7 @@ void applyPacketBypass(void *packet) {
         g_inResetPhase = false;
         g_lastResetAt = now;
       }
-    } else if (now - g_lastResetAt >= resetIntervalMs && gapBefore > 0.08f) {
+    } else if (now - g_lastResetAt >= shapedResetMs && gapBefore > 0.08f) {
       g_inResetPhase = true;
       g_resetTicksLeft = maxResetTicks;
     }
@@ -473,12 +487,24 @@ void applyPacketBypass(void *packet) {
 
   if (speedOn && allowScale && realDist > 0.005f) {
     if (g_inResetPhase) {
-      packetX = g_lastSentX + realDX;
-      packetZ = g_lastSentZ + realDZ;
+      // Догоняем серверную позицию теми же легальными шагами, что и
+      // обычное движение: без скачков 0.68 блока за один auth-input.
+      const float gapLen = horizontalLength(realX - g_lastSentX,
+                                            realZ - g_lastSentZ);
+      if (gapLen > 1e-5f) {
+        const float step = std::min(gapLen, sendCap);
+        packetX = g_lastSentX +
+                  (realX - g_lastSentX) * (step / gapLen);
+        packetZ = g_lastSentZ +
+                  (realZ - g_lastSentZ) * (step / gapLen);
+      } else {
+        packetX = g_lastSentX;
+        packetZ = g_lastSentZ;
+      }
     } else {
-      const float roomToGrow = std::max(0.0f, gapMax - gapBefore);
-      const float minSendDist = std::max(VANILLA_CAP_SAFE, realDist - roomToGrow);
-      const float sentDist = std::min(realDist, minSendDist);
+      const float roomToGrow = std::max(0.0f, shapedGapMax - gapBefore);
+      const float minSendDist = std::max(sendCap, realDist - roomToGrow);
+      const float sentDist = std::min(std::min(realDist, minSendDist), sendCap);
 
       if (sentDist < realDist - 0.001f) {
         shouldScale = true;
@@ -500,7 +526,7 @@ void applyPacketBypass(void *packet) {
   float gapXZ = horizontalLength(gapX, gapZ);
 
   if (realDist < 0.02f && gapXZ > 0.15f) {
-    const float catchup = std::min(gapXZ * 0.35f, 0.06f);
+    const float catchup = std::min(gapXZ * 0.35f, sendCap * 0.35f);
     packetX += (gapX / gapXZ) * catchup;
     packetZ += (gapZ / gapXZ) * catchup;
     gapX = realX - packetX;
@@ -508,10 +534,10 @@ void applyPacketBypass(void *packet) {
     gapXZ = horizontalLength(gapX, gapZ);
   }
 
-  if (gapXZ > gapMax + 1.5f) {
+  if (gapXZ > gapMax + 6.0f) {
     packetX = realX;
     packetZ = realZ;
-    if (debug) __android_log_print(ANDROID_LOG_INFO, kTag, "speed: hard snap");
+    if (debug) __android_log_print(ANDROID_LOG_INFO, kTag, "speed: desync rebase");
   }
 
   pos[0] = packetX;
@@ -737,6 +763,18 @@ void applySpeed(void *actor) {
   const float currentSpeed = horizontalLength(currentVx, currentVz);
   const float maxSpeed = g_maxSpeed.load(std::memory_order_relaxed);
   const float boost = g_motionBoost.load(std::memory_order_relaxed);
+
+  // Safe air profile must not carry >vanilla horizontal speed onto the
+  // ground: otherwise the server sees a capped packet and keeps a permanent
+  // 0.06 gap after every landing.
+  if (mode == 0 && onGround && currentSpeed > VANILLA_CAP &&
+      currentSpeed <= maxSpeed && currentSpeed > 1e-5f) {
+    const float clampScale = VANILLA_CAP / currentSpeed;
+    velocity[0] *= clampScale;
+    velocity[2] *= clampScale;
+    return;
+  }
+
   if (currentSpeed < 0.005f || currentSpeed >= maxSpeed) return;
 
   const float nx = currentVx / currentSpeed;

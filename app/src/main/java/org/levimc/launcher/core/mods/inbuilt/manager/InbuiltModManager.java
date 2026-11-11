@@ -123,20 +123,20 @@ public class InbuiltModManager {
     private static final int DEFAULT_CURSOR_SENSITIVITY = 120;
     private static final int DEFAULT_SPEED_MULTIPLIER = 200;
     private static final boolean DEFAULT_SPEED_S1_ENABLED = true;
-    private static final int DEFAULT_SPEED_MODE = 2;
-    private static final int DEFAULT_SPEED_MOTION_BOOST = 24;
-    private static final int DEFAULT_SPEED_MAX_SPEED = 68;
-    private static final int DEFAULT_SPEED_GAP_MAX = 45;
-    private static final int DEFAULT_SPEED_RESET_INTERVAL = 2500;
-    private static final int DEFAULT_SPEED_MAX_RESET_TICKS = 6;
+    private static final int DEFAULT_SPEED_MODE = 0;
+    private static final int DEFAULT_SPEED_MOTION_BOOST = 4;
+    private static final int DEFAULT_SPEED_MAX_SPEED = 34;
+    private static final int DEFAULT_SPEED_GAP_MAX = 0;
+    private static final int DEFAULT_SPEED_RESET_INTERVAL = 3500;
+    private static final int DEFAULT_SPEED_MAX_RESET_TICKS = 3;
     private static final boolean DEFAULT_SPEED_HOP_ENABLED = true;
-    private static final int DEFAULT_SPEED_HOP_HEIGHT = 123;
-    private static final float DEFAULT_SPEED_HOP_HEIGHT_EXACT = 0.1234f;
-    private static final int DEFAULT_SPEED_HOP_INTERVAL = 0;
-    private static final boolean DEFAULT_SPEED_MASK_Y = true;
+    private static final int DEFAULT_SPEED_HOP_HEIGHT = 1100;
+    private static final float DEFAULT_SPEED_HOP_HEIGHT_EXACT = 1.10f;
+    private static final int DEFAULT_SPEED_HOP_INTERVAL = 1;
+    private static final boolean DEFAULT_SPEED_MASK_Y = false;
     private static final int DEFAULT_SPEED_PHANTOM_HOLD = 3;
     private static final int DEFAULT_SPEED_FAKE_JUMP_TICKS = 4;
-    private static final boolean DEFAULT_SPEED_CANCEL_CORRECTIONS = true;
+    private static final boolean DEFAULT_SPEED_CANCEL_CORRECTIONS = false;
     private static final boolean DEFAULT_SPEED_PAUSE_ON_FALL = false;
     private static final boolean DEFAULT_SPEED_PAUSE_IF_SNEAKING = true;
     private static final boolean DEFAULT_SPEED_PAUSE_IF_NOT_MOVING = true;
@@ -195,7 +195,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
     private static final String KEY_TUNING_REVISION = "tuning_revision";
-    private static final int TUNING_REVISION = 4;
+    private static final int TUNING_REVISION = 6;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
     private static final String KEY_SPEED_HOP_HEIGHT_REVISION = "speed_hop_height_revision";
@@ -222,11 +222,12 @@ public class InbuiltModManager {
     }
 
     private void migrateSpeedHopHeight() {
-        if (prefs.getInt(KEY_SPEED_HOP_HEIGHT_REVISION, 0) >= 1) return;
+        if (prefs.getInt(KEY_SPEED_HOP_HEIGHT_REVISION, 0) >= 2) return;
         prefs.edit()
+                .putInt(KEY_SPEED_HOP_HEIGHT, DEFAULT_SPEED_HOP_HEIGHT)
                 .putFloat(KEY_SPEED_HOP_HEIGHT_EXACT,
                         DEFAULT_SPEED_HOP_HEIGHT_EXACT)
-                .putInt(KEY_SPEED_HOP_HEIGHT_REVISION, 1)
+                .putInt(KEY_SPEED_HOP_HEIGHT_REVISION, 2)
                 .apply();
     }
 
@@ -374,7 +375,7 @@ public class InbuiltModManager {
     }
 
     public int getSpeedGapMaxRaw() {
-        return Math.max(15, Math.min(300,
+        return Math.max(0, Math.min(300,
                 prefs.getInt(KEY_SPEED_GAP_MAX, DEFAULT_SPEED_GAP_MAX)));
     }
 
@@ -384,7 +385,7 @@ public class InbuiltModManager {
 
     public void setSpeedGapMaxRaw(int value) {
         prefs.edit().putInt(KEY_SPEED_GAP_MAX,
-                Math.max(15, Math.min(300, value))).apply();
+                Math.max(0, Math.min(300, value))).apply();
     }
 
     public int getSpeedResetInterval() {
@@ -416,13 +417,13 @@ public class InbuiltModManager {
     }
 
     public int getSpeedHopHeightRaw() {
-        return Math.max(0, Math.min(420,
+        return Math.max(0, Math.min(1500,
                 prefs.getInt(KEY_SPEED_HOP_HEIGHT, DEFAULT_SPEED_HOP_HEIGHT)));
     }
 
     public float getSpeedHopHeight() {
         if (prefs.contains(KEY_SPEED_HOP_HEIGHT_EXACT)) {
-            return Math.max(0.10f, Math.min(0.42f,
+            return Math.max(0.10f, Math.min(1.50f,
                     prefs.getFloat(KEY_SPEED_HOP_HEIGHT_EXACT,
                             DEFAULT_SPEED_HOP_HEIGHT_EXACT)));
         }
@@ -433,12 +434,12 @@ public class InbuiltModManager {
 
     public void setSpeedHopHeight(float height) {
         prefs.edit().putFloat(KEY_SPEED_HOP_HEIGHT_EXACT,
-                Math.max(0.10f, Math.min(0.42f, height))).apply();
+                Math.max(0.10f, Math.min(1.50f, height))).apply();
     }
 
     public void setSpeedHopHeightRaw(int value) {
         prefs.edit().putInt(KEY_SPEED_HOP_HEIGHT,
-                Math.max(0, Math.min(420, value)))
+                Math.max(0, Math.min(1500, value)))
                 .remove(KEY_SPEED_HOP_HEIGHT_EXACT)
                 .apply();
     }
