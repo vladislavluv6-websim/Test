@@ -1599,16 +1599,10 @@ void ClientBridge::appendNearbyActors(void *player, const Vec3 &extent,
     DistanceSortedActor entry{};
     if (!safeRead(begin + i * sizeof(DistanceSortedActor), entry)) break;
     if (!entry.actor) continue;
-    // Не отдаём aim assist указатель, у которого уже нет живого
-    // StateVectorComponent: дальнейшие вызовы isPlayer/getPosition по нему
-    // и раньше приводили к падению после респавна/смены измерения.
-    uintptr_t stateVector = 0;
-    if (!safeRead(reinterpret_cast<uintptr_t>(entry.actor) +
-                      offsets::kActorStateVectorComponent,
-                  stateVector) ||
-        !isPlausiblePointer(stateVector)) {
-      continue;
-    }
+    // Полная проверка живости: vtable в libminecraftpe, StateVectorComponent
+    // и валидная позиция. Без неё «правдоподобный» мусорный указатель из
+    // чужой версии оффсетов роняет игру при первом же isPlayer/getActorBounds.
+    if (!isLiveActor(entry.actor)) continue;
     // Один и тот же актёр может прийти из двух наборов (mob + all).
     bool duplicate = false;
     for (void *existing : out) {

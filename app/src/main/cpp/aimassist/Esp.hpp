@@ -116,6 +116,7 @@ private:
   std::vector<void *> m_actors;
   std::chrono::steady_clock::time_point m_lastLog{};
   std::chrono::steady_clock::time_point m_lastScan{};
+  std::chrono::steady_clock::time_point m_lastBoxCompute{};
   mutable std::mutex m_nameMutex;
   mutable std::mutex m_friendMutex;
   std::unordered_set<std::string> m_friends;

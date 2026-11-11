@@ -1137,15 +1137,14 @@ void Esp::render(void *levelRenderer, void *screenContext) {
       ? std::max(m_range.load(std::memory_order_relaxed), 64.0f)
       : m_range.load(std::memory_order_relaxed);
 
-  const auto scanNow = std::chrono::steady_clock::now();
-  const bool refresh =
-      m_actors.empty() ||
-      scanNow - m_lastScan >= std::chrono::milliseconds(33);
-  if (refresh) {
-    m_lastScan = scanNow;
-    m_bridge.fillNearbyActors(player, scanRange, m_actors);
-    AntiBot::instance().update(m_actors, player);
+  // Actor list MUST be refreshed every frame: caching it makes the pointers
+  // go stale and any per-actor game call then faults on freed memory.
+  m_bridge.fillNearbyActors(player, scanRange, m_actors);
+  AntiBot::instance().update(m_actors, player);
 
+  const auto boxNow = std::chrono::steady_clock::now();
+  if (boxNow - m_lastBoxCompute >= std::chrono::milliseconds(33)) {
+    m_lastBoxCompute = boxNow;
     if (nameTags) updateNameTags(player, playerRenderer, camera);
     if (espBoxes && javaBoxes) updateEspBoxes(player, playerRenderer, camera);
     if (targetEsp) updateTargetEsp(player, playerRenderer, camera);
