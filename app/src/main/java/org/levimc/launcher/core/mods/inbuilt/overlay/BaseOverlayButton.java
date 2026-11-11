@@ -383,6 +383,10 @@ public abstract class BaseOverlayButton {
     }
 
     public void hide() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post(this::hide);
+            return;
+        }
         if (pendingShowRunnable != null) {
             handler.removeCallbacks(pendingShowRunnable);
             pendingShowRunnable = null;

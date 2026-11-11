@@ -32,10 +32,10 @@ using Registry = entt::basic_registry<EntityId>;
 using SparseSet = Registry::common_type;
 
 // entt component type hashes in the running Bedrock build.
-constexpr entt::id_type kHashMoveInput = 0x468BCD2E;
-constexpr entt::id_type kHashOnGround = 0xC3E299A3;
-constexpr entt::id_type kHashEquipment = 0x71C44836;
-constexpr entt::id_type kHashActorData = 0x33475976;
+constexpr entt::id_type kHashMoveInput = 0x018B1887;
+constexpr entt::id_type kHashOnGround = 0xC29078A0;
+constexpr entt::id_type kHashEquipment = 0xB06141A9;
+constexpr entt::id_type kHashActorData = 0xC67426F3;
 
 constexpr uint8_t kMoveFlagSneakDown = 0;
 constexpr uint8_t kMoveFlagJumpDown = 7;

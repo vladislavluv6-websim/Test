@@ -1,6 +1,8 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.app.Activity;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.KeyEvent;
 
@@ -20,6 +22,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class InbuiltOverlayManager {
     public interface HudEditorSelectionListener {
@@ -28,7 +32,8 @@ public class InbuiltOverlayManager {
 
     private static volatile InbuiltOverlayManager instance;
     private final Activity activity;
-    private final List<BaseOverlayButton> overlays = new ArrayList<>();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final List<BaseOverlayButton> overlays = new CopyOnWriteArrayList<>();
     private static final String[] KEYBIND_MOD_IDS = {
             ModIds.QUICK_DROP, ModIds.CAMERA_PERSPECTIVE, ModIds.TOGGLE_HUD,
             ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.TRIGGER_BOT,
@@ -41,15 +46,15 @@ public class InbuiltOverlayManager {
             ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.TRIGGER_BOT,
             ModIds.SWING, ModIds.ESP, ModIds.FULLBRIGHT
     };
-    private final Map<String, Boolean> modActiveStates = new HashMap<>();
-    private final Map<String, BaseOverlayButton> keybindControllers = new HashMap<>();
-    private final Map<Integer, List<String>> pressedKeybinds = new HashMap<>();
+    private final Map<String, Boolean> modActiveStates = new ConcurrentHashMap<>();
+    private final Map<String, BaseOverlayButton> keybindControllers = new ConcurrentHashMap<>();
+    private final Map<Integer, List<String>> pressedKeybinds = new ConcurrentHashMap<>();
     private volatile boolean hasPressedKeybinds;
     private int modMenuShortcutHeld = KeyEvent.KEYCODE_UNKNOWN;
-    private final Map<String, BaseOverlayButton> modOverlayMap = new HashMap<>();
+    private final Map<String, BaseOverlayButton> modOverlayMap = new ConcurrentHashMap<>();
     private final Map<String, ExternalButtonOverlay> externalButtonOverlayMap = new HashMap<>();
     private final Map<String, MoreButtonOverlay> moreButtonOverlayMap = new HashMap<>();
-    private final Map<Integer, HotbarSlotOverlay> hotbarSlotOverlayMap = new HashMap<>();
+    private final Map<Integer, HotbarSlotOverlay> hotbarSlotOverlayMap = new ConcurrentHashMap<>();
     private final int[] hotbarItemCounts = new int[9];
     private volatile boolean hotbarTrackingEnabled;
     private boolean moreButtonsEditorOpen;
@@ -263,6 +268,10 @@ public class InbuiltOverlayManager {
     }
 
     public void handleModToggle(String modId, boolean enabled) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(() -> handleModToggle(modId, enabled));
+            return;
+        }
         boolean wasEnabled = modActiveStates.getOrDefault(modId, false);
         modActiveStates.put(modId, enabled);
 

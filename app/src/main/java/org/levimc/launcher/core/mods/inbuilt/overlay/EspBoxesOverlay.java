@@ -31,8 +31,8 @@ public class EspBoxesOverlay extends View {
     private final RectF rect = new RectF();
     private float density = 1f;
     private boolean attached;
-    private boolean showing;
-    private boolean moduleEnabled = true;
+    private volatile boolean showing;
+    private volatile boolean moduleEnabled = true;
     private int style = 0;
     private String[] boxes = new String[0];
     private boolean framePosted;
@@ -75,6 +75,10 @@ public class EspBoxesOverlay extends View {
     }
 
     public void show() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(this::show);
+            return;
+        }
         if (showing) return;
         showing = true;
         mainHandler.postDelayed(new Runnable() {
@@ -96,6 +100,10 @@ public class EspBoxesOverlay extends View {
     }
 
     public void hide() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(this::hide);
+            return;
+        }
         showing = false;
         attached = false;
         Choreographer.getInstance().removeFrameCallback(frameCallback);
@@ -111,10 +119,13 @@ public class EspBoxesOverlay extends View {
 
     public void setModuleEnabled(boolean enabled) {
         moduleEnabled = enabled;
-        if (!enabled) {
+        if (enabled) return;
+        Runnable clear = () -> {
             boxes = new String[0];
             invalidate();
-        }
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) clear.run();
+        else mainHandler.post(clear);
     }
 
     @Override

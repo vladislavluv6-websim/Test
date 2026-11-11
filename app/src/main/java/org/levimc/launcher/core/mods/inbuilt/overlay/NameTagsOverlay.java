@@ -45,8 +45,8 @@ public class NameTagsOverlay extends View {
     private final android.graphics.Path shieldPath = new android.graphics.Path();
     private float density = 1f;
     private boolean attached;
-    private boolean showing;
-    private boolean moduleEnabled = true;
+    private volatile boolean showing;
+    private volatile boolean moduleEnabled = true;
     private String[] labels = new String[0];
     private boolean frameCallbackPosted;
     private int style = STYLE_CAPSULE;
@@ -104,6 +104,10 @@ public class NameTagsOverlay extends View {
     }
 
     public void show() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(this::show);
+            return;
+        }
         if (showing) return;
         showing = true;
         mainHandler.postDelayed(new Runnable() {
@@ -126,6 +130,10 @@ public class NameTagsOverlay extends View {
     }
 
     public void hide() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(this::hide);
+            return;
+        }
         showing = false;
         attached = false;
         Choreographer.getInstance().removeFrameCallback(frameCallback);
@@ -148,10 +156,13 @@ public class NameTagsOverlay extends View {
         if (moduleEnabled == enabled) return;
         moduleEnabled = enabled;
         EspMod.setNameTags(enabled);
-        if (!enabled) {
+        if (enabled) return;
+        Runnable clear = () -> {
             labels = new String[0];
             invalidate();
-        }
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) clear.run();
+        else mainHandler.post(clear);
     }
 
     @Override

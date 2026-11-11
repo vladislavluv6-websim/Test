@@ -44,8 +44,8 @@ public class TargetEspOverlay extends View {
     private final RectF rect = new RectF();
     private float density = 1f;
     private boolean attached;
-    private boolean showing;
-    private boolean moduleEnabled = true;
+    private volatile boolean showing;
+    private volatile boolean moduleEnabled = true;
     private int style = STYLE_CRYSTAL;
     private int accent = 0xFF4E83FF;
     private long holdMs = 650L;
@@ -95,6 +95,10 @@ public class TargetEspOverlay extends View {
     }
 
     public void show() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(this::show);
+            return;
+        }
         if (showing) return;
         showing = true;
         applySettings();
@@ -117,6 +121,10 @@ public class TargetEspOverlay extends View {
     }
 
     public void hide() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(this::hide);
+            return;
+        }
         showing = false;
         attached = false;
         Choreographer.getInstance().removeFrameCallback(frameCallback);
@@ -135,10 +143,13 @@ public class TargetEspOverlay extends View {
         if (moduleEnabled == enabled) return;
         moduleEnabled = enabled;
         EspMod.setTargetEsp(enabled);
-        if (!enabled) {
+        if (enabled) return;
+        Runnable clear = () -> {
             ageMs = -1;
             invalidate();
-        }
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) clear.run();
+        else mainHandler.post(clear);
     }
 
     public void applyConfigurationChanges() {
