@@ -61,6 +61,11 @@ public class OnyxGuiBridge {
         post(overlay::hide);
     }
 
+    @JavascriptInterface
+    public void exportLogs() {
+        post(overlay::exportLogs);
+    }
+
     private void post(Runnable action) {
         try {
             activity.runOnUiThread(() -> {

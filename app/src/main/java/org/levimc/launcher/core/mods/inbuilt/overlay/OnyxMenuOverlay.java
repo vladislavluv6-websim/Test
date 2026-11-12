@@ -2,14 +2,19 @@ package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.PixelFormat;
+import android.net.Uri;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
+import android.widget.Toast;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -28,7 +33,12 @@ import org.levimc.launcher.core.mods.inbuilt.UnifiedMod;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -146,6 +156,61 @@ public class OnyxMenuOverlay {
         }
         loadModules();
         if (showing && pageReady) pushModules();
+    }
+
+    void exportLogs() {
+        if (activity.isFinishing() || activity.isDestroyed()) return;
+        int copied = 0;
+        try {
+            File root = org.levimc.launcher.util.LauncherStorage.getAppRoot(activity);
+            File logsDir = new File(root, "logs");
+            copied += copyToDownload(new File(logsDir, "client.log"), "levi_client.log");
+            copied += copyToDownload(new File(logsDir, "native.log"), "levi_native.log");
+            File crashDir = new File(new File(new File(root, "minecraft"), "_shared"), "crash");
+            File[] crashes = crashDir.listFiles((dir, name) ->
+                    name.endsWith(".dmp") || name.endsWith(".crashedsession"));
+            if (crashes != null) {
+                Arrays.sort(crashes, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+                for (int i = 0; i < crashes.length && i < 3; i++) {
+                    copied += copyToDownload(crashes[i], "levi_" + crashes[i].getName());
+                }
+            }
+        } catch (Throwable error) {
+            Log.e(TAG, "exportLogs failed", error);
+        }
+        try {
+            Toast.makeText(activity, "Logs: " + copied + " -> Download/levi_logs",
+                    Toast.LENGTH_LONG).show();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private int copyToDownload(File source, String displayName) {
+        if (source == null || !source.exists() || source.length() == 0L) return 0;
+        try {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, displayName);
+            values.put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + "/levi_logs");
+            activity.getContentResolver().delete(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    MediaStore.MediaColumns.DISPLAY_NAME + "=?",
+                    new String[]{displayName});
+            Uri target = activity.getContentResolver().insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (target == null) return 0;
+            try (InputStream in = new FileInputStream(source);
+                 OutputStream out = activity.getContentResolver().openOutputStream(target)) {
+                if (out == null) return 0;
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
+            }
+            return 1;
+        } catch (Throwable error) {
+            return 0;
+        }
     }
 
     UnifiedMod findModule(String stableKey) {

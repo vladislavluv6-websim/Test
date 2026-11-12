@@ -86,6 +86,21 @@ public class InbuiltOverlayManager {
     public InbuiltOverlayManager(Activity activity) {
         this.activity = activity;
         instance = this;
+        initClientLogging();
+    }
+
+    private void initClientLogging() {
+        try {
+            org.levimc.launcher.util.ClientLog.init(activity);
+            org.levimc.launcher.util.ClientLog.log("OverlayManager", "game session started");
+            java.io.File dir = new java.io.File(
+                    org.levimc.launcher.util.LauncherStorage.getAppRoot(activity), "logs");
+            if (dir.exists() || dir.mkdirs()) {
+                org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod.setDiagLogPath(
+                        new java.io.File(dir, "native.log").getAbsolutePath());
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private boolean isActivityUsable() {

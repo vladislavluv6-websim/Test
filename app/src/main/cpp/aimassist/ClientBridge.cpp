@@ -8,6 +8,8 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <csetjmp>
+#include <csignal>
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -28,6 +30,66 @@ namespace aimbot {
 namespace {
 
 constexpr const char *kTag = "AimAssistBridge";
+
+// ---------------------------------------------------------------------------
+// Fault guard: some game calls (e.g. Actor::isPlayer) dereference actor-owned
+// pointers. If the nearby-actor list ever hands us a bogus object, that read
+// faults inside libminecraftpe and takes the whole game down (crash dumps:
+// SIGSEGV at libminecraftpe+0xfd8e12c). Wrap those calls so a fault just
+// returns "false" instead of killing the process.
+// ---------------------------------------------------------------------------
+thread_local sigjmp_buf g_faultJmp;
+thread_local volatile sig_atomic_t g_inGuard = 0;
+struct sigaction g_oldSegv{};
+struct sigaction g_oldBus{};
+bool g_guardInstalled = false;
+
+void faultChain(int sig, siginfo_t *info, void *ctx, struct sigaction &old) {
+  if ((old.sa_flags & SA_SIGINFO) && old.sa_sigaction) {
+    old.sa_sigaction(sig, info, ctx);
+  } else if (old.sa_handler == SIG_DFL || old.sa_handler == SIG_IGN) {
+    sigaction(sig, &old, nullptr);
+    raise(sig);
+  } else if (old.sa_handler) {
+    old.sa_handler(sig);
+  }
+}
+
+void faultHandler(int sig, siginfo_t *info, void *ctx) {
+  if (g_inGuard) {
+    g_inGuard = 0;
+    siglongjmp(g_faultJmp, 1);
+  }
+  if (sig == SIGBUS) {
+    faultChain(sig, info, ctx, g_oldBus);
+  } else {
+    faultChain(sig, info, ctx, g_oldSegv);
+  }
+}
+
+void ensureFaultGuard() {
+  if (g_guardInstalled) return;
+  g_guardInstalled = true;
+  struct sigaction act{};
+  act.sa_sigaction = faultHandler;
+  act.sa_flags = SA_SIGINFO;
+  sigemptyset(&act.sa_mask);
+  sigaction(SIGSEGV, &act, &g_oldSegv);
+  sigaction(SIGBUS, &act, &g_oldBus);
+}
+
+template <typename Fn>
+bool guardedBoolCall(Fn &&fn) {
+  ensureFaultGuard();
+  if (sigsetjmp(g_faultJmp, 1) == 0) {
+    g_inGuard = 1;
+    const bool result = fn();
+    g_inGuard = 0;
+    return result;
+  }
+  g_inGuard = 0;
+  return false;
+}
 
 struct DistanceSortedActor {
   void *actor = nullptr;
@@ -119,29 +181,6 @@ bool safeWrite(uintptr_t address, const T &value) {
   return mem::write(address, value);
 }
 
-bool actorCtxQuerySafe(uintptr_t base) {
-  uintptr_t ctx = 0;
-  if (!safeRead(base + 0x10, ctx) || !isPlausiblePointer(ctx)) return false;
-  uintptr_t begin = 0;
-  uintptr_t end = 0;
-  if (!safeRead(ctx + 0x38, begin) || !safeRead(ctx + 0x40, end)) return false;
-  if (!isPlausiblePointer(begin) || !isPlausiblePointer(end) || end < begin) {
-    return false;
-  }
-  const uint64_t bytes = end - begin;
-  if (bytes < sizeof(void *) || bytes > (1u << 20)) return false;
-  uintptr_t probe = 0;
-  if (!safeRead(begin, probe) || !safeRead(end - sizeof(void *), probe)) {
-    return false;
-  }
-  uintptr_t table = 0;
-  if (!safeRead(ctx + 0x50, table) || !isPlausiblePointer(table)) return false;
-  if (!safeRead(table, probe)) return false;
-  uintptr_t tail = 0;
-  if (!safeRead(ctx + 0x58, tail)) return false;
-  return true;
-}
-
 bool isLiveActor(void *actor) {
   const auto base = reinterpret_cast<uintptr_t>(actor);
   if (!isPlausiblePointer(base)) return false;
@@ -150,11 +189,6 @@ bool isLiveActor(void *actor) {
       !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
     return false;
   }
-  // Actor::isPlayer dereferences *(actor+0x10) and then probes a hash table at
-  // [ctx+0x38]/[ctx+0x50]; a bogus-but-plausible ctx made that fault inside
-  // libminecraftpe. Require those structures to be mapped before the actor is
-  // ever handed to the game.
-  if (!actorCtxQuerySafe(base)) return false;
   uintptr_t stateVector = 0;
   if (!safeRead(base + offsets::kActorStateVectorComponent, stateVector) ||
       !isPlausiblePointer(stateVector)) {
@@ -1591,7 +1625,9 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
 
 bool ClientBridge::isPlayer(void *actor) const {
   if (!actor) return false;
-  return g_actorIsPlayer ? g_actorIsPlayer(actor) : true;
+  if (!g_actorIsPlayer) return true;
+  ActorIsPlayerFn fn = g_actorIsPlayer;
+  return guardedBoolCall([fn, actor]() { return fn(actor); });
 }
 
 int ClientBridge::getActorType(void *) const {
