@@ -1855,12 +1855,12 @@ Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
   if (actor != m_aimPointActor || now >= m_nextAimPointMs) {
     m_aimPointActor = actor;
     const bool head = bone == TargetBone::Head;
-    const float horizontal = head ? 0.007f : 0.013f;
-    const float vertical = head ? 0.005f : 0.010f;
+    const float horizontal = head ? 0.0016f : 0.0026f;
+    const float vertical = head ? 0.0012f : 0.0022f;
     m_aimPointOffset.x = randomFloat(-horizontal, horizontal);
     m_aimPointOffset.y = randomFloat(-vertical, vertical);
     m_aimPointOffset.z = randomFloat(-horizontal, horizontal);
-    m_nextAimPointMs = now + randomInt(1600, 3200);
+    m_nextAimPointMs = now + randomInt(2500, 5000);
   }
 
   Aabb bounds{};

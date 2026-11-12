@@ -777,6 +777,42 @@ std::string Esp::actorName(void *actor,
   return name;
 }
 
+uint32_t Esp::armorMaskFor(void *actor, std::chrono::steady_clock::time_point now) {
+  {
+    std::lock_guard<std::mutex> lock(m_metaMutex);
+    const auto it = m_armorCache.find(actor);
+    if (it != m_armorCache.end() &&
+        now - it->second.second < std::chrono::milliseconds(400)) {
+      return it->second.first;
+    }
+  }
+  const uint32_t mask = gameecs::armorMaterialMask(actor);
+  {
+    std::lock_guard<std::mutex> lock(m_metaMutex);
+    if (m_armorCache.size() > 4096) m_armorCache.clear();
+    m_armorCache[actor] = {mask, now};
+  }
+  return mask;
+}
+
+std::string Esp::offhandFor(void *actor, std::chrono::steady_clock::time_point now) {
+  {
+    std::lock_guard<std::mutex> lock(m_metaMutex);
+    const auto it = m_offhandCache.find(actor);
+    if (it != m_offhandCache.end() &&
+        now - it->second.second < std::chrono::milliseconds(400)) {
+      return it->second.first;
+    }
+  }
+  std::string name = gameecs::offhandItemName(actor);
+  {
+    std::lock_guard<std::mutex> lock(m_metaMutex);
+    if (m_offhandCache.size() > 4096) m_offhandCache.clear();
+    m_offhandCache[actor] = {name, now};
+  }
+  return name;
+}
+
 void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
                          const float camera[3]) {
   std::vector<NameTagLabel> labels;
@@ -846,7 +882,7 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
 
       std::string name = actorName(actor, now);
       if (name.empty()) continue;
-      const uint32_t armorMask = gameecs::armorMaterialMask(actor);
+      const uint32_t armorMask = armorMaskFor(actor, now);
       const int armorPieces = [armorMask]() {
         int count = 0;
         for (int slot = 0; slot < 4; ++slot) {
@@ -862,7 +898,7 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
       label.armorMask = armorMask;
       label.health = gameecs::readHealth(actor);
       label.friendPlayer = isFriend(actor);
-      label.offhandItem = gameecs::offhandItemName(actor);
+      label.offhandItem = offhandFor(actor, now);
       label.name = std::move(name);
       labels.push_back(std::move(label));
       if (labels.size() >= 256) break;
@@ -876,6 +912,7 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
 void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
                          const float camera[3]) {
   std::vector<EspBoxLabel> boxes;
+  const auto now = std::chrono::steady_clock::now();
 
   const float width = m_surfaceWidth.load(std::memory_order_relaxed);
   const float height = m_surfaceHeight.load(std::memory_order_relaxed);
@@ -968,8 +1005,13 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
         maxY < -32.0f || minY > height + 32.0f) {
       continue;
     }
-    const int armorPieces =
-        isPlayer ? gameecs::armorPieceCount(actor) : 0;
+    int armorPieces = 0;
+    if (isPlayer) {
+      const uint32_t armorMask = armorMaskFor(actor, now);
+      for (int slot = 0; slot < 4; ++slot) {
+        if (((armorMask >> (slot * 8)) & 0xFFu) != 0) ++armorPieces;
+      }
+    }
     uint32_t color =
         (isPlayer && armorColors && armorPieces > 0)
             ? armoredColor

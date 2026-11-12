@@ -118,6 +118,8 @@ private:
   void updateTargetEsp(void *player, uintptr_t playerRenderer,
                        const float camera[3]);
   std::string actorName(void *actor, std::chrono::steady_clock::time_point now);
+  uint32_t armorMaskFor(void *actor, std::chrono::steady_clock::time_point now);
+  std::string offhandFor(void *actor, std::chrono::steady_clock::time_point now);
 
   ClientBridge &m_bridge = ClientBridge::instance();
   std::mutex m_initMutex;
@@ -153,6 +155,13 @@ private:
   std::unordered_map<void *, std::pair<std::string,
                                        std::chrono::steady_clock::time_point>>
       m_nameCache;
+  mutable std::mutex m_metaMutex;
+  std::unordered_map<void *, std::pair<uint32_t,
+                                       std::chrono::steady_clock::time_point>>
+      m_armorCache;
+  std::unordered_map<void *, std::pair<std::string,
+                                       std::chrono::steady_clock::time_point>>
+      m_offhandCache;
 };
 
 } // namespace aimbot
