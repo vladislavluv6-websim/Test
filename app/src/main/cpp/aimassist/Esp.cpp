@@ -764,8 +764,28 @@ std::string Esp::actorName(void *actor,
     name = cleanPlayerName(std::move(name));
   }
   if (name.empty()) {
-    if (ActorGetNameTagFn fn = actorGetNameTagFn()) {
-      name = cleanPlayerName(fn(actor));
+    // Actor::getNameTag() is a real game call. If the actor list is momentarily
+    // stale (e.g. right after a dimension teleport) the object is gone and the
+    // call faults inside libminecraftpe. Only call it on a structurally valid
+    // actor.
+    const bool callable = [&]() {
+      if (!mem::isPlausiblePointer(base)) return false;
+      uintptr_t vtable = 0;
+      if (!mem::read(base, vtable) ||
+          !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
+        return false;
+      }
+      uintptr_t stateVector = 0;
+      if (!mem::read(base + offsets::kActorStateVectorComponent, stateVector) ||
+          !mem::isPlausiblePointer(stateVector)) {
+        return false;
+      }
+      return true;
+    }();
+    if (callable) {
+      if (ActorGetNameTagFn fn = actorGetNameTagFn()) {
+        name = cleanPlayerName(fn(actor));
+      }
     }
   }
 
