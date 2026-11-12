@@ -41,6 +41,7 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String KEY_AIM_ASSIST_IGNORE_INVISIBLE = "aim_assist_ignore_invisible";
     private static final String KEY_AIM_ASSIST_NEURAL = "aim_assist_neural";
+    private static final String KEY_AIM_ASSIST_KILLAURA = "aim_assist_killaura";
     private static final String KEY_AIM_ASSIST_ROT_RECORDING = "aim_assist_rot_recording";
     private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
@@ -616,6 +617,14 @@ public class InbuiltModManager {
 
     public void setAimAssistNeuralRotation(boolean enabled) {
         prefs.edit().putBoolean(KEY_AIM_ASSIST_NEURAL, enabled).apply();
+    }
+
+    public boolean isAimAssistKillaura() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_KILLAURA, false);
+    }
+
+    public void setAimAssistKillaura(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_KILLAURA, enabled).apply();
     }
 
     public boolean isAimAssistRotationRecording() {

@@ -155,6 +155,8 @@ struct Settings {
   bool randomAimPoint = true;
   // Neural/recorded rotation: replay a recorded human approach pattern.
   bool neuralRotation = false;
+  // Killaura: 360° auto-attack (ignore the FOV cone, attack the nearest target).
+  bool killaura = false;
 
   // ------------------------------------------------------------
   // Only crit
@@ -264,6 +266,7 @@ public:
   void setRandomAimPoint(bool enabled);
   void setRotationRecording(bool enabled);
   void setNeuralRotation(bool enabled);
+  void setKillaura(bool enabled);
   void setRotationPatternPath(const std::string &path);
   void setTouchActive(bool active);
   void notifyCameraLook();

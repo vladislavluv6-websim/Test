@@ -93,6 +93,12 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetNeura
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetKillaura(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setKillaura(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetRotationRecording(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::AimAssist::instance().setRotationRecording(enabled == JNI_TRUE);

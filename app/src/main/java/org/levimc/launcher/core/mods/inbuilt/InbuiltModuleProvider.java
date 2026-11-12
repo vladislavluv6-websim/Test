@@ -56,6 +56,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String CFG_AIM_ASSIST_IGNORE_INVISIBLE = "aim_assist_ignore_invisible";
     private static final String CFG_AIM_ASSIST_NEURAL = "aim_assist_neural";
+    private static final String CFG_AIM_ASSIST_KILLAURA = "aim_assist_killaura";
     private static final String CFG_AIM_ASSIST_ROT_RECORDING = "aim_assist_rot_recording";
     private static final String CFG_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String CFG_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
@@ -666,6 +667,11 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "false", "", "",
                     String.valueOf(manager.isAimAssistRotationRecording())));
+            configs.add(config(CFG_AIM_ASSIST_KILLAURA,
+                    context.getString(R.string.mod_config_aim_assist_killaura),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "false", "", "",
+                    String.valueOf(manager.isAimAssistKillaura())));
             configs.add(config(CFG_AIM_ASSIST_WALL_CHECK,
                     context.getString(R.string.mod_config_aim_assist_wall_check),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -1114,6 +1120,9 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_ROT_RECORDING:
                 manager.setAimAssistRotationRecording(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_KILLAURA:
+                manager.setAimAssistKillaura(parseBoolean(value));
                 break;
             case CFG_AIM_ASSIST_TARGET_PLAYERS:
                 manager.setAimAssistTargetPlayers(parseBoolean(value));

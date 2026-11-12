@@ -474,6 +474,11 @@ void AimAssist::setNeuralRotation(bool enabled) {
   m_settings.neuralRotation = enabled;
 }
 
+void AimAssist::setKillaura(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.killaura = enabled;
+}
+
 void AimAssist::setRotationRecording(bool enabled) {
   {
     std::lock_guard<std::mutex> lock(m_settingsMutex);
@@ -671,7 +676,7 @@ void AimAssist::updateVisual(float dt) {
   if (settings.antiBot) {
     AntiBot::instance().update(m_actors, player);
   }
-  if (settings.triggerBot && haveEye) {
+  if ((settings.triggerBot || settings.killaura) && haveEye) {
     updateTrigger(player, settings, current, eyeNow);
   } else {
     m_onTarget.store(false, std::memory_order_release);
@@ -1015,9 +1020,11 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   // Fast aim с anti-cheat профилем не разворачивается за спину: снапы
   // на 90-180° — первый маркер rotation-check'ов. Без профиля — 360°.
   const float assistFov =
-      settings.antiCheatMode
-          ? std::min(settings.fovDeg, settings.assistConeDeg)
-          : settings.fovDeg;
+      settings.killaura
+          ? 360.0f
+          : (settings.antiCheatMode
+                 ? std::min(settings.fovDeg, settings.assistConeDeg)
+                 : settings.fovDeg);
 
   Target current = m_target;
   bool currentStillValid = false;

@@ -143,6 +143,10 @@ public final class AimAssistMod {
         if (initialized) nativeSetNeuralRotation(enabled);
     }
 
+    public static void setKillaura(boolean enabled) {
+        if (initialized) nativeSetKillaura(enabled);
+    }
+
     public static void setRotationRecording(boolean enabled) {
         if (initialized) nativeSetRotationRecording(enabled);
     }
@@ -275,6 +279,7 @@ public final class AimAssistMod {
     private static native void nativeSetWallCheck(boolean enabled);
     private static native void nativeSetIgnoreInvisible(boolean enabled);
     private static native void nativeSetNeuralRotation(boolean enabled);
+    private static native void nativeSetKillaura(boolean enabled);
     private static native void nativeSetRotationRecording(boolean enabled);
     private static native void nativeSetRotationPatternPath(String path);
     private static native void nativeSetTargetPlayers(boolean enabled);

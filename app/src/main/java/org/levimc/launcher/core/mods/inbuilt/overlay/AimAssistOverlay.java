@@ -36,6 +36,7 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setWallCheck(manager.isAimAssistWallCheck());
         AimAssistMod.setIgnoreInvisible(manager.isAimAssistIgnoreInvisible());
         AimAssistMod.setNeuralRotation(manager.isAimAssistNeuralRotation());
+        AimAssistMod.setKillaura(manager.isAimAssistKillaura());
         if (!patternPathSet) {
             patternPathSet = true;
             try {
