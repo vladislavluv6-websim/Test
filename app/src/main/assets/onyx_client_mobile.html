@@ -907,8 +907,8 @@ html, body {
 
 /* MODAL DROPDOWN (SELECT) */
 .nl-modal-dropdown {
-  position: absolute;
-  z-index: 1000;
+  position: fixed;
+  z-index: 10050;
   background: rgba(20, 23, 33, 0.98);
   border: 1px solid #34394D;
   border-radius: 10px;
@@ -1649,8 +1649,12 @@ function openColorPopup(chipEl, event) {
 
   let left = rect.left - 200;
   let top = rect.bottom + 6;
+  const modalW = 224;
   if (left < 10) left = 10;
-  if (top + 220 > window.innerHeight) top = rect.top - 220;
+  if (left + modalW > window.innerWidth - 10) {
+    left = Math.max(10, window.innerWidth - modalW - 10);
+  }
+  if (top + 260 > window.innerHeight - 10) top = Math.max(10, rect.top - 260);
 
   modal.style.left = left + 'px';
   modal.style.top = top + 'px';

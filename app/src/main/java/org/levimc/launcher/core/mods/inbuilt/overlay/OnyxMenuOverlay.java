@@ -206,6 +206,8 @@ public class OnyxMenuOverlay {
         settings.setGeolocationEnabled(false);
         settings.setSaveFormData(false);
         settings.setTextZoom(100);
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        view.clearCache(true);
         view.addJavascriptInterface(new OnyxGuiBridge(activity, this), BRIDGE_NAME);
         view.setWebViewClient(new WebViewClient() {
             @Override

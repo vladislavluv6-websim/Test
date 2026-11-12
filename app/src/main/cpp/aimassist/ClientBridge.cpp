@@ -1561,9 +1561,36 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
   return true;
 }
 
+bool ClientBridge::actorComponentQuerySafe(void *actor) const {
+  const auto base = reinterpret_cast<uintptr_t>(actor);
+  if (!isPlausiblePointer(base)) return false;
+  uintptr_t ctx = 0;
+  if (!safeRead(base + 0x10, ctx) || !isPlausiblePointer(ctx)) return false;
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!safeRead(ctx + 0x38, begin) || !safeRead(ctx + 0x40, end)) return false;
+  if (!isPlausiblePointer(begin) || !isPlausiblePointer(end) || end < begin) {
+    return false;
+  }
+  uintptr_t table = 0;
+  if (!safeRead(ctx + 0x50, table) || !isPlausiblePointer(table)) return false;
+  uintptr_t tail = 0;
+  if (!safeRead(ctx + 0x58, tail)) return false;
+  uint32_t actorField18 = 0;
+  if (!safeRead(base + 0x18, actorField18)) return false;
+  return true;
+}
+
 bool ClientBridge::isPlayer(void *actor) const {
   if (!actor) return false;
-  return g_actorIsPlayer ? g_actorIsPlayer(actor) : true;
+  if (!g_actorIsPlayer) return true;
+  // Actor::isPlayer reads *(actor+0x10) and then dereferences [ctx+0x38]/
+  // [ctx+0x40]. When the nearby-actor list ever hands us a bogus object the
+  // wild ctx pointer made that first load fault inside libminecraftpe
+  // (crash dumps: SIGSEGV at libminecraftpe+0xfd8e12c). Validate the exact
+  // pointers before touching the game function.
+  if (!actorComponentQuerySafe(actor)) return false;
+  return g_actorIsPlayer(actor);
 }
 
 int ClientBridge::getActorType(void *) const {

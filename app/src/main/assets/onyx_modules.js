@@ -375,16 +375,20 @@
     track.addEventListener('touchstart', start, { passive: false });
   }
 
+  function relocatePopups() {
+    var dd = document.getElementById('modalDropdown');
+    if (dd && dd.parentNode !== document.body) document.body.appendChild(dd);
+    var cm = document.getElementById('colorPickerModal');
+    if (cm && cm.parentNode !== document.body) document.body.appendChild(cm);
+  }
+
   function openChoice(button, options, callback) {
     var dd = document.getElementById('modalDropdown');
-    var shell = document.getElementById('nlShell');
-    if (!dd || !shell) return;
+    if (!dd) return;
     closeAllPopups();
     dropdownTarget = button;
     dropdownOptions = options;
     dropdownCallback = callback;
-    var rect = button.getBoundingClientRect();
-    var shellRect = shell.getBoundingClientRect();
     var selected = button.querySelector('.label') ? button.querySelector('.label').textContent : '';
     var html = '';
     options.forEach(function (option, index) {
@@ -393,9 +397,18 @@
         '<span class="check">' + (isSelected ? '✓' : '') + '</span><span>' + esc(option.label) + '</span></div>';
     });
     dd.innerHTML = html;
-    dd.style.left = Math.min(rect.left - shellRect.left, shellRect.width - 150) + 'px';
-    dd.style.top = (rect.bottom - shellRect.top + 4) + 'px';
+    dd.style.left = '0px';
+    dd.style.top = '0px';
     dd.classList.add('open');
+    var rect = button.getBoundingClientRect();
+    var w = dd.offsetWidth || 150;
+    var h = dd.offsetHeight || 120;
+    var left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8));
+    var top = rect.bottom + 4;
+    if (top + h > window.innerHeight - 8) top = rect.top - h - 4;
+    if (top < 8) top = 8;
+    dd.style.left = left + 'px';
+    dd.style.top = top + 'px';
     dd.querySelectorAll('.dropdown-option').forEach(function (option) {
       option.addEventListener('click', function (event) {
         event.stopPropagation();
@@ -494,6 +507,12 @@
     if (typeof baseHandleSearch === 'function') baseHandleSearch(query);
     document.querySelectorAll('.module-card.expanded').forEach(ensureBuilt);
   };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', relocatePopups);
+  } else {
+    relocatePopups();
+  }
 
   window.toggleMenuVisibility = function () {
     bridge('hideMenu');

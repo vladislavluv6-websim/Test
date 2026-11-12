@@ -92,6 +92,11 @@ private:
   void appendNearbyActors(void *player, const Vec3 &extent, int actorType,
                           std::vector<void *> &out) const;
 
+  // Проверяет, что указатели, которые Actor::isPlayer дереференсит по своей
+  // первой же инструкции (*(actor+0x10), затем [ctx+0x38]/[ctx+0x40]/
+  // [ctx+0x50]), реально отображены — иначе вызов нативной функции падает.
+  bool actorComponentQuerySafe(void *actor) const;
+
 public:
 
   // Line-of-sight. Если сигнатура не найдена — возвращает true,
