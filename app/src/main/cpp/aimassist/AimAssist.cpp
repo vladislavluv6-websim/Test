@@ -686,7 +686,11 @@ void AimAssist::updateVisual(float dt) {
   if (settings.antiBot) {
     AntiBot::instance().update(m_actors, player);
   }
-  if ((settings.triggerBot || settings.killaura) && haveEye) {
+  if (settings.killaura) {
+    updateKillaura(player, settings, dt);
+    return;
+  }
+  if (settings.triggerBot && haveEye) {
     updateTrigger(player, settings, current, eyeNow);
   } else {
     m_onTarget.store(false, std::memory_order_release);
@@ -1213,6 +1217,82 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
 // ============================================================
 // Триггер: луч прицела против хитбоксов
 // ============================================================
+void AimAssist::updateKillaura(void *player, const Settings &settings,
+                              float dt) {
+  if (!player) return;
+  const int64_t now = nowMs();
+  Vec3 eye{};
+  if (!m_bridge.getEyePosition(player, eye)) return;
+  m_eye = eye;
+  const float reach = settings.range + 0.6f;
+  void *best = nullptr;
+  float bestDist = 1e9f;
+  for (void *actor : m_actors) {
+    if (!actor || actor == player) continue;
+    const bool isPlayerActor = m_bridge.isPlayer(actor);
+    if (isPlayerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
+    if (isPlayerActor && Esp::instance().isFriend(actor)) continue;
+    if (isPlayerActor && settings.antiBot &&
+        AntiBot::instance().isBot(actor)) {
+      continue;
+    }
+    if (settings.ignoreInvisible && isInvisible(actor)) continue;
+    Vec3 pos{};
+    if (!m_bridge.getPosition(actor, pos)) continue;
+    const float dx = pos.x - eye.x;
+    const float dy = pos.y - eye.y;
+    const float dz = pos.z - eye.z;
+    const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (distance > reach) continue;
+    if (settings.visibleCheck &&
+        !m_bridge.hasLineOfSight(player, eye, pos)) {
+      continue;
+    }
+    if (distance < bestDist) {
+      bestDist = distance;
+      best = actor;
+    }
+  }
+
+  if (!best) {
+    m_triggerActor.store(nullptr, std::memory_order_release);
+    m_onTarget.store(false, std::memory_order_release);
+    m_triggerSinceActor = nullptr;
+    m_triggerSinceMs = 0;
+    m_lastAimActor = nullptr;
+    return;
+  }
+
+  m_triggerActor.store(best, std::memory_order_release);
+  m_onTarget.store(true, std::memory_order_release);
+
+  const Vec3 point = getTargetPoint(best, settings.targetBone);
+  const Angles aim = calculateAnglesToPoint(point);
+  // Turn onto the target with the legit/neural rotation (human envelope).
+  applySmoothRotationInternal(aim.yaw, aim.pitch, dt, settings);
+
+  if (m_triggerSinceActor != best) {
+    m_triggerSinceActor = best;
+    m_triggerSinceMs = now;
+    m_triggerDelayForTargetMs =
+        static_cast<int>(settings.killauraReactionMs) + randomInt(0, 60);
+  }
+  if (now - m_triggerSinceMs < m_triggerDelayForTargetMs) return;
+  if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
+
+  const float curYaw = m_localYaw.load(std::memory_order_relaxed);
+  const float curPitch = m_localPitch.load(std::memory_order_relaxed);
+  const float errYaw = shortestDelta(curYaw, aim.yaw);
+  const float errPitch = aim.pitch - curPitch;
+  if (std::sqrt(errYaw * errYaw + errPitch * errPitch) > 6.0f) return;
+
+  if (m_bridge.attackActor(best, point)) {
+    const int interval =
+        std::max(180, settings.triggerIntervalMs) + randomInt(-40, 70);
+    m_nextAttackAtMs = now + interval;
+  }
+}
+
 void AimAssist::updateTrigger(void *player, const Settings &settings,
                               const ViewAngles &view, const Vec3 &eye) {
   if (!player || !settings.triggerBot) {

@@ -307,6 +307,7 @@ private:
   void updateFastAimStealth(const Settings &settings, float dt);
   void updateTrigger(void *player, const Settings &settings,
                      const ViewAngles &view, const Vec3 &eye);
+  void updateKillaura(void *player, const Settings &settings, float dt);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,
                                    float dt, const Settings &settings);
   void clearTarget();

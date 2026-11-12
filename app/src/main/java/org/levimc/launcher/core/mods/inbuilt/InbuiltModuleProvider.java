@@ -420,14 +420,6 @@ public final class InbuiltModuleProvider {
                     context.getString(R.string.mod_config_aim_assist_random_point),
                     UnifiedMod.ConfigType.TOGGLE, "true", "", "",
                     String.valueOf(manager.isAimAssistRandomPoint())));
-            configs.add(config(CFG_AIM_ASSIST_ROT_RECORDING,
-                    context.getString(R.string.mod_config_aim_assist_rot_recording),
-                    UnifiedMod.ConfigType.TOGGLE, "false", "", "",
-                    String.valueOf(manager.isAimAssistRotationRecording())));
-            configs.add(config(CFG_AIM_ASSIST_NEURAL,
-                    context.getString(R.string.mod_config_aim_assist_neural),
-                    UnifiedMod.ConfigType.TOGGLE, "false", "", "",
-                    String.valueOf(manager.isAimAssistNeuralRotation())));
             return configs;
         }
         if (ModIds.MORE_BUTTONS.equals(modId)) return configs;
@@ -714,21 +706,6 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "false", "", "",
                     String.valueOf(manager.isAimAssistIgnoreInvisible())));
-            configs.add(config(CFG_AIM_ASSIST_NEURAL,
-                    context.getString(R.string.mod_config_aim_assist_neural),
-                    UnifiedMod.ConfigType.TOGGLE,
-                    "false", "", "",
-                    String.valueOf(manager.isAimAssistNeuralRotation())));
-            configs.add(config(CFG_AIM_ASSIST_ROT_RECORDING,
-                    context.getString(R.string.mod_config_aim_assist_rot_recording),
-                    UnifiedMod.ConfigType.TOGGLE,
-                    "false", "", "",
-                    String.valueOf(manager.isAimAssistRotationRecording())));
-            configs.add(config(CFG_AIM_ASSIST_KILLAURA,
-                    context.getString(R.string.mod_config_aim_assist_killaura),
-                    UnifiedMod.ConfigType.TOGGLE,
-                    "false", "", "",
-                    String.valueOf(manager.isAimAssistKillaura())));
             configs.add(config(CFG_AIM_ASSIST_WALL_CHECK,
                     context.getString(R.string.mod_config_aim_assist_wall_check),
                     UnifiedMod.ConfigType.TOGGLE,
