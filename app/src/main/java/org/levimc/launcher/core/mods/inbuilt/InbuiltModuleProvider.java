@@ -397,17 +397,6 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "150", "0", "500",
                     String.valueOf(manager.getKillauraReaction())));
-            configs.add(config(CFG_AIM_ASSIST_BODY_PART,
-                    context.getString(R.string.mod_config_aim_assist_body_part),
-                    UnifiedMod.ConfigType.RADIO,
-                    "0",
-                    context.getString(R.string.mod_config_aim_assist_head) + ","
-                            + context.getString(R.string.mod_config_aim_assist_chest) + ","
-                            + context.getString(R.string.mod_config_aim_assist_legs) + ","
-                            + context.getString(R.string.mod_config_aim_assist_upper_chest) + ","
-                            + context.getString(R.string.mod_config_aim_assist_lower_chest),
-                    "",
-                    String.valueOf(manager.getAimAssistBodyPart())));
             configs.add(config(CFG_AIM_ASSIST_TARGET_PLAYERS,
                     context.getString(R.string.mod_config_aim_assist_target_players),
                     UnifiedMod.ConfigType.TOGGLE, "true", "", "",
@@ -605,17 +594,6 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.SLIDER_INT,
                     "360", "30", "360",
                     String.valueOf(manager.getAimAssistFov())));
-            configs.add(config(CFG_AIM_ASSIST_BODY_PART,
-                    context.getString(R.string.mod_config_aim_assist_body_part),
-                    UnifiedMod.ConfigType.RADIO,
-                    "0",
-                    context.getString(R.string.mod_config_aim_assist_head) + ","
-                            + context.getString(R.string.mod_config_aim_assist_chest) + ","
-                            + context.getString(R.string.mod_config_aim_assist_legs) + ","
-                            + context.getString(R.string.mod_config_aim_assist_upper_chest) + ","
-                            + context.getString(R.string.mod_config_aim_assist_lower_chest),
-                    "",
-                    String.valueOf(manager.getAimAssistBodyPart())));
             configs.add(config(CFG_AIM_ASSIST_TARGET_PLAYERS,
                     context.getString(R.string.mod_config_aim_assist_target_players),
                     UnifiedMod.ConfigType.TOGGLE,

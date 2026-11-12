@@ -653,29 +653,6 @@ void AimAssist::updateVisual(float dt) {
   m_localYaw.store(current.yaw, std::memory_order_relaxed);
   m_hasLocal = true;
 
-  {
-    // Neural rotation: record the player's own approach speed envelope so it can
-    // be replayed later as a human-like aiming cadence.
-    if (m_rotRecording) {
-      if (m_havePrevLocal && dt > 0.001f && dt < 0.1f) {
-        const float dy = shortestDelta(m_prevLocalYaw, current.yaw);
-        const float dp = current.pitch - m_prevLocalPitch;
-        const float step = std::sqrt(dy * dy + dp * dp);
-        if (std::isfinite(step) && step < 40.0f) {
-          m_rotPattern.push_back(step / dt);
-        }
-        if (m_rotPattern.size() > 60000) {
-          m_rotPattern.erase(m_rotPattern.begin(),
-                             m_rotPattern.begin() + 30000);
-        }
-      }
-      m_prevLocalYaw = current.yaw;
-      m_prevLocalPitch = current.pitch;
-      m_havePrevLocal = true;
-    } else {
-      m_havePrevLocal = false;
-    }
-  }
 
   // ---------------------------------------------------------------
   // Триггер: работает всегда, даже когда aim assist выключен.
@@ -748,10 +725,6 @@ void AimAssist::updateVisual(float dt) {
 
   // Высота цели задаётся режимом: голова / грудь / ноги.
   m_target.point = getTargetPoint(m_target.actor, settings.targetBone);
-  if (settings.randomAimPoint) {
-    m_target.point =
-        jitteredAimPoint(m_target.actor, m_target.point, settings.targetBone);
-  }
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -855,12 +828,6 @@ void AimAssist::updateVisual(float dt) {
 
   const Vec3 point = smoothedPoint(m_target, settings);
   Angles aim = calculateAnglesToPoint(point);
-
-  if (settings.humanize) {
-    aim.yaw = normalizeYaw(aim.yaw + m_restYaw + m_noiseYaw + m_overYaw);
-    aim.pitch = clampf(aim.pitch + m_restPitch + m_noisePitch + m_overPitch,
-                       -89.9f, 89.9f);
-  }
 
   if (m_targetLockMs == 0) {
     m_targetLockMs = aimNow;
@@ -1757,18 +1724,9 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
           std::max(fastDt, 1e-3f);
       m_catchupRate += (targetRate - m_catchupRate) *
                        (1.0f - std::exp(-fastDt / 0.12f));
-      float rate;
-      if (settings.neuralRotation && !m_rotPattern.empty()) {
-        const float recorded =
-            m_rotPattern[m_rotPlayIndex % m_rotPattern.size()];
-        m_rotPlayIndex = (m_rotPlayIndex + 1) % m_rotPattern.size();
-        rate = clampf(std::isfinite(recorded) ? recorded : maxSpeed,
-                      30.0f, 4000.0f);
-      } else {
-        rate = maxSpeed * (0.35f + 0.65f * smooth) +
-               clampf(m_catchupRate, 0.0f, 900.0f) * 0.5f;
-        rate = clampf(rate, 30.0f, 4000.0f);
-      }
+      float rate = maxSpeed * (0.35f + 0.65f * smooth) +
+                   clampf(m_catchupRate, 0.0f, 900.0f) * 0.5f;
+      rate = clampf(rate, 30.0f, 4000.0f);
       const float stepLen = std::min(errMag, rate * fastDt);
       stepYaw = errMag > 1e-6f ? errYaw * (stepLen / errMag) : errYaw;
       stepPitch = errMag > 1e-6f ? errPitch * (stepLen / errMag) : errPitch;
@@ -1901,45 +1859,20 @@ void AimAssist::resetHumanProfile() {
   m_targetLockMs = 0;
 }
 
-void AimAssist::updateHumanProfile(const Settings &settings, float dt,
-                                   int64_t now) {
-  // «Моторная» скорость меняется каждые 180-480 мс — траектория перестаёт
-  // быть одной и той же функцией ошибки.
+void AimAssist::updateHumanProfile(const Settings &settings, float, int64_t now) {
+  // Only the smooth motor-speed variation stays; all per-frame noise, rest
+  // offset and overshoot were removed so the aim never trembles.
   if (now >= m_nextMotorMs) {
     const float var = clampf(settings.motorVariation, 0.0f, 0.45f);
     m_motorScale = randomFloat(1.0f - var, 1.0f + var);
     m_nextMotorMs = now + randomInt(180, 480);
   }
-
-  // Медленно блуждающая точка покоя относительно центра хитбокса.
-  if (now >= m_nextRestMs) {
-    m_nextRestMs = now + randomInt(1500, 3500);
-    const float off = clampf(settings.restOffsetDeg, 0.0f, 1.0f);
-    m_restTargetYaw = randomFloat(-off, off);
-    m_restTargetPitch = randomFloat(-off, off);
-  }
-  const float ease = clampf(dt * 5.0f, 0.0f, 1.0f);
-  m_restYaw += (m_restTargetYaw - m_restYaw) * ease;
-  m_restPitch += (m_restTargetPitch - m_restPitch) * ease;
-
-  // Gauss-Markov шум сопровождения: маленький, сглаженный (без дрожания).
-  const float noiseAmp =
-      clampf(settings.trackingNoiseDeg + settings.aimTremorDeg, 0.0f, 0.5f);
-  if (settings.humanize && noiseAmp > 0.0f) {
-    if (now >= m_nextNoiseMs) {
-      m_nextNoiseMs = now + randomInt(140, 360);
-      m_noiseTargetYaw = randomFloat(-noiseAmp, noiseAmp);
-      m_noiseTargetPitch = randomFloat(-noiseAmp, noiseAmp);
-    }
-    const float nease = clampf(dt * 7.0f, 0.0f, 1.0f);
-    m_noiseYaw += (m_noiseTargetYaw - m_noiseYaw) * nease;
-    m_noisePitch += (m_noiseTargetPitch - m_noisePitch) * nease;
-  } else {
-    m_noiseYaw = 0.0f;
-    m_noisePitch = 0.0f;
-  }
-  m_overYaw *= 0.88f;
-  m_overPitch *= 0.88f;
+  m_noiseYaw = 0.0f;
+  m_noisePitch = 0.0f;
+  m_restYaw = 0.0f;
+  m_restPitch = 0.0f;
+  m_overYaw = 0.0f;
+  m_overPitch = 0.0f;
 }
 
 void AimAssist::updateFatigue(const Settings &settings, int64_t now) {
@@ -2065,42 +1998,17 @@ bool AimAssist::isFallingForCrit(const Settings &settings, int64_t now) {
 // ============================================================
 // Вспомогательное
 // ============================================================
-Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone) const {
+Vec3 AimAssist::getTargetPoint(void *actor, TargetBone) const {
   Aabb bounds{};
   if (!m_bridge.getActorBounds(actor, bounds)) {
     Vec3 position{};
     m_bridge.getPosition(actor, position);
     return position;
   }
-
-  // Точка считается от низа реального хитбокса. Раньше к StateVector-позиции
-  // прибавлялось +1.62, но у игроков эта позиция уже на уровне глаз, а у
-  // мобов — у ног; из-за этого прицел уходил вниз и не поднимался к голове.
-  float fraction = offsets::kHeadFraction;
-  switch (bone) {
-  case TargetBone::Chest:
-    fraction = offsets::kChestFraction;
-    break;
-  case TargetBone::Legs:
-    fraction = offsets::kLegsFraction;
-    break;
-  case TargetBone::UpperChest:
-    fraction = offsets::kUpperChestFraction;
-    break;
-  case TargetBone::LowerChest:
-    fraction = offsets::kLowerChestFraction;
-    break;
-  case TargetBone::Head:
-  default:
-    fraction = offsets::kHeadFraction;
-    break;
-  }
-
-  Vec3 point{};
-  point.x = (bounds.min.x + bounds.max.x) * 0.5f;
-  point.z = (bounds.min.z + bounds.max.z) * 0.5f;
-  point.y = bounds.min.y + (bounds.max.y - bounds.min.y) * fraction;
-  return point;
+  // Aim at the hitbox itself (its centre), never a chosen head/chest/legs spot.
+  return {(bounds.min.x + bounds.max.x) * 0.5f,
+          (bounds.min.y + bounds.max.y) * 0.5f,
+          (bounds.min.z + bounds.max.z) * 0.5f};
 }
 
 Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
