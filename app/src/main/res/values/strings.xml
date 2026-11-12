@@ -1258,6 +1258,7 @@
     <string name="mod_friend_add_hint">Player nickname</string>
     <string name="mod_friend_empty">No friends yet. Add a nickname above.</string>
     <string name="mod_friend_remove">Remove %1$s</string>
+    <string name="mod_config_friend_edit">Edit friend list</string>
     <string name="mod_config_target_esp_hex">Hex</string>
     <string name="mod_config_target_esp_orbit">Orbit</string>
     <string name="mod_config_target_esp_lock">Lock</string>

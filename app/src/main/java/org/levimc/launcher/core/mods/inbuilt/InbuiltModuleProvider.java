@@ -93,6 +93,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_SWING_SPEED = "swing_speed";
     private static final String CFG_SWING_AMPLITUDE = "swing_amplitude";
     private static final String CFG_FRIEND_NAMES = "friend_names";
+    private static final String CFG_FRIEND_EDIT = "friend_edit";
     private static final String CFG_TARGET_ESP_STYLE = "target_esp_style";
     private static final String CFG_TARGET_ESP_COLOR = "target_esp_color";
     private static final String CFG_TARGET_ESP_HOLD = "target_esp_hold_ms";
@@ -188,7 +189,7 @@ public final class InbuiltModuleProvider {
                 GROUP_ID,
                 groupName,
                 (mod, enabled) -> setEnabled(manager, mod, enabled),
-                (mod, config, value) -> setConfig(manager, mod, config, value),
+                (mod, config, value) -> setConfig(activity, manager, mod, config, value),
                 ModIds.MORE_BUTTONS.equals(id) ? mod -> MoreButtonsEditor.show(activity) : null
         );
         result.setLocalConfigSchema(createLocalConfigSchema(activity, result));
@@ -914,6 +915,10 @@ public final class InbuiltModuleProvider {
                     context.getString(R.string.mod_config_friend_names),
                     UnifiedMod.ConfigType.TEXT, "", "", "",
                     manager.getFriendNames()));
+            configs.add(config(CFG_FRIEND_EDIT,
+                    context.getString(R.string.mod_config_friend_edit),
+                    UnifiedMod.ConfigType.BUTTON, "", "", "",
+                    ""));
         }
         if (!ModIds.CHICK_PET.equals(modId) && !ModIds.AUTO_SPRINT.equals(modId)
                 && !ModIds.ZOOM.equals(modId) && !ModIds.FRIEND.equals(modId)) {
@@ -966,13 +971,16 @@ public final class InbuiltModuleProvider {
         }
     }
 
-    private static void setConfig(InbuiltModManager manager, UnifiedMod mod, UnifiedMod.ConfigEntry config,
-                                  String value) {
+    private static void setConfig(android.app.Activity activity, InbuiltModManager manager,
+                                  UnifiedMod mod, UnifiedMod.ConfigEntry config, String value) {
         if (ModIds.HOTBAR_SLOT.equals(mod.getId()) && setHotbarSlotConfig(manager, config.key, value)) return;
         switch (config.key) {
             case CFG_FRIEND_NAMES:
                 manager.setFriendNames(value);
                 applyFriendNames(manager);
+                break;
+            case CFG_FRIEND_EDIT:
+                FriendEditor.show(activity, manager, mod, CFG_FRIEND_NAMES);
                 break;
             case CFG_ACTIVATION_KEYBIND:
                 manager.setInbuiltModKeybind(mod.getId(), parseInt(value, manager.getInbuiltModKeybind(mod.getId())));
