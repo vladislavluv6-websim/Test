@@ -55,6 +55,8 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_FOV = "aim_assist_fov";
     private static final String CFG_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String CFG_AIM_ASSIST_IGNORE_INVISIBLE = "aim_assist_ignore_invisible";
+    private static final String CFG_AIM_ASSIST_NEURAL = "aim_assist_neural";
+    private static final String CFG_AIM_ASSIST_ROT_RECORDING = "aim_assist_rot_recording";
     private static final String CFG_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String CFG_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
     private static final String CFG_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
@@ -654,6 +656,16 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "false", "", "",
                     String.valueOf(manager.isAimAssistIgnoreInvisible())));
+            configs.add(config(CFG_AIM_ASSIST_NEURAL,
+                    context.getString(R.string.mod_config_aim_assist_neural),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "false", "", "",
+                    String.valueOf(manager.isAimAssistNeuralRotation())));
+            configs.add(config(CFG_AIM_ASSIST_ROT_RECORDING,
+                    context.getString(R.string.mod_config_aim_assist_rot_recording),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "false", "", "",
+                    String.valueOf(manager.isAimAssistRotationRecording())));
             configs.add(config(CFG_AIM_ASSIST_WALL_CHECK,
                     context.getString(R.string.mod_config_aim_assist_wall_check),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -1096,6 +1108,12 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_IGNORE_INVISIBLE:
                 manager.setAimAssistIgnoreInvisible(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_NEURAL:
+                manager.setAimAssistNeuralRotation(parseBoolean(value));
+                break;
+            case CFG_AIM_ASSIST_ROT_RECORDING:
+                manager.setAimAssistRotationRecording(parseBoolean(value));
                 break;
             case CFG_AIM_ASSIST_TARGET_PLAYERS:
                 manager.setAimAssistTargetPlayers(parseBoolean(value));

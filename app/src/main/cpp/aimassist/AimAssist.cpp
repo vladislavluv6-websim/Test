@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <fstream>
 #include <random>
 
 #include "GameEcs.hpp"
@@ -468,6 +469,56 @@ void AimAssist::setRandomAimPoint(bool enabled) {
   m_settings.randomAimPoint = enabled;
 }
 
+void AimAssist::setNeuralRotation(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.neuralRotation = enabled;
+}
+
+void AimAssist::setRotationRecording(bool enabled) {
+  {
+    std::lock_guard<std::mutex> lock(m_settingsMutex);
+    if (enabled && !m_rotRecording) {
+      m_rotPattern.clear();
+      m_rotPlayIndex = 0;
+      m_havePrevLocal = false;
+    }
+    m_rotRecording = enabled;
+  }
+  if (!enabled) saveRotationPattern();
+}
+
+void AimAssist::setRotationPatternPath(const std::string &path) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_rotPatternPath = path;
+  loadRotationPattern();
+}
+
+void AimAssist::saveRotationPattern() {
+  if (m_rotPatternPath.empty()) return;
+  std::ofstream out(m_rotPatternPath, std::ios::binary | std::ios::trunc);
+  if (!out) return;
+  const uint32_t count = static_cast<uint32_t>(m_rotPattern.size());
+  out.write(reinterpret_cast<const char *>(&count), sizeof(count));
+  if (count) {
+    out.write(reinterpret_cast<const char *>(m_rotPattern.data()),
+              static_cast<std::streamsize>(count) * sizeof(float));
+  }
+}
+
+void AimAssist::loadRotationPattern() {
+  if (m_rotPatternPath.empty()) return;
+  std::ifstream in(m_rotPatternPath, std::ios::binary);
+  if (!in) return;
+  uint32_t count = 0;
+  in.read(reinterpret_cast<char *>(&count), sizeof(count));
+  if (!in || count == 0 || count > 500000) return;
+  m_rotPattern.resize(count);
+  in.read(reinterpret_cast<char *>(m_rotPattern.data()),
+          static_cast<std::streamsize>(count) * sizeof(float));
+  if (!in) m_rotPattern.clear();
+  m_rotPlayIndex = 0;
+}
+
 void AimAssist::setTouchActive(bool) {
   // Ручной look больше не ставит наведение на паузу. View всё равно
   // перечитывается каждый кадр, поэтому цель не теряется.
@@ -581,6 +632,30 @@ void AimAssist::updateVisual(float dt) {
   m_localPitch.store(current.pitch, std::memory_order_relaxed);
   m_localYaw.store(current.yaw, std::memory_order_relaxed);
   m_hasLocal = true;
+
+  {
+    // Neural rotation: record the player's own approach speed envelope so it can
+    // be replayed later as a human-like aiming cadence.
+    if (m_rotRecording) {
+      if (m_havePrevLocal && dt > 0.001f && dt < 0.1f) {
+        const float dy = shortestDelta(m_prevLocalYaw, current.yaw);
+        const float dp = current.pitch - m_prevLocalPitch;
+        const float step = std::sqrt(dy * dy + dp * dp);
+        if (std::isfinite(step) && step < 40.0f) {
+          m_rotPattern.push_back(step / dt);
+        }
+        if (m_rotPattern.size() > 60000) {
+          m_rotPattern.erase(m_rotPattern.begin(),
+                             m_rotPattern.begin() + 30000);
+        }
+      }
+      m_prevLocalYaw = current.yaw;
+      m_prevLocalPitch = current.pitch;
+      m_havePrevLocal = true;
+    } else {
+      m_havePrevLocal = false;
+    }
+  }
 
   // ---------------------------------------------------------------
   // Триггер: работает всегда, даже когда aim assist выключен.
@@ -1578,9 +1653,18 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
           std::max(fastDt, 1e-3f);
       m_catchupRate += (targetRate - m_catchupRate) *
                        (1.0f - std::exp(-fastDt / 0.12f));
-      float rate = maxSpeed * (0.35f + 0.65f * smooth) +
-                   clampf(m_catchupRate, 0.0f, 900.0f) * 0.5f;
-      rate = clampf(rate, 30.0f, 4000.0f);
+      float rate;
+      if (settings.neuralRotation && !m_rotPattern.empty()) {
+        const float recorded =
+            m_rotPattern[m_rotPlayIndex % m_rotPattern.size()];
+        m_rotPlayIndex = (m_rotPlayIndex + 1) % m_rotPattern.size();
+        rate = clampf(std::isfinite(recorded) ? recorded : maxSpeed,
+                      30.0f, 4000.0f);
+      } else {
+        rate = maxSpeed * (0.35f + 0.65f * smooth) +
+               clampf(m_catchupRate, 0.0f, 900.0f) * 0.5f;
+        rate = clampf(rate, 30.0f, 4000.0f);
+      }
       const float stepLen = std::min(errMag, rate * fastDt);
       stepYaw = errMag > 1e-6f ? errYaw * (stepLen / errMag) : errYaw;
       stepPitch = errMag > 1e-6f ? errPitch * (stepLen / errMag) : errPitch;

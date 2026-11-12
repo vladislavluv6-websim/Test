@@ -153,6 +153,8 @@ struct Settings {
 
   bool antiBot = true;
   bool randomAimPoint = true;
+  // Neural/recorded rotation: replay a recorded human approach pattern.
+  bool neuralRotation = false;
 
   // ------------------------------------------------------------
   // Only crit
@@ -260,6 +262,9 @@ public:
   void setOnlyCrit(bool enabled);
   void setAntiBot(bool enabled);
   void setRandomAimPoint(bool enabled);
+  void setRotationRecording(bool enabled);
+  void setNeuralRotation(bool enabled);
+  void setRotationPatternPath(const std::string &path);
   void setTouchActive(bool active);
   void notifyCameraLook();
   void setActivationHeld(bool held);
@@ -421,6 +426,15 @@ private:
   // see a deterministic motor pattern across fights.
   float m_fastTimeScale = 1.0f;
   float m_catchupRate = 0.0f;
+  bool m_rotRecording = false;
+  bool m_havePrevLocal = false;
+  float m_prevLocalYaw = 0.0f;
+  float m_prevLocalPitch = 0.0f;
+  std::vector<float> m_rotPattern;
+  size_t m_rotPlayIndex = 0;
+  std::string m_rotPatternPath;
+  void saveRotationPattern();
+  void loadRotationPattern();
   float m_lastTargetYaw = 0.0f;
   float m_lastTargetPitch = 0.0f;
   float m_fastSpeedScale = 1.0f;

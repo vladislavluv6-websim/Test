@@ -13,10 +13,13 @@ import org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.core.versions.GameVersion;
 
+import java.io.File;
+
 public class AimAssistOverlay extends BaseOverlayButton {
     private static final String TAG = "AimAssist";
     private static final String SUPPORTED_MINECRAFT_VERSION = "1.26.60";
     private static boolean versionLogged = false;
+    private static boolean patternPathSet = false;
     private boolean isActive = false;
     private boolean wantActive = false;
     private boolean initPending = false;
@@ -32,6 +35,20 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setStrength(manager.getAimAssistStrength());
         AimAssistMod.setWallCheck(manager.isAimAssistWallCheck());
         AimAssistMod.setIgnoreInvisible(manager.isAimAssistIgnoreInvisible());
+        AimAssistMod.setNeuralRotation(manager.isAimAssistNeuralRotation());
+        if (!patternPathSet) {
+            patternPathSet = true;
+            try {
+                File dir = new File(
+                        org.levimc.launcher.util.LauncherStorage.getAppRoot(activity), "logs");
+                if (dir.exists() || dir.mkdirs()) {
+                    AimAssistMod.setRotationPatternPath(
+                            new File(dir, "rotation_pattern.bin").getAbsolutePath());
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        AimAssistMod.setRotationRecording(manager.isAimAssistRotationRecording());
         AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
         AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
         AimAssistMod.setBodyPart(manager.getAimAssistBodyPart());

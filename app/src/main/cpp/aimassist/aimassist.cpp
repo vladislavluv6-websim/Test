@@ -87,6 +87,32 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetIgnor
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetNeuralRotation(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setNeuralRotation(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetRotationRecording(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setRotationRecording(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetRotationPatternPath(
+    JNIEnv *env, jclass, jstring path) {
+  if (!path) {
+    aimbot::AimAssist::instance().setRotationPatternPath("");
+    return;
+  }
+  const char *chars = env->GetStringUTFChars(path, nullptr);
+  if (chars) {
+    aimbot::AimAssist::instance().setRotationPatternPath(chars);
+    env->ReleaseStringUTFChars(path, chars);
+  }
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetPlayers(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::AimAssist::instance().setTargetPlayers(enabled == JNI_TRUE);

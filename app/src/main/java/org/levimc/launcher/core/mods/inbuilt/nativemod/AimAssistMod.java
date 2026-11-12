@@ -139,6 +139,18 @@ public final class AimAssistMod {
         if (initialized) nativeSetIgnoreInvisible(enabled);
     }
 
+    public static void setNeuralRotation(boolean enabled) {
+        if (initialized) nativeSetNeuralRotation(enabled);
+    }
+
+    public static void setRotationRecording(boolean enabled) {
+        if (initialized) nativeSetRotationRecording(enabled);
+    }
+
+    public static void setRotationPatternPath(String path) {
+        if (initialized) nativeSetRotationPatternPath(path == null ? "" : path);
+    }
+
     public static void setTargetPlayers(boolean enabled) {
         if (initialized) nativeSetTargetPlayers(enabled);
     }
@@ -262,6 +274,9 @@ public final class AimAssistMod {
     private static native void nativeSetFov(float fovDeg);
     private static native void nativeSetWallCheck(boolean enabled);
     private static native void nativeSetIgnoreInvisible(boolean enabled);
+    private static native void nativeSetNeuralRotation(boolean enabled);
+    private static native void nativeSetRotationRecording(boolean enabled);
+    private static native void nativeSetRotationPatternPath(String path);
     private static native void nativeSetTargetPlayers(boolean enabled);
     private static native void nativeSetTargetMobs(boolean enabled);
     private static native void nativeSetLegitMode(boolean enabled);

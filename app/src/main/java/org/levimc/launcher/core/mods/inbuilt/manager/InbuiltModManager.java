@@ -40,6 +40,8 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_FOV = "aim_assist_fov";
     private static final String KEY_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
     private static final String KEY_AIM_ASSIST_IGNORE_INVISIBLE = "aim_assist_ignore_invisible";
+    private static final String KEY_AIM_ASSIST_NEURAL = "aim_assist_neural";
+    private static final String KEY_AIM_ASSIST_ROT_RECORDING = "aim_assist_rot_recording";
     private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
     private static final String KEY_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
@@ -606,6 +608,22 @@ public class InbuiltModManager {
 
     public void setAimAssistIgnoreInvisible(boolean enabled) {
         prefs.edit().putBoolean(KEY_AIM_ASSIST_IGNORE_INVISIBLE, enabled).apply();
+    }
+
+    public boolean isAimAssistNeuralRotation() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_NEURAL, false);
+    }
+
+    public void setAimAssistNeuralRotation(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_NEURAL, enabled).apply();
+    }
+
+    public boolean isAimAssistRotationRecording() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_ROT_RECORDING, false);
+    }
+
+    public void setAimAssistRotationRecording(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_ROT_RECORDING, enabled).apply();
     }
 
     public boolean isAimAssistTargetPlayers() {
