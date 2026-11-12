@@ -36,7 +36,7 @@ public class OnyxMenuOverlay {
     private static final String TAG = "OnyxMenuOverlay";
     private static final String ASSET_URL = "file:///android_asset/onyx_client_mobile.html";
     private static final String BRIDGE_NAME = "OnyxBridge";
-    private static final long IDLE_RELEASE_MS = 20000L;
+    private static final long IDLE_RELEASE_MS = 10000L;
 
     private final Activity activity;
     private final Handler handler = new Handler(Looper.getMainLooper());

@@ -119,6 +119,29 @@ bool safeWrite(uintptr_t address, const T &value) {
   return mem::write(address, value);
 }
 
+bool actorCtxQuerySafe(uintptr_t base) {
+  uintptr_t ctx = 0;
+  if (!safeRead(base + 0x10, ctx) || !isPlausiblePointer(ctx)) return false;
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!safeRead(ctx + 0x38, begin) || !safeRead(ctx + 0x40, end)) return false;
+  if (!isPlausiblePointer(begin) || !isPlausiblePointer(end) || end < begin) {
+    return false;
+  }
+  const uint64_t bytes = end - begin;
+  if (bytes < sizeof(void *) || bytes > (1u << 20)) return false;
+  uintptr_t probe = 0;
+  if (!safeRead(begin, probe) || !safeRead(end - sizeof(void *), probe)) {
+    return false;
+  }
+  uintptr_t table = 0;
+  if (!safeRead(ctx + 0x50, table) || !isPlausiblePointer(table)) return false;
+  if (!safeRead(table, probe)) return false;
+  uintptr_t tail = 0;
+  if (!safeRead(ctx + 0x58, tail)) return false;
+  return true;
+}
+
 bool isLiveActor(void *actor) {
   const auto base = reinterpret_cast<uintptr_t>(actor);
   if (!isPlausiblePointer(base)) return false;
@@ -127,6 +150,11 @@ bool isLiveActor(void *actor) {
       !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
     return false;
   }
+  // Actor::isPlayer dereferences *(actor+0x10) and then probes a hash table at
+  // [ctx+0x38]/[ctx+0x50]; a bogus-but-plausible ctx made that fault inside
+  // libminecraftpe. Require those structures to be mapped before the actor is
+  // ever handed to the game.
+  if (!actorCtxQuerySafe(base)) return false;
   uintptr_t stateVector = 0;
   if (!safeRead(base + offsets::kActorStateVectorComponent, stateVector) ||
       !isPlausiblePointer(stateVector)) {
@@ -1561,36 +1589,9 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
   return true;
 }
 
-bool ClientBridge::actorComponentQuerySafe(void *actor) const {
-  const auto base = reinterpret_cast<uintptr_t>(actor);
-  if (!isPlausiblePointer(base)) return false;
-  uintptr_t ctx = 0;
-  if (!safeRead(base + 0x10, ctx) || !isPlausiblePointer(ctx)) return false;
-  uintptr_t begin = 0;
-  uintptr_t end = 0;
-  if (!safeRead(ctx + 0x38, begin) || !safeRead(ctx + 0x40, end)) return false;
-  if (!isPlausiblePointer(begin) || !isPlausiblePointer(end) || end < begin) {
-    return false;
-  }
-  uintptr_t table = 0;
-  if (!safeRead(ctx + 0x50, table) || !isPlausiblePointer(table)) return false;
-  uintptr_t tail = 0;
-  if (!safeRead(ctx + 0x58, tail)) return false;
-  uint32_t actorField18 = 0;
-  if (!safeRead(base + 0x18, actorField18)) return false;
-  return true;
-}
-
 bool ClientBridge::isPlayer(void *actor) const {
   if (!actor) return false;
-  if (!g_actorIsPlayer) return true;
-  // Actor::isPlayer reads *(actor+0x10) and then dereferences [ctx+0x38]/
-  // [ctx+0x40]. When the nearby-actor list ever hands us a bogus object the
-  // wild ctx pointer made that first load fault inside libminecraftpe
-  // (crash dumps: SIGSEGV at libminecraftpe+0xfd8e12c). Validate the exact
-  // pointers before touching the game function.
-  if (!actorComponentQuerySafe(actor)) return false;
-  return g_actorIsPlayer(actor);
+  return g_actorIsPlayer ? g_actorIsPlayer(actor) : true;
 }
 
 int ClientBridge::getActorType(void *) const {
