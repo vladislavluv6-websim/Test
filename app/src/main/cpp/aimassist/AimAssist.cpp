@@ -757,6 +757,12 @@ void AimAssist::updateVisual(float dt) {
   const Vec3 point = smoothedPoint(m_target, settings);
   Angles aim = calculateAnglesToPoint(point);
 
+  if (settings.humanize) {
+    aim.yaw = normalizeYaw(aim.yaw + m_restYaw + m_noiseYaw + m_overYaw);
+    aim.pitch = clampf(aim.pitch + m_restPitch + m_noisePitch + m_overPitch,
+                       -89.9f, 89.9f);
+  }
+
   if (m_targetLockMs == 0) {
     m_targetLockMs = aimNow;
   }
@@ -1557,7 +1563,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     float stepPitch = errPitch * alpha;
 
     const float maxSpeed =
-        clampf(settings.fastAimMaxSpeed * strengthScale * m_fastSpeedScale,
+        clampf(settings.fastAimMaxSpeed * strengthScale * m_fastSpeedScale *
+                   m_motorScale,
                300.0f, 4000.0f);
     const float maxStep = maxSpeed * fastDt;
     const float stepMag =
@@ -1625,7 +1632,7 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
   float stepPitch = errPitch * alpha;
 
   const float maxStep =
-      settings.maxDegPerSecond * (0.5f + 0.5f * strengthScale) * h;
+      settings.maxDegPerSecond * (0.5f + 0.5f * strengthScale) * m_motorScale * h;
   const float stepMag =
       std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
   if (stepMag > maxStep && stepMag > 1e-6f) {
@@ -1682,21 +1689,45 @@ void AimAssist::resetHumanProfile() {
   m_targetLockMs = 0;
 }
 
-void AimAssist::updateHumanProfile(const Settings &settings, float, int64_t now) {
+void AimAssist::updateHumanProfile(const Settings &settings, float dt,
+                                   int64_t now) {
+  // «Моторная» скорость меняется каждые 180-480 мс — траектория перестаёт
+  // быть одной и той же функцией ошибки.
   if (now >= m_nextMotorMs) {
     const float var = clampf(settings.motorVariation, 0.0f, 0.45f);
     m_motorScale = randomFloat(1.0f - var, 1.0f + var);
     m_nextMotorMs = now + randomInt(180, 480);
   }
 
-  m_noiseYaw = 0.0f;
-  m_noisePitch = 0.0f;
-  m_restYaw = 0.0f;
-  m_restPitch = 0.0f;
-  m_restTargetYaw = 0.0f;
-  m_restTargetPitch = 0.0f;
-  m_overYaw = 0.0f;
-  m_overPitch = 0.0f;
+  // Медленно блуждающая точка покоя относительно центра хитбокса.
+  if (now >= m_nextRestMs) {
+    m_nextRestMs = now + randomInt(1500, 3500);
+    const float off = clampf(settings.restOffsetDeg, 0.0f, 1.0f);
+    m_restTargetYaw = randomFloat(-off, off);
+    m_restTargetPitch = randomFloat(-off, off);
+  }
+  const float ease = clampf(dt * 5.0f, 0.0f, 1.0f);
+  m_restYaw += (m_restTargetYaw - m_restYaw) * ease;
+  m_restPitch += (m_restTargetPitch - m_restPitch) * ease;
+
+  // Gauss-Markov шум сопровождения: маленький, сглаженный (без дрожания).
+  const float noiseAmp =
+      clampf(settings.trackingNoiseDeg + settings.aimTremorDeg, 0.0f, 0.5f);
+  if (settings.humanize && noiseAmp > 0.0f) {
+    if (now >= m_nextNoiseMs) {
+      m_nextNoiseMs = now + randomInt(140, 360);
+      m_noiseTargetYaw = randomFloat(-noiseAmp, noiseAmp);
+      m_noiseTargetPitch = randomFloat(-noiseAmp, noiseAmp);
+    }
+    const float nease = clampf(dt * 7.0f, 0.0f, 1.0f);
+    m_noiseYaw += (m_noiseTargetYaw - m_noiseYaw) * nease;
+    m_noisePitch += (m_noiseTargetPitch - m_noisePitch) * nease;
+  } else {
+    m_noiseYaw = 0.0f;
+    m_noisePitch = 0.0f;
+  }
+  m_overYaw *= 0.88f;
+  m_overPitch *= 0.88f;
 }
 
 void AimAssist::updateFatigue(const Settings &settings, int64_t now) {

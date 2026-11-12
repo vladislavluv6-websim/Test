@@ -108,9 +108,9 @@ struct Settings {
   // ------------------------------------------------------------
   // Реакция перед началом доводки: живой игрок не начинает вести цель
   // в тот же кадр, в котором она появилась.
-  bool humanize = false;
-  float reactionDelayMs = 0.0f;
-  float reactionJitterMs = 0.0f;
+  bool humanize = true;
+  float reactionDelayMs = 45.0f;
+  float reactionJitterMs = 90.0f;
   // Дополнительный вклад в шум сопровождения (0 — только trackingNoiseDeg).
   float aimTremorDeg = 0.0f;
   // Верхний предел поворота за один серверный тик (50 мс). Защита от
@@ -358,6 +358,9 @@ private:
   // Gauss-Markov шум сопровождения (градусы).
   float m_noiseYaw = 0.0f;
   float m_noisePitch = 0.0f;
+  float m_noiseTargetYaw = 0.0f;
+  float m_noiseTargetPitch = 0.0f;
+  int64_t m_nextNoiseMs = 0;
   // Медленно блуждающая точка покоя относительно центра хитбокса.
   float m_restYaw = 0.0f;
   float m_restPitch = 0.0f;
