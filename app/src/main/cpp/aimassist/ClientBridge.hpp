@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace aimbot {
@@ -105,6 +106,10 @@ public:
 
 private:
   ClientBridge() = default;
+
+  mutable std::mutex m_playerCacheMutex;
+  mutable std::unordered_map<void *, std::pair<bool,
+      std::chrono::steady_clock::time_point>> m_playerCache;
 };
 
 } // namespace aimbot

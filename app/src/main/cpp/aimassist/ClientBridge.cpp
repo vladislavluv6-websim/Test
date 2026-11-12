@@ -1624,7 +1624,22 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
 
 bool ClientBridge::isPlayer(void *actor) const {
   if (!actor) return false;
-  return playerComponentQuery(reinterpret_cast<uintptr_t>(actor));
+  const auto now = std::chrono::steady_clock::now();
+  {
+    std::lock_guard<std::mutex> lock(m_playerCacheMutex);
+    const auto it = m_playerCache.find(actor);
+    if (it != m_playerCache.end() &&
+        now - it->second.second < std::chrono::milliseconds(400)) {
+      return it->second.first;
+    }
+  }
+  const bool value = playerComponentQuery(reinterpret_cast<uintptr_t>(actor));
+  {
+    std::lock_guard<std::mutex> lock(m_playerCacheMutex);
+    if (m_playerCache.size() > 4096) m_playerCache.clear();
+    m_playerCache[actor] = {value, now};
+  }
+  return value;
 }
 
 int ClientBridge::getActorType(void *) const {
