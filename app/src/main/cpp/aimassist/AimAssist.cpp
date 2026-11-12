@@ -1853,19 +1853,25 @@ void AimAssist::updateVerticalMotion(float feetY, int64_t now) {
 // падения, чтобы не поймать шум на вершине прыжка.
 bool AimAssist::isFallingForCrit(const Settings &settings, int64_t now) {
   void *player = m_bridge.getLocalPlayer();
-  if (player && gameecs::hasOnGround(player)) {
+  if (!player) return false;
+  // Ported from the PC client's SolsticeCriticalPolicy: a crit needs the player
+  // airborne, not rising (jump pressed), and already falling faster than the
+  // gate (-0.17). No settle window — the window is the descent itself.
+  if (gameecs::hasOnGround(player)) {
     m_fallingSinceMs = 0;
     return false;
   }
-  const float minFall = std::max(0.01f, settings.critMinFallSpeed);
-  if (m_vertVel > -minFall) {
+  gameecs::MoveInputState input{};
+  if (gameecs::readMoveInput(player, input) && input.jumping) {
     m_fallingSinceMs = 0;
     return false;
   }
-  if (m_fallingSinceMs == 0) {
-    m_fallingSinceMs = now;
+  const float gate = -std::max(0.10f, settings.critMinFallSpeed);
+  if (!(m_vertVel <= gate)) {
+    m_fallingSinceMs = 0;
+    return false;
   }
-  return (now - m_fallingSinceMs) >= std::max(0, settings.critSettleMs);
+  return true;
 }
 
 // ============================================================

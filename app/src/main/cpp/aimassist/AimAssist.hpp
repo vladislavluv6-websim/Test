@@ -160,7 +160,7 @@ struct Settings {
   // Бить только в падении (после прыжка), чтобы каждый удар был критом.
   bool onlyCrit = false;
   // Минимальная скорость падения по Y, блоков/с.
-  float critMinFallSpeed = 0.18f;
+  float critMinFallSpeed = 0.17f;
   // Сколько миллисекунд нужно непрерывно падать перед ударом.
   int critSettleMs = 20;
 
