@@ -2005,29 +2005,56 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone) const {
     m_bridge.getPosition(actor, position);
     return position;
   }
-  // Aim at the point of the hitbox nearest to the crosshair, not a fixed spot.
-  // When the crosshair is already inside the box the target equals it, the
-  // error is zero and the camera does not move at all -> no tremor.
+  const Vec3 center{(bounds.min.x + bounds.max.x) * 0.5f,
+                    (bounds.min.y + bounds.max.y) * 0.5f,
+                    (bounds.min.z + bounds.max.z) * 0.5f};
+
+  // Current crosshair direction (from the live camera).
   const float pitch = m_localPitch.load(std::memory_order_relaxed);
   const float yaw = m_localYaw.load(std::memory_order_relaxed);
   const float pr = pitch * 0.01745329252f;
   const float yr = yaw * 0.01745329252f;
-  const float fx = -std::sin(yr) * std::cos(pr);
-  const float fy = -std::sin(pr);
-  const float fz = std::cos(yr) * std::cos(pr);
-  const Vec3 center{(bounds.min.x + bounds.max.x) * 0.5f,
-                    (bounds.min.y + bounds.max.y) * 0.5f,
-                    (bounds.min.z + bounds.max.z) * 0.5f};
-  const float dx = center.x - m_eye.x;
-  const float dy = center.y - m_eye.y;
-  const float dz = center.z - m_eye.z;
-  float t = dx * fx + dy * fy + dz * fz;
-  if (!std::isfinite(t) || t < 0.0f) t = 0.0f;
-  Vec3 point{m_eye.x + fx * t, m_eye.y + fy * t, m_eye.z + fz * t};
-  point.x = clampf(point.x, bounds.min.x, bounds.max.x);
-  point.y = clampf(point.y, bounds.min.y, bounds.max.y);
-  point.z = clampf(point.z, bounds.min.z, bounds.max.z);
-  return point;
+  const Vec3 dir{-std::sin(yr) * std::cos(pr), -std::sin(pr),
+                 std::cos(yr) * std::cos(pr)};
+
+  // Ray vs AABB (slab). If the crosshair already hits the box, return a point
+  // on the ray so the aim error is 0 and the camera does not move — this is
+  // what removes the tremor while tracking. Otherwise return the fixed box
+  // centre so the approach target is stable (no feedback with the live ray).
+  float tmin = 0.0f;
+  float tmax = 1.0e9f;
+  const float o[3] = {m_eye.x, m_eye.y, m_eye.z};
+  const float d[3] = {dir.x, dir.y, dir.z};
+  const float lo[3] = {bounds.min.x, bounds.min.y, bounds.min.z};
+  const float hi[3] = {bounds.max.x, bounds.max.y, bounds.max.z};
+  bool hits = true;
+  for (int axis = 0; axis < 3; ++axis) {
+    if (!std::isfinite(o[axis]) || !std::isfinite(d[axis])) {
+      hits = false;
+      break;
+    }
+    if (std::fabs(d[axis]) < 1.0e-7f) {
+      if (o[axis] < lo[axis] || o[axis] > hi[axis]) {
+        hits = false;
+        break;
+      }
+      continue;
+    }
+    float t1 = (lo[axis] - o[axis]) / d[axis];
+    float t2 = (hi[axis] - o[axis]) / d[axis];
+    if (t1 > t2) std::swap(t1, t2);
+    tmin = std::max(tmin, t1);
+    tmax = std::min(tmax, t2);
+    if (tmin > tmax) {
+      hits = false;
+      break;
+    }
+  }
+  if (hits && tmax >= 0.0f) {
+    const float t = std::max(0.0f, tmin);
+    return {m_eye.x + dir.x * t, m_eye.y + dir.y * t, m_eye.z + dir.z * t};
+  }
+  return center;
 }
 
 Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
