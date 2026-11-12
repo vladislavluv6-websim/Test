@@ -73,6 +73,7 @@ public class InbuiltModManager {
     private static final String KEY_NAME_TAG_SIZE = "name_tag_size";
     private static final String KEY_NAME_TAG_ARMOR_SIZE = "name_tag_armor_size";
     private static final String KEY_NAME_TAG_BLUR = "name_tag_blur";
+    private static final String KEY_NAME_TAG_BLUR_COLOR = "name_tag_blur_color";
     private static final String KEY_NAME_TAG_SHOW_ARMOR = "name_tag_show_armor";
     private static final String KEY_NAME_TAG_SHOW_OFFHAND = "name_tag_show_offhand";
     private static final String KEY_SWING_STYLE = "swing_style";
@@ -893,6 +894,14 @@ public class InbuiltModManager {
     public void setNameTagBlur(int blur) {
         prefs.edit().putInt(KEY_NAME_TAG_BLUR,
                 Math.max(0, Math.min(20, blur))).apply();
+    }
+
+    public int getNameTagBlurColor() {
+        return prefs.getInt(KEY_NAME_TAG_BLUR_COLOR, 0xFF101018);
+    }
+
+    public void setNameTagBlurColor(int argb) {
+        prefs.edit().putInt(KEY_NAME_TAG_BLUR_COLOR, argb).apply();
     }
 
     public boolean isNameTagShowArmor() {

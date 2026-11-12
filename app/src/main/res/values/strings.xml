@@ -710,6 +710,7 @@
     <string name="mod_config_name_tag_size">Name size</string>
     <string name="mod_config_name_tag_armor_size">Armor size</string>
     <string name="mod_config_name_tag_blur">Name blur</string>
+    <string name="mod_config_name_tag_blur_color">Name blur color</string>
     <string name="mod_config_name_tag_show_armor">Show armor</string>
     <string name="mod_config_name_tag_show_offhand">Show left-hand item</string>
     <string name="mod_config_name_tag_plate">Capsule</string>

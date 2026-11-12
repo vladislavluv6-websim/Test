@@ -61,6 +61,7 @@ public class NameTagsOverlay extends View {
     private int nameSize = 11;
     private int armorSize = 15;
     private int nameBlur = 4;
+    private int nameBlurColor = 0xFF101018;
     private int nameTagStyle;
     private boolean showArmor = true;
     private boolean showOffhand = true;
@@ -176,6 +177,7 @@ public class NameTagsOverlay extends View {
         nameSize = manager.getNameTagSize();
         armorSize = manager.getNameTagArmorSize();
         nameBlur = manager.getNameTagBlur();
+        nameBlurColor = manager.getNameTagBlurColor();
         nameTagStyle = manager.getNameTagStyle();
         showArmor = manager.isNameTagShowArmor();
         showOffhand = manager.isNameTagShowOffhand();
@@ -364,8 +366,9 @@ public class NameTagsOverlay extends View {
         textPaint.setTextSize(nameSize * density);
         if (nameBlur > 0) {
             float radius = Math.max(2.5f, nameBlur * 1.35f) * density;
-            int alpha = Math.min(235, 105 + nameBlur * 12);
-            textPaint.setShadowLayer(radius, 0f, dp(0.6f), (alpha << 24));
+            int alpha = Math.min(255, 105 + nameBlur * 12);
+            int shadow = (nameBlurColor & 0x00FFFFFF) | (alpha << 24);
+            textPaint.setShadowLayer(radius, 0f, dp(0.6f), shadow);
         } else {
             textPaint.clearShadowLayer();
         }
@@ -377,30 +380,33 @@ public class NameTagsOverlay extends View {
         final float nameWidth = textPaint.measureText(label.name);
         final int iconCount = countArmorIcons(label.armorMask);
         final Bitmap item = showOffhand ? itemIcon(label.offhand) : null;
-        final float centerY = label.y + (textPaint.ascent() + textPaint.descent()) * 0.5f;
+        final float baseline = label.y;
+        final float centerY = baseline + (textPaint.ascent() + textPaint.descent()) * 0.5f;
 
-        // Имя всегда ровно по центру цели; иконки — по бокам, фон прозрачный.
+        // Иконки брони — сверху, по центру над ником.
+        if (iconCount > 0) {
+            final float iconsWidth = iconCount * iconSize + (iconCount - 1) * iconGap;
+            final float ix = label.x - iconsWidth * 0.5f;
+            final float iy = baseline + textPaint.ascent() - dp(4f) - iconSize;
+            drawArmorRow(canvas, label.armorMask, iconCount, ix, iy,
+                    iconSize, iconGap);
+        }
+
+        // Ник — ровно по центру цели.
         textPaint.setColor(label.friend ? FRIEND_COLOR : nameColor);
         textPaint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText(label.name, label.x, label.y, textPaint);
+        canvas.drawText(label.name, label.x, baseline, textPaint);
         textPaint.setTextAlign(Paint.Align.LEFT);
 
-        final float leftEdge = label.x - nameWidth * 0.5f;
-        final float rightEdge = label.x + nameWidth * 0.5f;
-
+        // Офф-хенд предмет — слева от ника.
         if (item != null) {
-            float ix = leftEdge - dp(3f) - iconSize;
+            final float ix = label.x - nameWidth * 0.5f - dp(3f) - iconSize;
             iconRect.set(ix, centerY - iconSize * 0.5f,
                     ix + iconSize, centerY + iconSize * 0.5f);
             drawIcon(canvas, item, iconRect, null);
         }
-
-        if (iconCount > 0) {
-            float ix = rightEdge + dp(4f);
-            drawArmorRow(canvas, label.armorMask, iconCount, ix,
-                    centerY - iconSize * 0.5f, iconSize, iconGap);
-        }
     }
+
 
     private void drawPanel(Canvas canvas, float minX, float minY,
                            float maxX, float maxY, boolean friend) {
