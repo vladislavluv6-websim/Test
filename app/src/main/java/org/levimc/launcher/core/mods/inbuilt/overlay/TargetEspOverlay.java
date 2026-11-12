@@ -5,9 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.RadialGradient;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Choreographer;
@@ -20,38 +18,46 @@ import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.preloader.PreloaderInput;
 
 /**
- * Target ESP: рисуется на цели, которую ведёт AimAssist/TriggerBot.
- * Три модели: круг (качается вверх-вниз), ромб (вращается вместе с
- * поворотом игрока) и сфера (стоит на месте).
+ * Target ESP. Три модели, которые отдаёт native как экранный бокс + полный
+ * набор для 3D→2D проекции (камера, базис, AABB цели):
+ *   0 — угловые скобки (2D billboard, неон)
+ *   1 — статичные орбитальные кольца (3D, синий/голубой, частицы)
+ *   2 — сканирующее кольцо с вертикальной аурой (3D, анимация вверх-вниз)
  */
 public class TargetEspOverlay extends View {
-    public static final int STYLE_CIRCLE = 0;
-    public static final int STYLE_DIAMOND = 1;
-    public static final int STYLE_SPHERE = 2;
+    public static final int STYLE_BRACKETS = 0;
+    public static final int STYLE_ORBITAL = 1;
+    public static final int STYLE_SCAN = 2;
 
     private static final long FADE_MS = 180L;
     private static final long POLL_INTERVAL_NANOS = 33_000_000L;
+    private static final int RING_SEGMENTS = 56;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint corePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     private final RectF rect = new RectF();
-    private final RectF shape = new RectF();
+    private final float[] sp = new float[2];
+
     private float density = 1f;
     private boolean attached;
     private volatile boolean showing;
     private volatile boolean moduleEnabled = true;
-    private int style = STYLE_CIRCLE;
+    private int style = STYLE_BRACKETS;
     private int accent = 0xFF4E83FF;
     private long holdMs = 650L;
     private float x, y, w, h;
-    private float yawDeg;
     private long ageMs = -1;
     private boolean framePosted;
     private long lastPollNanos;
     private boolean paused;
+
+    private float camX, camY, camZ;
+    private float minX, minY, minZ, maxX, maxY, maxZ;
+    private float fx, fy, fz, rx, rz, ux, uy, uz, focal;
+    private float screenW, screenH;
 
     private final Runnable resumeRunnable = () -> {
         if (attached) postFrame();
@@ -91,17 +97,19 @@ public class TargetEspOverlay extends View {
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setElevation(95f);
         density = activity.getResources().getDisplayMetrics().density;
-        strokePaint.setStyle(Paint.Style.STROKE);
-        strokePaint.setStrokeWidth(2f * density);
+        corePaint.setStyle(Paint.Style.STROKE);
+        corePaint.setStrokeCap(Paint.Cap.ROUND);
+        corePaint.setStrokeJoin(Paint.Join.ROUND);
         glowPaint.setStyle(Paint.Style.STROKE);
-        glowPaint.setStrokeWidth(7f * density);
-        fillPaint.setStyle(Paint.Style.FILL);
+        glowPaint.setStrokeCap(Paint.Cap.ROUND);
+        glowPaint.setStrokeJoin(Paint.Join.ROUND);
+        dotPaint.setStyle(Paint.Style.FILL);
         applySettings();
     }
 
     private void applySettings() {
         InbuiltModManager manager = InbuiltModManager.getInstance(getContext());
-        style = Math.max(0, Math.min(STYLE_SPHERE, manager.getTargetEspStyle()));
+        style = Math.max(0, Math.min(STYLE_SCAN, manager.getTargetEspStyle()));
         accent = manager.getTargetEspColor();
         holdMs = Math.max(150, manager.getTargetEspHoldMs());
         EspMod.setTargetEspHold((int) holdMs);
@@ -235,16 +243,41 @@ public class TargetEspOverlay extends View {
             return;
         }
         try {
-            String[] parts = raw.split("\t");
-            if (parts.length >= 5) {
-                x = Float.parseFloat(parts[0]);
-                y = Float.parseFloat(parts[1]);
-                w = Float.parseFloat(parts[2]);
-                h = Float.parseFloat(parts[3]);
-                ageMs = Long.parseLong(parts[4]);
-                if (parts.length >= 6) {
-                    yawDeg = Float.parseFloat(parts[5]);
-                }
+            String[] p = raw.split("\t");
+            if (p.length >= 26) {
+                x = Float.parseFloat(p[0]);
+                y = Float.parseFloat(p[1]);
+                w = Float.parseFloat(p[2]);
+                h = Float.parseFloat(p[3]);
+                ageMs = Long.parseLong(p[4]);
+                camX = Float.parseFloat(p[6]);
+                camY = Float.parseFloat(p[7]);
+                camZ = Float.parseFloat(p[8]);
+                minX = Float.parseFloat(p[9]);
+                minY = Float.parseFloat(p[10]);
+                minZ = Float.parseFloat(p[11]);
+                maxX = Float.parseFloat(p[12]);
+                maxY = Float.parseFloat(p[13]);
+                maxZ = Float.parseFloat(p[14]);
+                fx = Float.parseFloat(p[15]);
+                fy = Float.parseFloat(p[16]);
+                fz = Float.parseFloat(p[17]);
+                rx = Float.parseFloat(p[18]);
+                rz = Float.parseFloat(p[19]);
+                ux = Float.parseFloat(p[20]);
+                uy = Float.parseFloat(p[21]);
+                uz = Float.parseFloat(p[22]);
+                focal = Float.parseFloat(p[23]);
+                screenW = Float.parseFloat(p[24]);
+                screenH = Float.parseFloat(p[25]);
+            } else if (p.length >= 5) {
+                x = Float.parseFloat(p[0]);
+                y = Float.parseFloat(p[1]);
+                w = Float.parseFloat(p[2]);
+                h = Float.parseFloat(p[3]);
+                ageMs = Long.parseLong(p[4]);
+                screenW = getWidth();
+                screenH = getHeight();
             }
         } catch (NumberFormatException ignored) {
         }
@@ -269,100 +302,185 @@ public class TargetEspOverlay extends View {
         float halfH = h * 0.5f * scale;
         rect.set(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
 
-        int color = Color.argb((int) (255 * alpha), Color.red(accent),
-                Color.green(accent), Color.blue(accent));
-        int faint = Color.argb((int) (70 * alpha), Color.red(accent),
-                Color.green(accent), Color.blue(accent));
-        strokePaint.setColor(color);
-        strokePaint.setStrokeWidth(2f * density);
-        glowPaint.setColor(faint);
-        glowPaint.setStrokeWidth(7f * density);
-        fillPaint.setShader(null);
-        fillPaint.setColor(Color.argb((int) (40 * alpha), Color.red(accent),
-                Color.green(accent), Color.blue(accent)));
-
         switch (style) {
-            case STYLE_DIAMOND:
-                drawDiamond(canvas);
+            case STYLE_ORBITAL:
+                drawOrbital(canvas, alpha);
                 break;
-            case STYLE_SPHERE:
-                drawSphere(canvas, alpha);
+            case STYLE_SCAN:
+                drawScan(canvas, alpha);
                 break;
-            case STYLE_CIRCLE:
+            case STYLE_BRACKETS:
             default:
-                drawCircle(canvas, alpha);
+                drawBrackets(canvas, alpha);
                 break;
         }
     }
 
-    private void drawCircle(Canvas canvas, float alpha) {
-        float bob = (float) Math.sin(ageMs / 240.0) * 7f * density;
-        float cx = rect.centerX();
-        float cy = rect.centerY() + bob;
-        float radius = Math.min(rect.width(), rect.height()) * 0.56f;
-        shape.set(cx - radius, cy - radius, cx + radius, cy + radius);
-        canvas.drawOval(shape, glowPaint);
-        canvas.drawOval(shape, strokePaint);
-
-        float spin = (ageMs % 1200L) / 1200f * 360f;
-        float inset = radius * 0.82f;
-        shape.set(cx - inset, cy - inset, cx + inset, cy + inset);
-        strokePaint.setStrokeWidth(3f * density);
-        path.reset();
-        path.addArc(shape, spin, 68f);
-        canvas.drawPath(path, strokePaint);
-        path.reset();
-        path.addArc(shape, spin + 180f, 68f);
-        canvas.drawPath(path, strokePaint);
-        strokePaint.setStrokeWidth(2f * density);
+    // -------------------------------------------------------------- brackets
+    private void drawBrackets(Canvas canvas, float alpha) {
+        final float pad = 6f * density;
+        final float arm = Math.min(rect.width(), rect.height()) * 0.30f;
+        final float l = rect.left - pad;
+        final float r = rect.right + pad;
+        final float t = rect.top - pad;
+        final float b = rect.bottom + pad;
+        int core = Color.argb((int) (255 * alpha), 0xE0, 0xF7, 0xFA);
+        int glow = Color.argb((int) (95 * alpha), 0x00, 0xE5, 0xFF);
+        int trail = Color.argb((int) (42 * alpha), 0x00, 0xE5, 0xFF);
+        bracketPass(canvas, l, t, r, b, arm * 1.6f, 8f * density, trail);
+        bracketPass(canvas, l, t, r, b, arm, 6f * density, glow);
+        bracketPass(canvas, l, t, r, b, arm, 2.4f * density, core);
     }
 
-    private void drawDiamond(Canvas canvas) {
-        float cx = rect.centerX();
-        float cy = rect.centerY();
-        float rx = rect.width() * 0.56f;
-        float ry = rect.height() * 0.56f;
-        canvas.save();
-        canvas.rotate(-yawDeg, cx, cy);
-        path.reset();
-        path.moveTo(cx, cy - ry);
-        path.lineTo(cx + rx, cy);
-        path.lineTo(cx, cy + ry);
-        path.lineTo(cx - rx, cy);
-        path.close();
-        canvas.drawPath(path, fillPaint);
-        canvas.drawPath(path, glowPaint);
-        canvas.drawPath(path, strokePaint);
-        float small = 0.5f;
-        path.reset();
-        path.moveTo(cx, cy - ry * small);
-        path.lineTo(cx + rx * small, cy);
-        path.lineTo(cx, cy + ry * small);
-        path.lineTo(cx - rx * small, cy);
-        path.close();
-        strokePaint.setStrokeWidth(3f * density);
-        canvas.drawPath(path, strokePaint);
-        strokePaint.setStrokeWidth(2f * density);
-        canvas.restore();
+    private void bracketPass(Canvas canvas, float l, float t, float r, float b,
+                             float arm, float width, int color) {
+        corePaint.setColor(color);
+        corePaint.setStrokeWidth(width);
+        canvas.drawLine(l, t, l + arm, t, corePaint);
+        canvas.drawLine(l, t, l, t + arm, corePaint);
+        canvas.drawLine(r, t, r - arm, t, corePaint);
+        canvas.drawLine(r, t, r, t + arm, corePaint);
+        canvas.drawLine(l, b, l + arm, b, corePaint);
+        canvas.drawLine(l, b, l, b - arm, corePaint);
+        canvas.drawLine(r, b, r - arm, b, corePaint);
+        canvas.drawLine(r, b, r, b - arm, corePaint);
     }
 
-    private void drawSphere(Canvas canvas, float alpha) {
-        float cx = rect.centerX();
-        float cy = rect.centerY();
-        float radius = Math.max(4f, Math.min(rect.width(), rect.height()) * 0.5f);
-        RadialGradient gradient = new RadialGradient(
-                cx - radius * 0.28f, cy - radius * 0.28f, radius * 1.2f,
-                new int[]{
-                        Color.argb((int) (110 * alpha), 255, 255, 255),
-                        Color.argb((int) (70 * alpha), Color.red(accent),
-                                Color.green(accent), Color.blue(accent)),
-                        Color.argb(0, Color.red(accent), Color.green(accent),
-                                Color.blue(accent))
-                },
-                new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
-        fillPaint.setShader(gradient);
-        canvas.drawCircle(cx, cy, radius, fillPaint);
-        fillPaint.setShader(null);
-        canvas.drawCircle(cx, cy, radius, strokePaint);
+    // --------------------------------------------------------------- orbital
+    private void drawOrbital(Canvas canvas, float alpha) {
+        final float ccx = (minX + maxX) * 0.5f;
+        final float ccy = (minY + maxY) * 0.5f + (maxY - minY) * 0.16f;
+        final float ccz = (minZ + maxZ) * 0.5f;
+        final float radius = Math.max(maxX - minX, maxZ - minZ) * 0.5f + 0.16f;
+
+        float[][] rings = {
+                {0f, 0f},
+                {35f, 0f},
+                {0f, 35f},
+        };
+        int glow = Color.argb((int) (70 * alpha), 0x00, 0x88, 0xFF);
+        int core = Color.argb((int) (235 * alpha), 0x40, 0xC4, 0xFF);
+        int white = Color.argb((int) (245 * alpha), 0xFF, 0xFF, 0xFF);
+        int particleA = Color.argb((int) (220 * alpha), 0x40, 0xC4, 0xFF);
+        int particleB = Color.argb((int) (220 * alpha), 0xFF, 0xD5, 0x4F);
+
+        for (int ringIndex = 0; ringIndex < rings.length; ringIndex++) {
+            float ax = (float) Math.toRadians(rings[ringIndex][0]);
+            float az = (float) Math.toRadians(rings[ringIndex][1]);
+            glowPaint.setColor(glow);
+            glowPaint.setStrokeWidth(6f * density);
+            corePaint.setColor(core);
+            corePaint.setStrokeWidth(2f * density);
+            drawRing(canvas, ccx, ccy, ccz, radius, ax, az, glowPaint);
+            drawRing(canvas, ccx, ccy, ccz, radius, ax, az, corePaint);
+            for (int i = 0; i < 5; i++) {
+                double t = (i / 5.0) * Math.PI * 2.0;
+                if (!ringPoint(ccx, ccy, ccz, radius, ax, az, t, sp)) continue;
+                dotPaint.setColor(i % 2 == 0 ? particleA : particleB);
+                canvas.drawCircle(sp[0], sp[1], 2.2f * density, dotPaint);
+            }
+        }
+        // white highlight at the "poles"
+        if (project(ccx, ccy - radius, ccz, sp)) {
+            dotPaint.setColor(white);
+            canvas.drawCircle(sp[0], sp[1], 3f * density, dotPaint);
+        }
+        if (project(ccx, ccy + radius, ccz, sp)) {
+            dotPaint.setColor(white);
+            canvas.drawCircle(sp[0], sp[1], 3f * density, dotPaint);
+        }
+    }
+
+    private void drawRing(Canvas canvas, float ccx, float ccy, float ccz,
+                          float radius, float ax, float az, Paint paint) {
+        path.reset();
+        boolean started = false;
+        for (int i = 0; i <= RING_SEGMENTS; i++) {
+            double t = (i / (double) RING_SEGMENTS) * Math.PI * 2.0;
+            if (!ringPoint(ccx, ccy, ccz, radius, ax, az, t, sp)) {
+                started = false;
+                continue;
+            }
+            if (!started) {
+                path.moveTo(sp[0], sp[1]);
+                started = true;
+            } else {
+                path.lineTo(sp[0], sp[1]);
+            }
+        }
+        canvas.drawPath(path, paint);
+    }
+
+    private boolean ringPoint(float ccx, float ccy, float ccz, float radius,
+                              float ax, float az, double t, float[] out) {
+        float cx = (float) Math.cos(t);
+        float sy = (float) Math.sin(t);
+        float sinX = (float) Math.sin(ax);
+        float cosX = (float) Math.cos(ax);
+        float sinZ = (float) Math.sin(az);
+        float cosZ = (float) Math.cos(az);
+        // start in the XZ plane, then tilt around X and Z
+        float px = cx * cosZ;
+        float py = -cx * sinZ;
+        float pz = sy * cosX;
+        float py2 = py + sy * sinX;
+        return project(ccx + px * radius, ccy + py2 * radius, ccz + pz * radius, out);
+    }
+
+    // ------------------------------------------------------------------ scan
+    private void drawScan(Canvas canvas, float alpha) {
+        final float ccx = (minX + maxX) * 0.5f;
+        final float ccz = (minZ + maxZ) * 0.5f;
+        final float height = Math.max(0.2f, maxY - minY);
+        final float radius = Math.max(maxX - minX, maxZ - minZ) * 0.5f + 0.18f;
+
+        float speed = 1.7f;
+        float phase = (float) ((Math.sin(ageMs * 0.001f * speed) + 1.0) * 0.5);
+        float ringY = minY + height * (0.06f + 0.88f * phase);
+
+        int coreWhite = Color.argb((int) (255 * alpha), 0xFF, 0xFF, 0xFF);
+        int edgeCyan = Color.argb((int) (210 * alpha), 0x4D, 0xD0, 0xE1);
+        int glow = Color.argb((int) (80 * alpha), 0x4D, 0xD0, 0xE1);
+        int trail = Color.argb((int) (55 * alpha), 0x4D, 0xD0, 0xE1);
+
+        // vertical translucent aura above the ring
+        glowPaint.setColor(trail);
+        glowPaint.setStrokeWidth(2f * density);
+        for (int i = 0; i < 16; i++) {
+            double t = (i / 16.0) * Math.PI * 2.0;
+            float px = ccx + (float) Math.cos(t) * radius;
+            float pz = ccz + (float) Math.sin(t) * radius;
+            if (project(px, ringY, pz, sp)) {
+                float sx0 = sp[0];
+                float sy0 = sp[1];
+                if (project(px, maxY, pz, sp)) {
+                    canvas.drawLine(sx0, sy0, sp[0], sp[1], glowPaint);
+                }
+            }
+        }
+        // the ring itself
+        glowPaint.setColor(glow);
+        glowPaint.setStrokeWidth(9f * density);
+        drawRing(canvas, ccx, ringY, ccz, radius, 0f, 0f, glowPaint);
+        corePaint.setStrokeWidth(3.2f * density);
+        corePaint.setColor(edgeCyan);
+        drawRing(canvas, ccx, ringY, ccz, radius, 0f, 0f, corePaint);
+        corePaint.setStrokeWidth(1.4f * density);
+        corePaint.setColor(coreWhite);
+        drawRing(canvas, ccx, ringY, ccz, radius * 0.985f, 0f, 0f, corePaint);
+    }
+
+    private boolean project(float wx, float wy, float wz, float[] out) {
+        if (focal <= 0f || screenW <= 0f || screenH <= 0f) return false;
+        float dx = wx - camX;
+        float dy = wy - camY;
+        float dz = wz - camZ;
+        float depth = dx * fx + dy * fy + dz * fz;
+        if (depth <= 0.05f) return false;
+        float right = dx * rx + dz * rz;
+        float up = dx * ux + dy * uy + dz * uz;
+        out[0] = screenW * 0.5f + (right / depth) * focal;
+        out[1] = screenH * 0.5f - (up / depth) * focal;
+        return true;
     }
 }

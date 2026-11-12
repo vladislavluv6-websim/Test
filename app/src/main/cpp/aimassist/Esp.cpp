@@ -1085,6 +1085,26 @@ void Esp::updateTargetEsp(void *player, uintptr_t playerRenderer,
         state.height = maxY - minY;
         state.ageMs = std::max<int64_t>(0, ageMs);
         state.yaw = view.yaw;
+        state.camX = camera[0];
+        state.camY = camera[1];
+        state.camZ = camera[2];
+        state.minX = bounds.min.x;
+        state.minY = bounds.min.y;
+        state.minZ = bounds.min.z;
+        state.maxX = bounds.max.x;
+        state.maxY = bounds.max.y;
+        state.maxZ = bounds.max.z;
+        state.fx = fx;
+        state.fy = fy;
+        state.fz = fz;
+        state.rx = rx;
+        state.rz = rz;
+        state.ux = ux;
+        state.uy = uy;
+        state.uz = uz;
+        state.focal = focal;
+        state.screenW = width;
+        state.screenH = height;
       }
     }
   }

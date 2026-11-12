@@ -1262,4 +1262,7 @@
     <string name="mod_config_target_esp_lock">Lock</string>
     <string name="mod_config_target_esp_diamond">Diamond</string>
     <string name="mod_config_target_esp_sphere">Sphere</string>
+    <string name="mod_config_target_esp_brackets">Corner Brackets</string>
+    <string name="mod_config_target_esp_orbital">Orbital Rings</string>
+    <string name="mod_config_target_esp_scan">Scan Ring</string>
 </resources>

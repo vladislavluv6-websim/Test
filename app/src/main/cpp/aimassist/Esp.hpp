@@ -42,6 +42,27 @@ struct TargetEspState {
   float height = 0.0f;
   int64_t ageMs = 0;
   float yaw = 0.0f;
+  // Camera + basis + target AABB so Java can project 3D points to screen.
+  float camX = 0.0f;
+  float camY = 0.0f;
+  float camZ = 0.0f;
+  float minX = 0.0f;
+  float minY = 0.0f;
+  float minZ = 0.0f;
+  float maxX = 0.0f;
+  float maxY = 0.0f;
+  float maxZ = 0.0f;
+  float fx = 0.0f;
+  float fy = 0.0f;
+  float fz = 0.0f;
+  float rx = 0.0f;
+  float rz = 0.0f;
+  float ux = 0.0f;
+  float uy = 0.0f;
+  float uz = 0.0f;
+  float focal = 0.0f;
+  float screenW = 0.0f;
+  float screenH = 0.0f;
 };
 
 class Esp {

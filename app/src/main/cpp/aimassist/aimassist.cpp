@@ -492,13 +492,27 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeGetTargetEsp(
   const aimbot::TargetEspState state =
       aimbot::Esp::instance().copyTargetEsp();
   if (!state.visible || !env) return nullptr;
-  char buffer[96]{};
-  std::snprintf(buffer, sizeof(buffer), "%.1f\t%.1f\t%.1f\t%.1f\t%lld\t%.1f",
-                static_cast<double>(state.x), static_cast<double>(state.y),
-                static_cast<double>(state.width),
-                static_cast<double>(state.height),
-                static_cast<long long>(state.ageMs),
-                static_cast<double>(state.yaw));
+  char buffer[640]{};
+  std::snprintf(
+      buffer, sizeof(buffer),
+      "%.1f\t%.1f\t%.1f\t%.1f\t%lld\t%.1f\t"
+      "%.3f\t%.3f\t%.3f\t"
+      "%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t"
+      "%.5f\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\t%.5f\t%.2f\t"
+      "%.1f\t%.1f",
+      static_cast<double>(state.x), static_cast<double>(state.y),
+      static_cast<double>(state.width), static_cast<double>(state.height),
+      static_cast<long long>(state.ageMs), static_cast<double>(state.yaw),
+      static_cast<double>(state.camX), static_cast<double>(state.camY),
+      static_cast<double>(state.camZ), static_cast<double>(state.minX),
+      static_cast<double>(state.minY), static_cast<double>(state.minZ),
+      static_cast<double>(state.maxX), static_cast<double>(state.maxY),
+      static_cast<double>(state.maxZ), static_cast<double>(state.fx),
+      static_cast<double>(state.fy), static_cast<double>(state.fz),
+      static_cast<double>(state.rx), static_cast<double>(state.rz),
+      static_cast<double>(state.ux), static_cast<double>(state.uy),
+      static_cast<double>(state.uz), static_cast<double>(state.focal),
+      static_cast<double>(state.screenW), static_cast<double>(state.screenH));
   return env->NewStringUTF(buffer);
 }
 
