@@ -420,6 +420,9 @@ private:
   // the same time constant / speed / settle radius, otherwise ML heuristics
   // see a deterministic motor pattern across fights.
   float m_fastTimeScale = 1.0f;
+  float m_catchupRate = 0.0f;
+  float m_lastTargetYaw = 0.0f;
+  float m_lastTargetPitch = 0.0f;
   float m_fastSpeedScale = 1.0f;
   float m_fastStealthScale = 1.0f;
   int64_t m_nextFastPauseMs = 0;

@@ -1557,21 +1557,47 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     float errPitch = targetPitch - curPitch;
     const float errMag =
         std::sqrt(errYaw * errYaw + errPitch * errPitch);
-    float stepYaw = errYaw * alpha;
-    float stepPitch = errPitch * alpha;
 
     const float maxSpeed =
         clampf(settings.fastAimMaxSpeed * strengthScale * m_fastSpeedScale *
                    m_motorScale,
                300.0f, 4000.0f);
-    const float maxStep = maxSpeed * fastDt;
-    const float stepMag =
-        std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
-    if (stepMag > maxStep && stepMag > 1e-6f) {
-      const float scale = maxStep / stepMag;
-      stepYaw *= scale;
-      stepPitch *= scale;
+
+    float stepYaw;
+    float stepPitch;
+    if (settings.legit) {
+      // Legit rotation ported from a working killaura: a rate-limited
+      // shortest-arc approach whose speed eases with a smoothstep as it nears
+      // the target (never a constant rate), plus a catchup term that tracks the
+      // target's own angular velocity so a strafing target is not trailed.
+      const float t = clampf(errMag / 45.0f, 0.0f, 1.0f);
+      const float smooth = t * t * (3.0f - 2.0f * t);
+      const float targetRate =
+          (std::fabs(shortestDelta(m_lastTargetYaw, targetYaw)) +
+           std::fabs(targetPitch - m_lastTargetPitch)) /
+          std::max(fastDt, 1e-3f);
+      m_catchupRate += (targetRate - m_catchupRate) *
+                       (1.0f - std::exp(-fastDt / 0.12f));
+      float rate = maxSpeed * (0.35f + 0.65f * smooth) +
+                   clampf(m_catchupRate, 0.0f, 900.0f) * 0.5f;
+      rate = clampf(rate, 30.0f, 4000.0f);
+      const float stepLen = std::min(errMag, rate * fastDt);
+      stepYaw = errMag > 1e-6f ? errYaw * (stepLen / errMag) : errYaw;
+      stepPitch = errMag > 1e-6f ? errPitch * (stepLen / errMag) : errPitch;
+    } else {
+      stepYaw = errYaw * alpha;
+      stepPitch = errPitch * alpha;
+      const float maxStep = maxSpeed * fastDt;
+      const float stepMag =
+          std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
+      if (stepMag > maxStep && stepMag > 1e-6f) {
+        const float scale = maxStep / stepMag;
+        stepYaw *= scale;
+        stepPitch *= scale;
+      }
     }
+    m_lastTargetYaw = targetYaw;
+    m_lastTargetPitch = targetPitch;
     if (errMag < 0.01f) {
       stepYaw = errYaw;
       stepPitch = errPitch;
