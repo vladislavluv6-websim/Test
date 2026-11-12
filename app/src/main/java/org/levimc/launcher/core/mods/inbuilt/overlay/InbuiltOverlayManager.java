@@ -92,7 +92,10 @@ public class InbuiltOverlayManager {
     private void initClientLogging() {
         try {
             org.levimc.launcher.util.ClientLog.init(activity);
-            org.levimc.launcher.util.ClientLog.log("OverlayManager", "game session started");
+            org.levimc.launcher.util.ClientLog.installCrashHook();
+            org.levimc.launcher.util.ClientLog.log("OverlayManager", "game session started"
+                    + " heap=" + (Runtime.getRuntime().totalMemory()
+                    - Runtime.getRuntime().freeMemory()));
             java.io.File dir = new java.io.File(
                     org.levimc.launcher.util.LauncherStorage.getAppRoot(activity), "logs");
             if (dir.exists() || dir.mkdirs()) {

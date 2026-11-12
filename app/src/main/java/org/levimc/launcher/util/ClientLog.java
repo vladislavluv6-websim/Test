@@ -40,6 +40,31 @@ public final class ClientLog {
         return logFile;
     }
 
+    private static volatile boolean crashHookInstalled = false;
+
+    public static void installCrashHook() {
+        if (crashHookInstalled) return;
+        crashHookInstalled = true;
+        final Thread.UncaughtExceptionHandler previous =
+                Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+            try {
+                log("Crash", "uncaught in " + thread.getName() + ": " + error);
+                for (StackTraceElement frame : error.getStackTrace()) {
+                    log("Crash", "  at " + frame);
+                }
+                try {
+                    Runtime rt = Runtime.getRuntime();
+                    log("Crash", "heap used=" + (rt.totalMemory() - rt.freeMemory())
+                            + " max=" + rt.maxMemory());
+                } catch (Throwable ignored) {
+                }
+            } catch (Throwable ignored) {
+            }
+            if (previous != null) previous.uncaughtException(thread, error);
+        });
+    }
+
     public static void log(String tag, String message) {
         Log.i(TAG, tag + ": " + message);
         File file = logFile;
