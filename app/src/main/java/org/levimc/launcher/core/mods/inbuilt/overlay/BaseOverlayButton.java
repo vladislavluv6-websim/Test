@@ -93,6 +93,7 @@ public abstract class BaseOverlayButton {
         if (ModIds.NAME_TAGS.equals(id)) return activity.getString(R.string.inbuilt_mod_name_tags);
         if (ModIds.TARGET_ESP.equals(id)) return activity.getString(R.string.inbuilt_mod_target_esp);
         if (ModIds.FRIEND.equals(id)) return activity.getString(R.string.inbuilt_mod_friend);
+        if (ModIds.KILLAURA.equals(id)) return activity.getString(R.string.inbuilt_mod_killaura);
         return "";
     }
 

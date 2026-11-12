@@ -1023,33 +1023,9 @@ public final class InbuiltModuleProvider {
     private static void setEnabled(InbuiltModManager manager, UnifiedMod mod, boolean enabled) {
         manager.setInbuiltModEnabled(mod.getId(), enabled);
         if (ModIds.FRIEND.equals(mod.getId())) applyFriendNames(manager);
-        if (ModIds.KILLAURA.equals(mod.getId())) applyKillaura(manager, enabled);
         InbuiltOverlayManager overlayManager = InbuiltOverlayManager.getInstance();
         if (overlayManager != null) {
             overlayManager.handleModToggle(mod.getId(), enabled);
-        }
-    }
-
-    private static void applyKillaura(InbuiltModManager manager, boolean enabled) {
-        if (enabled) {
-            AimAssistMod.setKillaura(true);
-            AimAssistMod.setKillauraConeDeg(manager.getKillauraCone());
-            AimAssistMod.setKillauraReactionMs(manager.getKillauraReaction());
-            AimAssistMod.setNeuralRotation(manager.isAimAssistNeuralRotation());
-            AimAssistMod.setRange(manager.getKillauraRange());
-            AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
-            AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
-            AimAssistMod.setBodyPart(manager.getAimAssistBodyPart());
-            AimAssistMod.setRandomAimPoint(manager.isAimAssistRandomPoint());
-            AimAssistMod.setRandomAimPoint(manager.isAimAssistRandomPoint());
-            AimAssistMod.setWallCheck(true);
-            final float range = manager.getKillauraRange();
-            AimAssistMod.initializeAsync(ok -> {
-                if (ok) AimAssistMod.setEnabled(true, range, 100.0f);
-            });
-        } else {
-            AimAssistMod.setKillaura(false);
-            AimAssistMod.setEnabled(false, 8.0f, 100.0f);
         }
     }
 

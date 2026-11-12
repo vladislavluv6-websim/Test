@@ -14,6 +14,7 @@ import org.levimc.launcher.core.mods.inbuilt.model.MoreButtonConfig;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.PojavControlsMod;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.HotbarSlotMod;
+import org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod;
 import org.levimc.launcher.ui.dialogs.LogcatOverlayManager;
 import org.levimc.pojavcontrols.PojavControls;
 import org.levimc.pojavcontrols.PojavControlsHost;
@@ -204,7 +205,10 @@ public class InbuiltOverlayManager {
         y += step;
         if (manager.isOverlayShortcutVisible(ModIds.NAME_TAGS)) menuY += step;
         modPositionMap.put(ModIds.FRIEND, y);
+        y += step;
         if (manager.isOverlayShortcutVisible(ModIds.FRIEND)) menuY += step;
+        modPositionMap.put(ModIds.KILLAURA, y);
+        if (manager.isOverlayShortcutVisible(ModIds.KILLAURA)) menuY += step;
 
         for (String modId : STANDARD_SHORTCUT_MOD_IDS) {
             if (manager.isOverlayShortcutVisible(modId)) {
@@ -219,6 +223,9 @@ public class InbuiltOverlayManager {
         }
         if (manager.isOverlayShortcutVisible(ModIds.FRIEND)) {
             ensureToggleShortcut(ModIds.FRIEND);
+        }
+        if (manager.isOverlayShortcutVisible(ModIds.KILLAURA)) {
+            ensureToggleShortcut(ModIds.KILLAURA);
         }
 
         if (manager.resolveInbuiltModEnabled(ModIds.CHICK_PET, false)) {
@@ -252,7 +259,7 @@ public class InbuiltOverlayManager {
 
     private boolean isShortcutModule(String modId) {
         if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)
-                || ModIds.FRIEND.equals(modId)) {
+                || ModIds.FRIEND.equals(modId) || ModIds.KILLAURA.equals(modId)) {
             return true;
         }
         for (String id : STANDARD_SHORTCUT_MOD_IDS) {
@@ -274,7 +281,7 @@ public class InbuiltOverlayManager {
         InbuiltModManager manager = InbuiltModManager.getInstance(activity);
         if (manager.isOverlayShortcutVisible(modId)) {
             if (ModIds.TARGET_ESP.equals(modId) || ModIds.NAME_TAGS.equals(modId)
-                    || ModIds.FRIEND.equals(modId)) {
+                    || ModIds.FRIEND.equals(modId) || ModIds.KILLAURA.equals(modId)) {
                 ensureToggleShortcut(modId);
             } else {
                 showShortcutOnly(modId);
@@ -315,6 +322,28 @@ public class InbuiltOverlayManager {
             return;
         }
         if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+        if (ModIds.KILLAURA.equals(modId)) {
+            InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+            if (enabled) {
+                AimAssistMod.setKillaura(true);
+                AimAssistMod.setKillauraConeDeg(manager.getKillauraCone());
+                AimAssistMod.setKillauraReactionMs(manager.getKillauraReaction());
+                AimAssistMod.setRange(manager.getKillauraRange());
+                AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
+                AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
+                AimAssistMod.setBodyPart(manager.getAimAssistBodyPart());
+                AimAssistMod.setRandomAimPoint(manager.isAimAssistRandomPoint());
+                AimAssistMod.setWallCheck(true);
+                final float range = manager.getKillauraRange();
+                AimAssistMod.initializeAsync(ok -> {
+                    if (ok) AimAssistMod.setEnabled(true, range, 100.0f);
+                });
+            } else {
+                AimAssistMod.setKillaura(false);
+                AimAssistMod.setEnabled(false, 8.0f, 100.0f);
+            }
+            return;
+        }
         boolean wasEnabled = modActiveStates.getOrDefault(modId, false);
         modActiveStates.put(modId, enabled);
 

@@ -475,8 +475,13 @@ void AimAssist::setNeuralRotation(bool enabled) {
 }
 
 void AimAssist::setKillaura(bool enabled) {
-  std::lock_guard<std::mutex> lock(m_settingsMutex);
-  m_settings.killaura = enabled;
+  {
+    std::lock_guard<std::mutex> lock(m_settingsMutex);
+    m_settings.killaura = enabled;
+  }
+  if (!enabled) {
+    m_bridge.setSilentAim(false, 0.0f, 0.0f);
+  }
 }
 
 void AimAssist::setKillauraConeDeg(float deg) {
@@ -1255,6 +1260,7 @@ void AimAssist::updateKillaura(void *player, const Settings &settings,
   }
 
   if (!best) {
+    m_bridge.setSilentAim(false, 0.0f, 0.0f);
     m_triggerActor.store(nullptr, std::memory_order_release);
     m_onTarget.store(false, std::memory_order_release);
     m_triggerSinceActor = nullptr;
@@ -1268,8 +1274,10 @@ void AimAssist::updateKillaura(void *player, const Settings &settings,
 
   const Vec3 point = getTargetPoint(best, settings.targetBone);
   const Angles aim = calculateAnglesToPoint(point);
-  // Turn onto the target with the legit/neural rotation (human envelope).
-  applySmoothRotationInternal(aim.yaw, aim.pitch, dt, settings);
+  // SILENT aura: only the outgoing PlayerAuthInput rotation is set to the
+  // target; the local camera never moves. The attack is then aligned on the
+  // server side, so it registers with no visible aiming.
+  m_bridge.setSilentAim(true, aim.pitch, aim.yaw);
 
   if (m_triggerSinceActor != best) {
     m_triggerSinceActor = best;
@@ -1279,12 +1287,6 @@ void AimAssist::updateKillaura(void *player, const Settings &settings,
   }
   if (now - m_triggerSinceMs < m_triggerDelayForTargetMs) return;
   if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
-
-  const float curYaw = m_localYaw.load(std::memory_order_relaxed);
-  const float curPitch = m_localPitch.load(std::memory_order_relaxed);
-  const float errYaw = shortestDelta(curYaw, aim.yaw);
-  const float errPitch = aim.pitch - curPitch;
-  if (std::sqrt(errYaw * errYaw + errPitch * errPitch) > 6.0f) return;
 
   if (m_bridge.attackActor(best, point)) {
     const int interval =

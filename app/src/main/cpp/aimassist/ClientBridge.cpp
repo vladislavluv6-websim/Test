@@ -87,8 +87,26 @@ std::mutex g_initMutex;
 
 std::chrono::steady_clock::time_point g_lastFrame{};
 std::atomic<ClientBridge::MovePacketSender> g_movePacketSender{nullptr};
+std::atomic<bool> g_silentAimActive{false};
+std::atomic<float> g_silentAimPitch{0.0f};
+std::atomic<float> g_silentAimYaw{0.0f};
 
 void *playerAuthInputWriteDetour(void *packet, void *a1, void *a2, void *a3) {
+  if (packet && g_silentAimActive.load(std::memory_order_relaxed)) {
+    // Silent aim: write the aim rotation into the outgoing packet only. The
+    // local camera/actor rotation is untouched, so the user sees nothing, but
+    // the server receives the rotation the attack is aligned with.
+    const float pitch = g_silentAimPitch.load(std::memory_order_relaxed);
+    const float yaw = g_silentAimYaw.load(std::memory_order_relaxed);
+    if (std::isfinite(pitch) && std::isfinite(yaw)) {
+      auto *rot = reinterpret_cast<float *>(
+          static_cast<char *>(packet) + offsets::kPlayerAuthInputRot);
+      rot[0] = pitch;
+      rot[1] = yaw;
+      *reinterpret_cast<float *>(static_cast<char *>(packet) +
+                                 offsets::kPlayerAuthInputYHeadRot) = yaw;
+    }
+  }
   if (packet && combatstate::sprintSuppressed()) {
     auto *bits = reinterpret_cast<uint64_t *>(
         static_cast<char *>(packet) + offsets::kPlayerAuthInputInputData);
@@ -1620,6 +1638,12 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
   out.y = position[1];
   out.z = position[2];
   return true;
+}
+
+void ClientBridge::setSilentAim(bool active, float pitch, float yaw) {
+  g_silentAimYaw.store(yaw, std::memory_order_relaxed);
+  g_silentAimPitch.store(pitch, std::memory_order_relaxed);
+  g_silentAimActive.store(active, std::memory_order_relaxed);
 }
 
 bool ClientBridge::isPlayer(void *actor) const {

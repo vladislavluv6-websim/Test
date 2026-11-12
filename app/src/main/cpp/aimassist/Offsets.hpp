@@ -247,5 +247,7 @@ inline constexpr uint32_t kMobCategory = 2;
 // stripping sprint bits during the TriggerBot critical window.
 inline constexpr uintptr_t kPlayerAuthInputWriteFileOffset = 0xdaa4864;
 inline constexpr uintptr_t kPlayerAuthInputInputData = 0x88;
+inline constexpr uintptr_t kPlayerAuthInputRot = 0x30;
+inline constexpr uintptr_t kPlayerAuthInputYHeadRot = 0x44;
 
 } // namespace aimbot::offsets

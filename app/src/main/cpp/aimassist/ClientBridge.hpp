@@ -102,6 +102,9 @@ public:
   // Явная отправка MovePlayerPacket. По умолчанию nullptr:
   // в 1.26.x локальные углы сами уходят в PlayerAuthInput.
   void setMovePacketSender(MovePacketSender sender);
+  // Silent aim: inject the given rotation into the outgoing PlayerAuthInput
+  // without moving the local camera. active=false restores normal rotation.
+  void setSilentAim(bool active, float pitch, float yaw);
   void sendMovePacket(void *player, float yaw, float pitch) const;
 
 private:
