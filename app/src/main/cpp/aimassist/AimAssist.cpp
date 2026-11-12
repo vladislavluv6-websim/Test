@@ -2005,10 +2005,29 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone) const {
     m_bridge.getPosition(actor, position);
     return position;
   }
-  // Aim at the hitbox itself (its centre), never a chosen head/chest/legs spot.
-  return {(bounds.min.x + bounds.max.x) * 0.5f,
-          (bounds.min.y + bounds.max.y) * 0.5f,
-          (bounds.min.z + bounds.max.z) * 0.5f};
+  // Aim at the point of the hitbox nearest to the crosshair, not a fixed spot.
+  // When the crosshair is already inside the box the target equals it, the
+  // error is zero and the camera does not move at all -> no tremor.
+  const float pitch = m_localPitch.load(std::memory_order_relaxed);
+  const float yaw = m_localYaw.load(std::memory_order_relaxed);
+  const float pr = pitch * 0.01745329252f;
+  const float yr = yaw * 0.01745329252f;
+  const float fx = -std::sin(yr) * std::cos(pr);
+  const float fy = -std::sin(pr);
+  const float fz = std::cos(yr) * std::cos(pr);
+  const Vec3 center{(bounds.min.x + bounds.max.x) * 0.5f,
+                    (bounds.min.y + bounds.max.y) * 0.5f,
+                    (bounds.min.z + bounds.max.z) * 0.5f};
+  const float dx = center.x - m_eye.x;
+  const float dy = center.y - m_eye.y;
+  const float dz = center.z - m_eye.z;
+  float t = dx * fx + dy * fy + dz * fz;
+  if (!std::isfinite(t) || t < 0.0f) t = 0.0f;
+  Vec3 point{m_eye.x + fx * t, m_eye.y + fy * t, m_eye.z + fz * t};
+  point.x = clampf(point.x, bounds.min.x, bounds.max.x);
+  point.y = clampf(point.y, bounds.min.y, bounds.max.y);
+  point.z = clampf(point.z, bounds.min.z, bounds.max.z);
+  return point;
 }
 
 Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
