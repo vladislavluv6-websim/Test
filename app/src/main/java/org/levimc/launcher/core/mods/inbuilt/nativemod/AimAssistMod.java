@@ -135,6 +135,10 @@ public final class AimAssistMod {
         if (initialized) nativeSetWallCheck(enabled);
     }
 
+    public static void setIgnoreInvisible(boolean enabled) {
+        if (initialized) nativeSetIgnoreInvisible(enabled);
+    }
+
     public static void setTargetPlayers(boolean enabled) {
         if (initialized) nativeSetTargetPlayers(enabled);
     }
@@ -257,6 +261,7 @@ public final class AimAssistMod {
     private static native void nativeSetStrength(float strength);
     private static native void nativeSetFov(float fovDeg);
     private static native void nativeSetWallCheck(boolean enabled);
+    private static native void nativeSetIgnoreInvisible(boolean enabled);
     private static native void nativeSetTargetPlayers(boolean enabled);
     private static native void nativeSetTargetMobs(boolean enabled);
     private static native void nativeSetLegitMode(boolean enabled);

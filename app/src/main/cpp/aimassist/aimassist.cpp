@@ -81,6 +81,12 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetWallC
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetIgnoreInvisible(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setIgnoreInvisible(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTargetPlayers(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::AimAssist::instance().setTargetPlayers(enabled == JNI_TRUE);

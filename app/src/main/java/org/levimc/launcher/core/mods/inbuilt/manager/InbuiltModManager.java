@@ -39,6 +39,7 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_LEGIT = "aim_assist_legit";
     private static final String KEY_AIM_ASSIST_FOV = "aim_assist_fov";
     private static final String KEY_AIM_ASSIST_WALL_CHECK = "aim_assist_wall_check";
+    private static final String KEY_AIM_ASSIST_IGNORE_INVISIBLE = "aim_assist_ignore_invisible";
     private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
     private static final String KEY_AIM_ASSIST_BODY_PART = "aim_assist_body_part";
@@ -597,6 +598,14 @@ public class InbuiltModManager {
 
     public void setAimAssistWallCheck(boolean enabled) {
         prefs.edit().putBoolean(KEY_AIM_ASSIST_WALL_CHECK, enabled).apply();
+    }
+
+    public boolean isAimAssistIgnoreInvisible() {
+        return prefs.getBoolean(KEY_AIM_ASSIST_IGNORE_INVISIBLE, false);
+    }
+
+    public void setAimAssistIgnoreInvisible(boolean enabled) {
+        prefs.edit().putBoolean(KEY_AIM_ASSIST_IGNORE_INVISIBLE, enabled).apply();
     }
 
     public boolean isAimAssistTargetPlayers() {

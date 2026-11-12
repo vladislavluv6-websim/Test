@@ -31,6 +31,7 @@ public class AimAssistOverlay extends BaseOverlayButton {
         AimAssistMod.setFov(manager.getAimAssistFov());
         AimAssistMod.setStrength(manager.getAimAssistStrength());
         AimAssistMod.setWallCheck(manager.isAimAssistWallCheck());
+        AimAssistMod.setIgnoreInvisible(manager.isAimAssistIgnoreInvisible());
         AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
         AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
         AimAssistMod.setBodyPart(manager.getAimAssistBodyPart());

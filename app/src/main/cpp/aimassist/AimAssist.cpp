@@ -234,6 +234,11 @@ void AimAssist::setWallCheck(bool enabled) {
   m_settings.visibleCheck = enabled;
 }
 
+void AimAssist::setIgnoreInvisible(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.ignoreInvisible = enabled;
+}
+
 void AimAssist::setTargetPlayers(bool enabled) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   m_settings.targetPlayers = enabled;

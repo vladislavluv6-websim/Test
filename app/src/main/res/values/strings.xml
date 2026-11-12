@@ -751,6 +751,7 @@
     <string name="mod_config_aim_assist_strength">Aim strength (%)</string>
     <string name="mod_config_aim_assist_legit">Humanized aim (slower, smoother, less detectable)</string>
     <string name="mod_config_aim_assist_fov">Aim FOV (degrees)</string>
+    <string name="mod_config_aim_assist_ignore_invisible">Ignore invisible players</string>
     <string name="mod_config_aim_assist_wall_check">Wall check</string>
     <string name="mod_config_aim_assist_target_players">Target players</string>
     <string name="mod_config_aim_assist_target_mobs">Target mobs</string>

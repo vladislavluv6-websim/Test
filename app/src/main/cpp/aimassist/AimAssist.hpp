@@ -76,7 +76,7 @@ struct Settings {
   int randomJitterIntervalMs = 150;
 
   bool visibleCheck = true;
-  bool ignoreInvisible = true;
+  bool ignoreInvisible = false;
   bool teamCheck = false;
   bool targetPlayers = true;
   bool targetMobs = true;
@@ -227,6 +227,7 @@ public:
   void setStrength(float strength);
   void setFov(float fovDeg);
   void setWallCheck(bool enabled);
+  void setIgnoreInvisible(bool enabled);
   void setTargetPlayers(bool enabled);
   void setTargetMobs(bool enabled);
   void setBodyPart(int bodyPart);
