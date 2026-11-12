@@ -31,65 +31,6 @@ namespace {
 
 constexpr const char *kTag = "AimAssistBridge";
 
-// ---------------------------------------------------------------------------
-// Fault guard: some game calls (e.g. Actor::isPlayer) dereference actor-owned
-// pointers. If the nearby-actor list ever hands us a bogus object, that read
-// faults inside libminecraftpe and takes the whole game down (crash dumps:
-// SIGSEGV at libminecraftpe+0xfd8e12c). Wrap those calls so a fault just
-// returns "false" instead of killing the process.
-// ---------------------------------------------------------------------------
-thread_local sigjmp_buf g_faultJmp;
-thread_local volatile sig_atomic_t g_inGuard = 0;
-struct sigaction g_oldSegv{};
-struct sigaction g_oldBus{};
-bool g_guardInstalled = false;
-
-void faultChain(int sig, siginfo_t *info, void *ctx, struct sigaction &old) {
-  if ((old.sa_flags & SA_SIGINFO) && old.sa_sigaction) {
-    old.sa_sigaction(sig, info, ctx);
-  } else if (old.sa_handler == SIG_DFL || old.sa_handler == SIG_IGN) {
-    sigaction(sig, &old, nullptr);
-    raise(sig);
-  } else if (old.sa_handler) {
-    old.sa_handler(sig);
-  }
-}
-
-void faultHandler(int sig, siginfo_t *info, void *ctx) {
-  if (g_inGuard) {
-    g_inGuard = 0;
-    siglongjmp(g_faultJmp, 1);
-  }
-  if (sig == SIGBUS) {
-    faultChain(sig, info, ctx, g_oldBus);
-  } else {
-    faultChain(sig, info, ctx, g_oldSegv);
-  }
-}
-
-void ensureFaultGuard() {
-  if (g_guardInstalled) return;
-  g_guardInstalled = true;
-  struct sigaction act{};
-  act.sa_sigaction = faultHandler;
-  act.sa_flags = SA_SIGINFO;
-  sigemptyset(&act.sa_mask);
-  sigaction(SIGSEGV, &act, &g_oldSegv);
-  sigaction(SIGBUS, &act, &g_oldBus);
-}
-
-template <typename Fn>
-bool guardedBoolCall(Fn &&fn) {
-  ensureFaultGuard();
-  if (sigsetjmp(g_faultJmp, 1) == 0) {
-    g_inGuard = 1;
-    const bool result = fn();
-    g_inGuard = 0;
-    return result;
-  }
-  g_inGuard = 0;
-  return false;
-}
 
 struct DistanceSortedActor {
   void *actor = nullptr;
@@ -179,6 +120,64 @@ bool safeRead(uintptr_t address, T &out) {
 template <typename T>
 bool safeWrite(uintptr_t address, const T &value) {
   return mem::write(address, value);
+}
+
+// Safe reimplementation of Actor::isPlayer (verified against the game's
+// disassembly at libminecraftpe+0xfd8e120). It checks presence of the player
+// component (hash 0xf95d258f) via the actor's component table using only
+// guaranteed-safe reads, so it can never fault inside the game and can never
+// leave a game lock held (which a SIGSEGV longjmp would).
+bool playerComponentQuery(uintptr_t actor) {
+  uintptr_t ctx = 0;
+  if (!safeRead(actor + 0x10, ctx) || !isPlausiblePointer(ctx)) return false;
+  constexpr uint32_t kHash = 0xf95d258fu;
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!safeRead(ctx + 0x38, begin) || !safeRead(ctx + 0x40, end)) return false;
+  if (!isPlausiblePointer(begin) || !isPlausiblePointer(end) || end < begin) {
+    return false;
+  }
+  const uint64_t span = end - begin;
+  if (span < sizeof(void *) || span > (1u << 20)) return false;
+  const uint64_t count = span / sizeof(void *);
+  const uint64_t index = (count - 1) & static_cast<uint64_t>(kHash);
+  uint32_t field18 = 0;
+  if (!safeRead(actor + 0x18, field18)) return false;
+  uintptr_t probe = begin + index * sizeof(void *);
+  uintptr_t table = 0;
+  if (!safeRead(ctx + 0x50, table) || !isPlausiblePointer(table)) return false;
+  uintptr_t tail = 0;
+  if (!safeRead(ctx + 0x58, tail)) return false;
+  for (int step = 0; step < 64; ++step) {
+    uintptr_t packed = 0;
+    if (!safeRead(probe, packed)) return false;
+    if (packed == static_cast<uintptr_t>(-1)) return false;
+    uintptr_t slot = table + packed * 32;
+    uint32_t slotHash = 0;
+    if (!safeRead(slot + 8, slotHash)) return false;
+    if (slotHash != kHash) {
+      probe = slot;
+      continue;
+    }
+    if (slot == tail) return false;
+    uintptr_t entry = 0;
+    if (!safeRead(slot + 0x10, entry) || entry == 0) return false;
+    uintptr_t a = 0;
+    uintptr_t b = 0;
+    if (!safeRead(entry + 8, a) || !safeRead(entry + 16, b)) return false;
+    if (b < a) return false;
+    const uint64_t idx2 = (static_cast<uint64_t>(field18) >> 11) & 0x7Fu;
+    if (idx2 >= ((b - a) >> 3)) return false;
+    uintptr_t node = 0;
+    if (!safeRead(a + idx2 * 8, node) || node == 0) return false;
+    const uint32_t low = field18 & 0x3FFFFu;
+    const uint32_t high = field18 & 0xFFFC0000u;
+    const uint32_t off = low & 0x7FFu;
+    uint32_t value = 0;
+    if (!safeRead(node + static_cast<uintptr_t>(off) * 4, value)) return false;
+    return (value ^ high) < 0x40000u;
+  }
+  return false;
 }
 
 bool isLiveActor(void *actor) {
@@ -1625,9 +1624,7 @@ bool ClientBridge::getPosition(void *actor, Vec3 &out) const {
 
 bool ClientBridge::isPlayer(void *actor) const {
   if (!actor) return false;
-  if (!g_actorIsPlayer) return true;
-  ActorIsPlayerFn fn = g_actorIsPlayer;
-  return guardedBoolCall([fn, actor]() { return fn(actor); });
+  return playerComponentQuery(reinterpret_cast<uintptr_t>(actor));
 }
 
 int ClientBridge::getActorType(void *) const {
