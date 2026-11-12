@@ -7,6 +7,7 @@ public final class ModIds {
     public static final String AUTO_SPRINT = "auto_sprint";
     public static final String SPEED = "speed";
     public static final String AIM_ASSIST = "aim_assist";
+    public static final String KILLAURA = "killaura";
     public static final String ESP = "esp";
     public static final String NAME_TAGS = "name_tags";
     public static final String FRIEND = "friend";

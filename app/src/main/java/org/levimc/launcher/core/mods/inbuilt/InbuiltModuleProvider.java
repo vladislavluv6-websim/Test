@@ -11,6 +11,7 @@ import org.json.JSONObject;
 import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
+import org.levimc.launcher.core.mods.inbuilt.nativemod.AimAssistMod;
 import org.levimc.launcher.core.mods.inbuilt.nativemod.EspMod;
 import org.levimc.launcher.core.mods.inbuilt.overlay.InbuiltOverlayManager;
 import org.levimc.launcher.core.mods.inbuilt.overlay.MoreButtonsEditor;
@@ -57,6 +58,9 @@ public final class InbuiltModuleProvider {
     private static final String CFG_AIM_ASSIST_IGNORE_INVISIBLE = "aim_assist_ignore_invisible";
     private static final String CFG_AIM_ASSIST_NEURAL = "aim_assist_neural";
     private static final String CFG_AIM_ASSIST_KILLAURA = "aim_assist_killaura";
+    private static final String CFG_KILLAURA_RANGE = "killaura_range";
+    private static final String CFG_KILLAURA_CONE = "killaura_cone";
+    private static final String CFG_KILLAURA_REACTION = "killaura_reaction";
     private static final String CFG_AIM_ASSIST_ROT_RECORDING = "aim_assist_rot_recording";
     private static final String CFG_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String CFG_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
@@ -146,6 +150,9 @@ public final class InbuiltModuleProvider {
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.AIM_ASSIST,
                 R.string.inbuilt_mod_aim_assist, R.string.inbuilt_mod_aim_assist_desc,
+                groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.KILLAURA,
+                R.string.inbuilt_mod_killaura, R.string.inbuilt_mod_killaura_desc,
                 groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.ESP,
                 R.string.inbuilt_mod_esp, R.string.inbuilt_mod_esp_desc,
@@ -373,6 +380,56 @@ public final class InbuiltModuleProvider {
                                                               InbuiltModManager manager,
                                                               String modId) {
         List<UnifiedMod.ConfigEntry> configs = new ArrayList<>();
+
+        if (ModIds.KILLAURA.equals(modId)) {
+            configs.add(config(CFG_KILLAURA_RANGE,
+                    context.getString(R.string.mod_config_killaura_range),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "4", "3", "6",
+                    String.valueOf(manager.getKillauraRange())));
+            configs.add(config(CFG_KILLAURA_CONE,
+                    context.getString(R.string.mod_config_killaura_cone),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "90", "20", "180",
+                    String.valueOf(manager.getKillauraCone())));
+            configs.add(config(CFG_KILLAURA_REACTION,
+                    context.getString(R.string.mod_config_killaura_reaction),
+                    UnifiedMod.ConfigType.SLIDER_INT,
+                    "150", "0", "500",
+                    String.valueOf(manager.getKillauraReaction())));
+            configs.add(config(CFG_AIM_ASSIST_BODY_PART,
+                    context.getString(R.string.mod_config_aim_assist_body_part),
+                    UnifiedMod.ConfigType.RADIO,
+                    "0",
+                    context.getString(R.string.mod_config_aim_assist_head) + ","
+                            + context.getString(R.string.mod_config_aim_assist_chest) + ","
+                            + context.getString(R.string.mod_config_aim_assist_legs) + ","
+                            + context.getString(R.string.mod_config_aim_assist_upper_chest) + ","
+                            + context.getString(R.string.mod_config_aim_assist_lower_chest),
+                    "",
+                    String.valueOf(manager.getAimAssistBodyPart())));
+            configs.add(config(CFG_AIM_ASSIST_TARGET_PLAYERS,
+                    context.getString(R.string.mod_config_aim_assist_target_players),
+                    UnifiedMod.ConfigType.TOGGLE, "true", "", "",
+                    String.valueOf(manager.isAimAssistTargetPlayers())));
+            configs.add(config(CFG_AIM_ASSIST_TARGET_MOBS,
+                    context.getString(R.string.mod_config_aim_assist_target_mobs),
+                    UnifiedMod.ConfigType.TOGGLE, "true", "", "",
+                    String.valueOf(manager.isAimAssistTargetMobs())));
+            configs.add(config(CFG_AIM_ASSIST_RANDOM_POINT,
+                    context.getString(R.string.mod_config_aim_assist_random_point),
+                    UnifiedMod.ConfigType.TOGGLE, "true", "", "",
+                    String.valueOf(manager.isAimAssistRandomPoint())));
+            configs.add(config(CFG_AIM_ASSIST_ROT_RECORDING,
+                    context.getString(R.string.mod_config_aim_assist_rot_recording),
+                    UnifiedMod.ConfigType.TOGGLE, "false", "", "",
+                    String.valueOf(manager.isAimAssistRotationRecording())));
+            configs.add(config(CFG_AIM_ASSIST_NEURAL,
+                    context.getString(R.string.mod_config_aim_assist_neural),
+                    UnifiedMod.ConfigType.TOGGLE, "false", "", "",
+                    String.valueOf(manager.isAimAssistNeuralRotation())));
+            return configs;
+        }
         if (ModIds.MORE_BUTTONS.equals(modId)) return configs;
         if (ModIds.POJAV_CONTROLS.equals(modId)) {
             configs.add(activationKeybind(context, manager, modId));
@@ -989,9 +1046,33 @@ public final class InbuiltModuleProvider {
     private static void setEnabled(InbuiltModManager manager, UnifiedMod mod, boolean enabled) {
         manager.setInbuiltModEnabled(mod.getId(), enabled);
         if (ModIds.FRIEND.equals(mod.getId())) applyFriendNames(manager);
+        if (ModIds.KILLAURA.equals(mod.getId())) applyKillaura(manager, enabled);
         InbuiltOverlayManager overlayManager = InbuiltOverlayManager.getInstance();
         if (overlayManager != null) {
             overlayManager.handleModToggle(mod.getId(), enabled);
+        }
+    }
+
+    private static void applyKillaura(InbuiltModManager manager, boolean enabled) {
+        if (enabled) {
+            AimAssistMod.setKillaura(true);
+            AimAssistMod.setKillauraConeDeg(manager.getKillauraCone());
+            AimAssistMod.setKillauraReactionMs(manager.getKillauraReaction());
+            AimAssistMod.setNeuralRotation(manager.isAimAssistNeuralRotation());
+            AimAssistMod.setRange(manager.getKillauraRange());
+            AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
+            AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
+            AimAssistMod.setBodyPart(manager.getAimAssistBodyPart());
+            AimAssistMod.setRandomAimPoint(manager.isAimAssistRandomPoint());
+            AimAssistMod.setRandomAimPoint(manager.isAimAssistRandomPoint());
+            AimAssistMod.setWallCheck(true);
+            final float range = manager.getKillauraRange();
+            AimAssistMod.initializeAsync(ok -> {
+                if (ok) AimAssistMod.setEnabled(true, range, 100.0f);
+            });
+        } else {
+            AimAssistMod.setKillaura(false);
+            AimAssistMod.setEnabled(false, 8.0f, 100.0f);
         }
     }
 
@@ -1123,6 +1204,18 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_KILLAURA:
                 manager.setAimAssistKillaura(parseBoolean(value));
+                break;
+            case CFG_KILLAURA_RANGE:
+                manager.setKillauraRange(parseInt(value, manager.getKillauraRange()));
+                AimAssistMod.setRange(manager.getKillauraRange());
+                break;
+            case CFG_KILLAURA_CONE:
+                manager.setKillauraCone(parseInt(value, manager.getKillauraCone()));
+                AimAssistMod.setKillauraConeDeg(manager.getKillauraCone());
+                break;
+            case CFG_KILLAURA_REACTION:
+                manager.setKillauraReaction(parseInt(value, manager.getKillauraReaction()));
+                AimAssistMod.setKillauraReactionMs(manager.getKillauraReaction());
                 break;
             case CFG_AIM_ASSIST_TARGET_PLAYERS:
                 manager.setAimAssistTargetPlayers(parseBoolean(value));

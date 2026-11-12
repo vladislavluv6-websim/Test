@@ -157,6 +157,8 @@ struct Settings {
   bool neuralRotation = false;
   // Killaura: 360° auto-attack (ignore the FOV cone, attack the nearest target).
   bool killaura = false;
+  float killauraConeDeg = 90.0f;
+  float killauraReactionMs = 140.0f;
 
   // ------------------------------------------------------------
   // Only crit
@@ -267,6 +269,8 @@ public:
   void setRotationRecording(bool enabled);
   void setNeuralRotation(bool enabled);
   void setKillaura(bool enabled);
+  void setKillauraConeDeg(float deg);
+  void setKillauraReactionMs(float ms);
   void setRotationPatternPath(const std::string &path);
   void setTouchActive(bool active);
   void notifyCameraLook();

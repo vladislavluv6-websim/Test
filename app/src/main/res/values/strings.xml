@@ -676,6 +676,11 @@
     <string name="mod_config_speed_auto_sprint">Auto sprint</string>
     <string name="mod_config_speed_debug">Debug log</string>
     <string name="speed_mod_unavailable">Speed hack is unavailable for this game version</string>
+    <string name="inbuilt_mod_killaura">Killaura</string>
+    <string name="inbuilt_mod_killaura_desc">360 auto-attack aura with rotation/crit bypasses</string>
+    <string name="mod_config_killaura_range">Range</string>
+    <string name="mod_config_killaura_cone">FOV cone</string>
+    <string name="mod_config_killaura_reaction">Reaction (ms)</string>
     <string name="inbuilt_mod_aim_assist">Aim Assist</string>
     <string name="inbuilt_mod_aim_assist_desc">Humanized camera aim assist</string>
     <string name="inbuilt_mod_esp">ESP (Hitboxes)</string>

@@ -42,6 +42,9 @@ public class InbuiltModManager {
     private static final String KEY_AIM_ASSIST_IGNORE_INVISIBLE = "aim_assist_ignore_invisible";
     private static final String KEY_AIM_ASSIST_NEURAL = "aim_assist_neural";
     private static final String KEY_AIM_ASSIST_KILLAURA = "aim_assist_killaura";
+    private static final String KEY_KILLAURA_RANGE = "killaura_range";
+    private static final String KEY_KILLAURA_CONE = "killaura_cone";
+    private static final String KEY_KILLAURA_REACTION = "killaura_reaction";
     private static final String KEY_AIM_ASSIST_ROT_RECORDING = "aim_assist_rot_recording";
     private static final String KEY_AIM_ASSIST_TARGET_PLAYERS = "aim_assist_target_players";
     private static final String KEY_AIM_ASSIST_TARGET_MOBS = "aim_assist_target_mobs";
@@ -625,6 +628,30 @@ public class InbuiltModManager {
 
     public void setAimAssistKillaura(boolean enabled) {
         prefs.edit().putBoolean(KEY_AIM_ASSIST_KILLAURA, enabled).apply();
+    }
+
+    public int getKillauraRange() {
+        return Math.max(3, Math.min(6, prefs.getInt(KEY_KILLAURA_RANGE, 4)));
+    }
+
+    public void setKillauraRange(int range) {
+        prefs.edit().putInt(KEY_KILLAURA_RANGE, Math.max(3, Math.min(6, range))).apply();
+    }
+
+    public int getKillauraCone() {
+        return Math.max(20, Math.min(180, prefs.getInt(KEY_KILLAURA_CONE, 90)));
+    }
+
+    public void setKillauraCone(int cone) {
+        prefs.edit().putInt(KEY_KILLAURA_CONE, Math.max(20, Math.min(180, cone))).apply();
+    }
+
+    public int getKillauraReaction() {
+        return Math.max(0, Math.min(500, prefs.getInt(KEY_KILLAURA_REACTION, 150)));
+    }
+
+    public void setKillauraReaction(int ms) {
+        prefs.edit().putInt(KEY_KILLAURA_REACTION, Math.max(0, Math.min(500, ms))).apply();
     }
 
     public boolean isAimAssistRotationRecording() {

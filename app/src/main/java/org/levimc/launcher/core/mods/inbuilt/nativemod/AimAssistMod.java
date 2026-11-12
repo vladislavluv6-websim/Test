@@ -147,6 +147,14 @@ public final class AimAssistMod {
         if (initialized) nativeSetKillaura(enabled);
     }
 
+    public static void setKillauraConeDeg(float deg) {
+        if (initialized) nativeSetKillauraConeDeg(deg);
+    }
+
+    public static void setKillauraReactionMs(float ms) {
+        if (initialized) nativeSetKillauraReactionMs(ms);
+    }
+
     public static void setRotationRecording(boolean enabled) {
         if (initialized) nativeSetRotationRecording(enabled);
     }
@@ -280,6 +288,8 @@ public final class AimAssistMod {
     private static native void nativeSetIgnoreInvisible(boolean enabled);
     private static native void nativeSetNeuralRotation(boolean enabled);
     private static native void nativeSetKillaura(boolean enabled);
+    private static native void nativeSetKillauraConeDeg(float deg);
+    private static native void nativeSetKillauraReactionMs(float ms);
     private static native void nativeSetRotationRecording(boolean enabled);
     private static native void nativeSetRotationPatternPath(String path);
     private static native void nativeSetTargetPlayers(boolean enabled);

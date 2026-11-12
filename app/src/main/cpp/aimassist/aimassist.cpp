@@ -99,6 +99,18 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetKilla
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetKillauraConeDeg(
+    JNIEnv *, jclass, jfloat deg) {
+  aimbot::AimAssist::instance().setKillauraConeDeg(deg);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetKillauraReactionMs(
+    JNIEnv *, jclass, jfloat ms) {
+  aimbot::AimAssist::instance().setKillauraReactionMs(ms);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetRotationRecording(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::AimAssist::instance().setRotationRecording(enabled == JNI_TRUE);

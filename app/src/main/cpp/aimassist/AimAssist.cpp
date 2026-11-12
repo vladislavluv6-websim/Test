@@ -479,6 +479,16 @@ void AimAssist::setKillaura(bool enabled) {
   m_settings.killaura = enabled;
 }
 
+void AimAssist::setKillauraConeDeg(float deg) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.killauraConeDeg = clampf(deg, 10.0f, 360.0f);
+}
+
+void AimAssist::setKillauraReactionMs(float ms) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.killauraReactionMs = clampf(ms, 0.0f, 600.0f);
+}
+
 void AimAssist::setRotationRecording(bool enabled) {
   {
     std::lock_guard<std::mutex> lock(m_settingsMutex);
@@ -1021,7 +1031,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   // на 90-180° — первый маркер rotation-check'ов. Без профиля — 360°.
   const float assistFov =
       settings.killaura
-          ? 360.0f
+          ? std::min(settings.fovDeg, settings.killauraConeDeg)
           : (settings.antiCheatMode
                  ? std::min(settings.fovDeg, settings.assistConeDeg)
                  : settings.fovDeg);
@@ -1363,6 +1373,11 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     const float reactionRoll = randomFloat(0.0f, 1.0f);
     if (reactionRoll < 0.08f) {
       m_triggerDelayForTargetMs += randomInt(20, 70);
+    }
+    if (settings.killaura) {
+      m_triggerDelayForTargetMs =
+          std::max(m_triggerDelayForTargetMs,
+                   static_cast<int>(settings.killauraReactionMs));
     }
     m_triggerDelayForTargetMs =
         std::max(0, std::min(650, m_triggerDelayForTargetMs));

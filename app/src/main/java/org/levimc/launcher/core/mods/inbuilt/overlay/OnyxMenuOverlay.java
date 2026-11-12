@@ -487,6 +487,7 @@ public class OnyxMenuOverlay {
         String id = mod.getId() == null ? "" : mod.getId().toLowerCase(Locale.US);
         switch (id) {
             case ModIds.AIM_ASSIST:
+            case ModIds.KILLAURA:
             case ModIds.TRIGGER_BOT:
             case ModIds.TARGET_ESP:
             case ModIds.SWING:
