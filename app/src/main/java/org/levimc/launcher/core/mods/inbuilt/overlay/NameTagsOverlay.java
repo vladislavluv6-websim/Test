@@ -62,6 +62,7 @@ public class NameTagsOverlay extends View {
     private int armorSize = 15;
     private int nameBlur = 4;
     private int nameBlurColor = 0xFF101018;
+    private int nameOutlineColor = 0xFF0A0A12;
     private int nameTagStyle;
     private boolean showArmor = true;
     private boolean showOffhand = true;
@@ -176,8 +177,8 @@ public class NameTagsOverlay extends View {
         nameColor = manager.getNameTagColor();
         nameSize = manager.getNameTagSize();
         armorSize = manager.getNameTagArmorSize();
-        nameBlur = manager.getNameTagBlur();
-        nameBlurColor = manager.getNameTagBlurColor();
+        nameBlur = 0;
+        nameOutlineColor = manager.getNameTagOutlineColor();
         nameTagStyle = manager.getNameTagStyle();
         showArmor = manager.isNameTagShowArmor();
         showOffhand = manager.isNameTagShowOffhand();
@@ -364,14 +365,7 @@ public class NameTagsOverlay extends View {
 
     private void applyTextStyle() {
         textPaint.setTextSize(nameSize * density);
-        if (nameBlur > 0) {
-            float radius = Math.max(2.5f, nameBlur * 1.35f) * density;
-            int alpha = Math.min(255, 105 + nameBlur * 12);
-            int shadow = (nameBlurColor & 0x00FFFFFF) | (alpha << 24);
-            textPaint.setShadowLayer(radius, 0f, dp(0.6f), shadow);
-        } else {
-            textPaint.clearShadowLayer();
-        }
+        textPaint.clearShadowLayer();
     }
 
     private void drawLabel(Canvas canvas, Label label) {
@@ -392,9 +386,15 @@ public class NameTagsOverlay extends View {
                     iconSize, iconGap);
         }
 
-        // Ник — ровно по центру цели.
-        textPaint.setColor(label.friend ? FRIEND_COLOR : nameColor);
+        // Ник — ровно по центру цели, с аккуратной обводкой.
         textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setStyle(Paint.Style.STROKE);
+        textPaint.setStrokeWidth(Math.max(2f, nameSize * 0.16f) * density);
+        textPaint.setStrokeJoin(Paint.Join.ROUND);
+        textPaint.setColor(nameOutlineColor);
+        canvas.drawText(label.name, label.x, baseline, textPaint);
+        textPaint.setStyle(Paint.Style.FILL);
+        textPaint.setColor(label.friend ? FRIEND_COLOR : nameColor);
         canvas.drawText(label.name, label.x, baseline, textPaint);
         textPaint.setTextAlign(Paint.Align.LEFT);
 

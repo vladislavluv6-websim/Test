@@ -324,9 +324,9 @@ public class TargetEspOverlay extends View {
         final float r = rect.right + pad;
         final float t = rect.top - pad;
         final float b = rect.bottom + pad;
-        int core = Color.argb((int) (255 * alpha), 0xE0, 0xF7, 0xFA);
-        int glow = Color.argb((int) (95 * alpha), 0x00, 0xE5, 0xFF);
-        int trail = Color.argb((int) (42 * alpha), 0x00, 0xE5, 0xFF);
+        int core = withAlpha(accent, 255 * alpha);
+        int glow = withAlpha(accent, 105 * alpha);
+        int trail = withAlpha(accent, 45 * alpha);
         bracketPass(canvas, l, t, r, b, arm * 1.6f, 8f * density, trail);
         bracketPass(canvas, l, t, r, b, arm, 6f * density, glow);
         bracketPass(canvas, l, t, r, b, arm, 2.4f * density, core);
@@ -358,11 +358,11 @@ public class TargetEspOverlay extends View {
                 {35f, 0f},
                 {0f, 35f},
         };
-        int glow = Color.argb((int) (70 * alpha), 0x00, 0x88, 0xFF);
-        int core = Color.argb((int) (235 * alpha), 0x40, 0xC4, 0xFF);
-        int white = Color.argb((int) (245 * alpha), 0xFF, 0xFF, 0xFF);
-        int particleA = Color.argb((int) (220 * alpha), 0x40, 0xC4, 0xFF);
-        int particleB = Color.argb((int) (220 * alpha), 0xFF, 0xD5, 0x4F);
+        int glow = withAlpha(accent, 75 * alpha);
+        int core = withAlpha(accent, 235 * alpha);
+        int white = withAlpha(0xFFFFFFFF, 245 * alpha);
+        int particleA = withAlpha(accent, 220 * alpha);
+        int particleB = withAlpha(0xFFFFD54F, 220 * alpha);
 
         for (int ringIndex = 0; ringIndex < rings.length; ringIndex++) {
             float ax = (float) Math.toRadians(rings[ringIndex][0]);
@@ -438,10 +438,10 @@ public class TargetEspOverlay extends View {
         float phase = (float) ((Math.sin(ageMs * 0.001f * speed) + 1.0) * 0.5);
         float ringY = minY + height * (0.06f + 0.88f * phase);
 
-        int coreWhite = Color.argb((int) (255 * alpha), 0xFF, 0xFF, 0xFF);
-        int edgeCyan = Color.argb((int) (210 * alpha), 0x4D, 0xD0, 0xE1);
-        int glow = Color.argb((int) (80 * alpha), 0x4D, 0xD0, 0xE1);
-        int trail = Color.argb((int) (55 * alpha), 0x4D, 0xD0, 0xE1);
+        int coreWhite = withAlpha(0xFFFFFFFF, 255 * alpha);
+        int edgeCyan = withAlpha(accent, 210 * alpha);
+        int glow = withAlpha(accent, 85 * alpha);
+        int trail = withAlpha(accent, 60 * alpha);
 
         // vertical translucent aura above the ring
         glowPaint.setColor(trail);
@@ -468,6 +468,11 @@ public class TargetEspOverlay extends View {
         corePaint.setStrokeWidth(1.4f * density);
         corePaint.setColor(coreWhite);
         drawRing(canvas, ccx, ringY, ccz, radius * 0.985f, 0f, 0f, corePaint);
+    }
+
+    private static int withAlpha(int argb, float a) {
+        int alpha = Math.max(0, Math.min(255, Math.round(a)));
+        return (argb & 0x00FFFFFF) | (alpha << 24);
     }
 
     private boolean project(float wx, float wy, float wz, float[] out) {

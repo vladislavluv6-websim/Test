@@ -74,6 +74,7 @@ public class InbuiltModManager {
     private static final String KEY_NAME_TAG_ARMOR_SIZE = "name_tag_armor_size";
     private static final String KEY_NAME_TAG_BLUR = "name_tag_blur";
     private static final String KEY_NAME_TAG_BLUR_COLOR = "name_tag_blur_color";
+    private static final String KEY_NAME_TAG_OUTLINE_COLOR = "name_tag_outline_color";
     private static final String KEY_NAME_TAG_SHOW_ARMOR = "name_tag_show_armor";
     private static final String KEY_NAME_TAG_SHOW_OFFHAND = "name_tag_show_offhand";
     private static final String KEY_SWING_STYLE = "swing_style";
@@ -160,7 +161,7 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
     private static final int DEFAULT_AIM_ASSIST_BODY_PART = 0;
-    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 2200;
+    private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 3400;
     private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 60;
     private static final int DEFAULT_AIM_ASSIST_ACCEL = 12000;
     private static final int DEFAULT_AIM_ASSIST_DEADZONE = 0;
@@ -171,7 +172,7 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_LOCK = true;
     private static final boolean DEFAULT_AIM_ASSIST_FAST_AIM = true;
     private static final int DEFAULT_AIM_ASSIST_FAST_AIM_TIME = 35;
-    private static final int DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED = 2600;
+    private static final int DEFAULT_AIM_ASSIST_FAST_AIM_MAX_SPEED = 4200;
     private static final boolean DEFAULT_AIM_ASSIST_ANTI_BOT = true;
     private static final boolean DEFAULT_AIM_ASSIST_RANDOM_POINT = true;
     private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
@@ -197,7 +198,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_SWING_SPEED = 100;
     private static final int DEFAULT_SWING_AMPLITUDE = 100;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
-    private static final int DEFAULT_TRIGGER_BOT_DELAY = 90;
+    private static final int DEFAULT_TRIGGER_BOT_DELAY = 45;
     private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 40;
     private static final int DEFAULT_TRIGGER_BOT_RANGE = 30;
     private static final int DEFAULT_TRIGGER_BOT_TOLERANCE = 8;
@@ -212,7 +213,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
     private static final String KEY_TUNING_REVISION = "tuning_revision";
-    private static final int TUNING_REVISION = 6;
+    private static final int TUNING_REVISION = 7;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
     private static final String KEY_ONYX_DEFAULTS_REVISION = "onyx_defaults_revision";
@@ -474,7 +475,7 @@ public class InbuiltModManager {
 
     public void setSpeedHopHeight(float height) {
         prefs.edit().putFloat(KEY_SPEED_HOP_HEIGHT_EXACT,
-                Math.max(0.10f, Math.min(1.50f, height))).apply();
+                Math.max(0.02f, Math.min(1.50f, height))).apply();
     }
 
     public void setSpeedHopHeightRaw(int value) {
@@ -902,6 +903,14 @@ public class InbuiltModManager {
 
     public void setNameTagBlurColor(int argb) {
         prefs.edit().putInt(KEY_NAME_TAG_BLUR_COLOR, argb).apply();
+    }
+
+    public int getNameTagOutlineColor() {
+        return prefs.getInt(KEY_NAME_TAG_OUTLINE_COLOR, 0xFF0A0A12);
+    }
+
+    public void setNameTagOutlineColor(int argb) {
+        prefs.edit().putInt(KEY_NAME_TAG_OUTLINE_COLOR, argb).apply();
     }
 
     public boolean isNameTagShowArmor() {

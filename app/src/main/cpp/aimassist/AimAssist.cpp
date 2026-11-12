@@ -584,15 +584,9 @@ void AimAssist::updateVisual(float dt) {
   // ---------------------------------------------------------------
   const float actorRange =
       std::max(settings.range, settings.triggerRange + 0.5f);
-  static int64_t s_lastScanMs = 0;
   if (settings.triggerBot || m_enabled.load(std::memory_order_acquire)) {
-    // ~30 Hz scan: fetchNearbyActors is the heaviest per-frame call and two
-    // consumers (aim assist + ESP) used to run it every frame each.
-    const int64_t scanNow = nowMs();
-    if (m_actors.empty() || scanNow - s_lastScanMs >= 33) {
-      s_lastScanMs = scanNow;
-      m_bridge.fillNearbyActors(player, actorRange, m_actors);
-    }
+    // Aim assist needs a fresh list every frame for responsive acquisition.
+    m_bridge.fillNearbyActors(player, actorRange, m_actors);
   }
   if (settings.antiBot) {
     AntiBot::instance().update(m_actors, player);

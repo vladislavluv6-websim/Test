@@ -86,7 +86,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_NAME_TAG_SIZE = "name_tag_size";
     private static final String CFG_NAME_TAG_ARMOR_SIZE = "name_tag_armor_size";
     private static final String CFG_NAME_TAG_BLUR = "name_tag_blur";
-    private static final String CFG_NAME_TAG_BLUR_COLOR = "name_tag_blur_color";
+    private static final String CFG_NAME_TAG_OUTLINE_COLOR = "name_tag_outline_color";
     private static final String CFG_NAME_TAG_SHOW_ARMOR = "name_tag_show_armor";
     private static final String CFG_NAME_TAG_SHOW_OFFHAND = "name_tag_show_offhand";
     private static final String CFG_SWING_STYLE = "swing_style";
@@ -487,7 +487,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_SPEED_HOP_HEIGHT,
                     context.getString(R.string.mod_config_speed_hop_height),
                     UnifiedMod.ConfigType.SLIDER_FLOAT,
-                    "0.42", "0.10", "1.50",
+                    "0.42", "0.02", "1.50",
                     String.format(java.util.Locale.US, "%.8f",
                             manager.getSpeedHopHeight())));
             configs.add(config(CFG_SPEED_HOP_INTERVAL,
@@ -744,16 +744,11 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.COLOR,
                     formatColor(manager.getNameTagColor()), "", "",
                     formatColor(manager.getNameTagColor())));
-            configs.add(config(CFG_NAME_TAG_BLUR,
-                    context.getString(R.string.mod_config_name_tag_blur),
-                    UnifiedMod.ConfigType.SLIDER_INT,
-                    "4", "0", "20",
-                    String.valueOf(manager.getNameTagBlur())));
-            configs.add(config(CFG_NAME_TAG_BLUR_COLOR,
-                    context.getString(R.string.mod_config_name_tag_blur_color),
+            configs.add(config(CFG_NAME_TAG_OUTLINE_COLOR,
+                    context.getString(R.string.mod_config_name_tag_outline_color),
                     UnifiedMod.ConfigType.COLOR,
-                    formatColor(manager.getNameTagBlurColor()), "", "",
-                    formatColor(manager.getNameTagBlurColor())));
+                    formatColor(manager.getNameTagOutlineColor()), "", "",
+                    formatColor(manager.getNameTagOutlineColor())));
             configs.add(config(CFG_NAME_TAG_SIZE,
                     context.getString(R.string.mod_config_name_tag_size),
                     UnifiedMod.ConfigType.SLIDER_INT,
@@ -1169,11 +1164,8 @@ public final class InbuiltModuleProvider {
             case CFG_NAME_TAG_STYLE:
                 manager.setNameTagStyle(parseInt(value, manager.getNameTagStyle()));
                 break;
-            case CFG_NAME_TAG_BLUR:
-                manager.setNameTagBlur(parseInt(value, manager.getNameTagBlur()));
-                break;
-            case CFG_NAME_TAG_BLUR_COLOR:
-                manager.setNameTagBlurColor(parseColor(value, manager.getNameTagBlurColor()));
+            case CFG_NAME_TAG_OUTLINE_COLOR:
+                manager.setNameTagOutlineColor(parseColor(value, manager.getNameTagOutlineColor()));
                 break;
             case CFG_NAME_TAG_COLOR:
                 manager.setNameTagColor(parseColor(value, manager.getNameTagColor()));
