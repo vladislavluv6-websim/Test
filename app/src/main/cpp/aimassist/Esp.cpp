@@ -1137,14 +1137,15 @@ void Esp::render(void *levelRenderer, void *screenContext) {
       ? std::max(m_range.load(std::memory_order_relaxed), 64.0f)
       : m_range.load(std::memory_order_relaxed);
 
-  // Actor list MUST be refreshed every frame: caching it makes the pointers
-  // go stale and any per-actor game call then faults on freed memory.
-  m_bridge.fillNearbyActors(player, scanRange, m_actors);
-  AntiBot::instance().update(m_actors, player);
-
+  // Actor scan + snapshots ~30 Hz. The scan (game fetchNearbyActors) is the
+  // single most expensive per-frame call; isPlayer is fault-guarded and
+  // getActorBounds uses safe reads, so a slightly stale list can never fault.
   const auto boxNow = std::chrono::steady_clock::now();
-  if (boxNow - m_lastBoxCompute >= std::chrono::milliseconds(33)) {
+  if (m_actors.empty() ||
+      boxNow - m_lastBoxCompute >= std::chrono::milliseconds(33)) {
     m_lastBoxCompute = boxNow;
+    m_bridge.fillNearbyActors(player, scanRange, m_actors);
+    AntiBot::instance().update(m_actors, player);
     if (nameTags) updateNameTags(player, playerRenderer, camera);
     if (espBoxes && javaBoxes) updateEspBoxes(player, playerRenderer, camera);
     if (targetEsp) updateTargetEsp(player, playerRenderer, camera);
