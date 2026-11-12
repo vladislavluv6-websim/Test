@@ -294,7 +294,7 @@ public class OnyxMenuOverlay {
             }
         });
         webView = view;
-        view.loadUrl(ASSET_URL);
+        view.loadUrl(ASSET_URL + "?v=" + System.currentTimeMillis());
     }
 
     private void attachToWindow() {

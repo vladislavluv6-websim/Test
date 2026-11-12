@@ -374,111 +374,37 @@ public class NameTagsOverlay extends View {
     private void drawLabel(Canvas canvas, Label label) {
         final float iconSize = Math.max(8, armorSize) * density;
         final float iconGap = 1.3f * density;
-        final float itemGap = 3f * density;
         final float nameWidth = textPaint.measureText(label.name);
-        final Bitmap item = showOffhand ? itemIcon(label.offhand) : null;
-        final float itemWidth = item != null ? iconSize + itemGap : 0f;
         final int iconCount = countArmorIcons(label.armorMask);
-        final float iconsWidth = iconCount > 0
-                ? iconCount * iconSize + (iconCount - 1) * iconGap : 0f;
-        final boolean iconsRight = nameTagStyle == 1 || nameTagStyle == 3
-                || nameTagStyle == 4;
-        final float ascent = textPaint.ascent();
-        final float descent = textPaint.descent();
-        final float textTop = label.y + ascent;
-        final float textBottom = label.y + descent;
-        final float centerY = label.y + (ascent + descent) * 0.5f;
-        final float rightIconsGap = iconsRight && iconCount > 0 ? dp(8f) : 0f;
-        final float lineWidth = itemWidth + nameWidth + rightIconsGap + iconsWidth;
-        final float left = label.x - lineWidth * 0.5f;
+        final Bitmap item = showOffhand ? itemIcon(label.offhand) : null;
+        final float centerY = label.y + (textPaint.ascent() + textPaint.descent()) * 0.5f;
 
-        float minX = left;
-        float maxX = left + lineWidth;
-        float minY = textTop;
-        float maxY = textBottom;
-        float iconsLeft = left + itemWidth + nameWidth + rightIconsGap;
-        float iconsTop = centerY - iconSize * 0.5f;
+        // Имя всегда ровно по центру цели; иконки — по бокам, фон прозрачный.
+        textPaint.setColor(label.friend ? FRIEND_COLOR : nameColor);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        canvas.drawText(label.name, label.x, label.y, textPaint);
+        textPaint.setTextAlign(Paint.Align.LEFT);
 
-        if (iconCount > 0 && !iconsRight) {
-            iconsLeft = label.x - iconsWidth * 0.5f;
-            iconsTop = textTop - dp(4f) - iconSize;
-            minX = Math.min(minX, iconsLeft);
-            maxX = Math.max(maxX, iconsLeft + iconsWidth);
-            minY = Math.min(minY, iconsTop);
-        } else if (iconCount > 0) {
-            minY = Math.min(minY, iconsTop);
-            maxY = Math.max(maxY, iconsTop + iconSize);
-        }
-
-        drawPanel(canvas, minX, minY, maxX, maxY, label.friend);
+        final float leftEdge = label.x - nameWidth * 0.5f;
+        final float rightEdge = label.x + nameWidth * 0.5f;
 
         if (item != null) {
-            iconRect.set(left, centerY - iconSize * 0.5f,
-                    left + iconSize, centerY + iconSize * 0.5f);
+            float ix = leftEdge - dp(3f) - iconSize;
+            iconRect.set(ix, centerY - iconSize * 0.5f,
+                    ix + iconSize, centerY + iconSize * 0.5f);
             drawIcon(canvas, item, iconRect, null);
         }
 
-        textPaint.setColor(label.friend ? FRIEND_COLOR : nameColor);
-        textPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText(label.name, left + itemWidth, label.y, textPaint);
-
         if (iconCount > 0) {
-            float cursor = iconsLeft;
-            drawArmorRow(canvas, label.armorMask, iconCount, cursor, iconsTop,
-                    iconSize, iconGap);
+            float ix = rightEdge + dp(4f);
+            drawArmorRow(canvas, label.armorMask, iconCount, ix,
+                    centerY - iconSize * 0.5f, iconSize, iconGap);
         }
     }
 
     private void drawPanel(Canvas canvas, float minX, float minY,
                            float maxX, float maxY, boolean friend) {
-        final float horizontal = dp(7f);
-        final float vertical = dp(5f);
-        panelRect.set(minX - horizontal, minY - vertical,
-                maxX + horizontal, maxY + vertical);
-        int accent = friend ? FRIEND_COLOR : nameColor;
-        int accentSoft = (accent & 0x00FFFFFF) | 0x88000000;
-        switch (nameTagStyle) {
-            case 0:
-                panelPaint.setColor(0xD20D0F16);
-                panelPaint.clearShadowLayer();
-                canvas.drawRoundRect(panelRect, panelRect.height() * 0.5f,
-                        panelRect.height() * 0.5f, panelPaint);
-                borderPaint.setColor(0x552A2E3A);
-                canvas.drawRoundRect(panelRect, panelRect.height() * 0.5f,
-                        panelRect.height() * 0.5f, borderPaint);
-                break;
-            case 1:
-                borderPaint.setColor(accentSoft);
-                borderPaint.setStrokeWidth(dp(1.4f));
-                canvas.drawLine(panelRect.left, panelRect.top,
-                        panelRect.right, panelRect.top, borderPaint);
-                canvas.drawLine(panelRect.left, panelRect.bottom,
-                        panelRect.right, panelRect.bottom, borderPaint);
-                break;
-            case 2:
-                panelPaint.setColor(0x66101828);
-                panelPaint.setShadowLayer(Math.max(4f, nameBlur * 1.6f) * density,
-                        0f, 0f, accentSoft);
-                canvas.drawRoundRect(panelRect, dp(9f), dp(9f), panelPaint);
-                panelPaint.clearShadowLayer();
-                borderPaint.setColor(accentSoft);
-                canvas.drawRoundRect(panelRect, dp(9f), dp(9f), borderPaint);
-                break;
-            case 3:
-                panelPaint.setColor(0xA60E1018);
-                canvas.drawRoundRect(panelRect, dp(6f), dp(6f), panelPaint);
-                borderPaint.setColor(0x33FFFFFF);
-                canvas.drawLine(panelRect.left + dp(4f), panelRect.top,
-                        panelRect.left + dp(4f), panelRect.bottom, borderPaint);
-                break;
-            case 4:
-                drawBrackets(canvas, panelRect, accent);
-                break;
-            default:
-                panelPaint.setColor(0xD20D0F16);
-                canvas.drawRoundRect(panelRect, dp(7f), dp(7f), panelPaint);
-                break;
-        }
+        // Фон name tag полностью прозрачный — виден только ник и иконки.
     }
 
     private void drawBrackets(Canvas canvas, RectF rect, int accent) {

@@ -490,6 +490,7 @@
   }
 
   window.onyxInit = function (modules) {
+    relocatePopups();
     render(Array.isArray(modules) ? modules : []);
   };
 
