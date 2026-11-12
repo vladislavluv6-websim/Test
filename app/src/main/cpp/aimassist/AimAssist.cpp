@@ -1279,13 +1279,11 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
       m_triggerDelayForTargetMs += randomInt(0, jitter);
     }
     const float reactionRoll = randomFloat(0.0f, 1.0f);
-    if (reactionRoll < 0.10f) {
-      m_triggerDelayForTargetMs += randomInt(90, 240);
-    } else if (reactionRoll < 0.18f) {
-      m_triggerDelayForTargetMs -= randomInt(15, 45);
+    if (reactionRoll < 0.08f) {
+      m_triggerDelayForTargetMs += randomInt(20, 70);
     }
     m_triggerDelayForTargetMs =
-        std::max(25, std::min(650, m_triggerDelayForTargetMs));
+        std::max(0, std::min(650, m_triggerDelayForTargetMs));
   }
   // В режиме only crit окно падения короткое: не тратим его на полную
   // «человеческую» задержку и случайные пропуски.

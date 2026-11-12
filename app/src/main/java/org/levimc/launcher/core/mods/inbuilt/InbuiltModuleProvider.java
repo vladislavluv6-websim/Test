@@ -800,7 +800,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_TRIGGER_BOT_DELAY,
                     context.getString(R.string.mod_config_trigger_bot_delay),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "90", "40", "400",
+                    "0", "0", "400",
                     String.valueOf(manager.getTriggerBotDelay())));
             configs.add(config(CFG_TRIGGER_BOT_REACTION_JITTER,
                     context.getString(R.string.mod_config_trigger_bot_reaction_jitter),

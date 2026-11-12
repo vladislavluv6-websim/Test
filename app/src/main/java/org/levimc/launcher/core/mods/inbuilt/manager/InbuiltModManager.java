@@ -199,8 +199,8 @@ public class InbuiltModManager {
     private static final int DEFAULT_SWING_SPEED = 100;
     private static final int DEFAULT_SWING_AMPLITUDE = 100;
     private static final boolean DEFAULT_TRIGGER_BOT_ENABLED = true;
-    private static final int DEFAULT_TRIGGER_BOT_DELAY = 45;
-    private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 40;
+    private static final int DEFAULT_TRIGGER_BOT_DELAY = 0;
+    private static final int DEFAULT_TRIGGER_BOT_REACTION_JITTER = 15;
     private static final int DEFAULT_TRIGGER_BOT_RANGE = 30;
     private static final int DEFAULT_TRIGGER_BOT_TOLERANCE = 8;
     private static final boolean DEFAULT_TRIGGER_BOT_TARGET_PLAYERS = true;
@@ -208,13 +208,13 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_TRIGGER_BOT_HUMANIZATION = true;
     private static final int DEFAULT_TRIGGER_BOT_INTERVAL = 220;
     private static final int DEFAULT_TRIGGER_BOT_INTERVAL_JITTER = 50;
-    private static final int DEFAULT_TRIGGER_BOT_SKIP_CHANCE = 1;
+    private static final int DEFAULT_TRIGGER_BOT_SKIP_CHANCE = 0;
     private static final boolean DEFAULT_TRIGGER_BOT_ONLY_CRIT = false;
     private static final int DEFAULT_GYRO_SENSITIVITY_MULTIPLIER = 100;
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
     private static final String KEY_TUNING_REVISION = "tuning_revision";
-    private static final int TUNING_REVISION = 7;
+    private static final int TUNING_REVISION = 8;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
     private static final String KEY_ONYX_DEFAULTS_REVISION = "onyx_defaults_revision";
