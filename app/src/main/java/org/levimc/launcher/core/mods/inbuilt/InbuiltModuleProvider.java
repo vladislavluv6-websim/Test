@@ -1278,6 +1278,14 @@ public final class InbuiltModuleProvider {
             default:
                 break;
         }
+
+        // Push the new config to the live overlay/native (colors, model, etc.).
+        // Without this the value only changed in prefs, so the game kept the
+        // old color/style until the module was restarted.
+        InbuiltOverlayManager changedManager = InbuiltOverlayManager.getInstance();
+        if (changedManager != null) {
+            changedManager.applyConfigurationChanges(mod.getId());
+        }
     }
 
     private static boolean setHotbarSlotConfig(InbuiltModManager manager, String key, String value) {
