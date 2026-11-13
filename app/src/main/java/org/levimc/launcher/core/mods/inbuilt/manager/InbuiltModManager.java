@@ -67,6 +67,7 @@ public class InbuiltModManager {
     private static final String KEY_TRIGGER_BOT_RANDOM_POINT = "trigger_bot_random_point";
     private static final String KEY_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String KEY_ESP_SHOW_MOBS = "esp_show_mobs";
+    private static final String KEY_ESP_HIDE_LABELS = "esp_hide_labels";
     private static final String KEY_ESP_NAME_TAGS = "esp_name_tags";
     private static final String KEY_ESP_RANGE = "esp_range";
     private static final String KEY_ESP_PLAYER_COLOR = "esp_player_color";
@@ -184,6 +185,7 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_RANDOM_POINT = true;
     private static final boolean DEFAULT_ESP_SHOW_PLAYERS = true;
     private static final boolean DEFAULT_ESP_SHOW_MOBS = true;
+    private static final boolean DEFAULT_ESP_HIDE_LABELS = true;
     private static final boolean DEFAULT_ESP_NAME_TAGS = false;
     private static final boolean DEFAULT_ESP_ARMOR_COLORS = true;
     private static final int DEFAULT_ESP_ARMORED_COLOR = 0xFF4E83FF;
@@ -786,6 +788,15 @@ public class InbuiltModManager {
 
     public void setEspShowMobs(boolean enabled) {
         prefs.edit().putBoolean(KEY_ESP_SHOW_MOBS, enabled).apply();
+    }
+
+    /** Скрывать в ESP серверные надписи/NPC (мобы с кастомным ником). */
+    public boolean isEspHideLabels() {
+        return prefs.getBoolean(KEY_ESP_HIDE_LABELS, DEFAULT_ESP_HIDE_LABELS);
+    }
+
+    public void setEspHideLabels(boolean enabled) {
+        prefs.edit().putBoolean(KEY_ESP_HIDE_LABELS, enabled).apply();
     }
 
     public boolean isEspNameTags() {

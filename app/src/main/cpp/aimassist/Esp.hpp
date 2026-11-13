@@ -77,6 +77,9 @@ public:
 
   void setPlayers(bool enabled);
   void setMobs(bool enabled);
+  // Скрывать серверные надписи/таблички: это мобы/NPC с кастомным ником.
+  void setHideLabels(bool enabled);
+  bool isHideLabelsEnabled() const;
   void setRange(float range);
   void setPlayerColor(uint32_t argb);
   void setMobColor(uint32_t argb);
@@ -123,6 +126,8 @@ private:
   // AABB с коротким hold-last-good: одиночный сбой чтения компонента не
   // должен выкидывать игрока из кадра ESP/NameTags.
   bool boundsFor(void *actor, Aabb &out);
+  // true, если это не игрок, а сущность-надпись (моб/NPC с ником).
+  bool isLabelActor(void *actor);
 
   ClientBridge &m_bridge = ClientBridge::instance();
   std::mutex m_initMutex;
@@ -130,6 +135,7 @@ private:
   std::atomic<bool> m_enabled{false};
   std::atomic<bool> m_showPlayers{true};
   std::atomic<bool> m_showMobs{true};
+  std::atomic<bool> m_hideLabels{true};
   // ESP/NameTags всегда 100 блоков: отдельной настройки дальности больше нет.
   std::atomic<float> m_range{100.0f};
   std::atomic<uint32_t> m_playerColor{0xFFFF5555u};
@@ -172,6 +178,8 @@ private:
   };
   std::unordered_map<void *, CachedBounds> m_boundsCache;
   std::chrono::steady_clock::time_point m_boundsCacheCleanup{};
+  std::unordered_map<void *, std::pair<bool, std::chrono::steady_clock::time_point>>
+      m_labelCache;
 };
 
 } // namespace aimbot

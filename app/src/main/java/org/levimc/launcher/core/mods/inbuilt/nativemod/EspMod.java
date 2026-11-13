@@ -57,6 +57,11 @@ public final class EspMod {
         if (initialized) nativeSetMobs(enabled);
     }
 
+    /** Скрывать в ESP серверные надписи/NPC (мобы с кастомным ником). */
+    public static void setHideLabels(boolean enabled) {
+        if (initialized) nativeSetHideLabels(enabled);
+    }
+
     public static void setRange(float range) {
         if (initialized) nativeSetRange(range);
     }
@@ -122,6 +127,7 @@ public final class EspMod {
     private static native void nativeSetPlayers(boolean enabled);
     private static native void nativeSetMobs(boolean enabled);
     private static native void nativeSetRange(float range);
+    private static native void nativeSetHideLabels(boolean enabled);
     private static native void nativeSetPlayerColor(int argb);
     private static native void nativeSetMobColor(int argb);
     private static native void nativeSetArmoredColor(int argb);

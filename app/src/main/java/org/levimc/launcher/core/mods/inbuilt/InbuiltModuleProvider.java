@@ -83,6 +83,7 @@ public final class InbuiltModuleProvider {
     private static final String CFG_TRIGGER_BOT_RANDOM_POINT = "trigger_bot_random_point";
     private static final String CFG_ESP_SHOW_PLAYERS = "esp_show_players";
     private static final String CFG_ESP_SHOW_MOBS = "esp_show_mobs";
+    private static final String CFG_ESP_HIDE_LABELS = "esp_hide_labels";
     private static final String CFG_ESP_RANGE = "esp_range";
     private static final String CFG_ESP_BOX_STYLE = "esp_box_style";
     private static final String CFG_ESP_PLAYER_COLOR = "esp_player_color";
@@ -716,6 +717,11 @@ public final class InbuiltModuleProvider {
                     UnifiedMod.ConfigType.TOGGLE,
                     "true", "", "",
                     String.valueOf(manager.isEspShowMobs())));
+            configs.add(config(CFG_ESP_HIDE_LABELS,
+                    context.getString(R.string.mod_config_esp_hide_labels),
+                    UnifiedMod.ConfigType.TOGGLE,
+                    "true", "", "",
+                    String.valueOf(manager.isEspHideLabels())));
             configs.add(config(CFG_ESP_ARMOR_COLORS,
                     context.getString(R.string.mod_config_esp_armor_colors),
                     UnifiedMod.ConfigType.TOGGLE,
@@ -1208,6 +1214,9 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_ESP_SHOW_MOBS:
                 manager.setEspShowMobs(parseBoolean(value));
+                break;
+            case CFG_ESP_HIDE_LABELS:
+                manager.setEspHideLabels(parseBoolean(value));
                 break;
             case CFG_ESP_ARMOR_COLORS:
                 manager.setEspArmorColors(parseBoolean(value));

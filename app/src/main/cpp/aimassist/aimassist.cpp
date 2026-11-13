@@ -404,6 +404,12 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetMobs(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetHideLabels(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::Esp::instance().setHideLabels(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_EspMod_nativeSetRange(
     JNIEnv *, jclass, jfloat range) {
   aimbot::Esp::instance().setRange(range);

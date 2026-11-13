@@ -43,6 +43,7 @@ public class EspOverlay extends BaseOverlayButton {
         EspMod.setRange(RANGE_BLOCKS);
         EspMod.setPlayers(manager.isEspShowPlayers());
         EspMod.setMobs(manager.isEspShowMobs());
+        EspMod.setHideLabels(manager.isEspHideLabels());
         EspMod.setPlayerColor(manager.getEspPlayerColor());
         EspMod.setMobColor(manager.getEspMobColor());
         EspMod.setArmorColors(manager.isEspArmorColors());

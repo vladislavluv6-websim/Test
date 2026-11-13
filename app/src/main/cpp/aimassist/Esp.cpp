@@ -596,6 +596,14 @@ void Esp::setMobs(bool enabled) {
   m_showMobs.store(enabled, std::memory_order_release);
 }
 
+void Esp::setHideLabels(bool enabled) {
+  m_hideLabels.store(enabled, std::memory_order_release);
+}
+
+bool Esp::isHideLabelsEnabled() const {
+  return m_hideLabels.load(std::memory_order_acquire);
+}
+
 void Esp::setRange(float range) {
   if (!std::isfinite(range)) return;
   m_range.store(std::clamp(range, 4.0f, 512.0f), std::memory_order_release);
@@ -860,6 +868,43 @@ bool Esp::boundsFor(void *actor, Aabb &out) {
   return false;
 }
 
+bool Esp::isLabelActor(void *actor) {
+  if (!actor) return false;
+  if (m_bridge.isPlayer(actor)) return false;
+  const auto now = std::chrono::steady_clock::now();
+  const auto cached = m_labelCache.find(actor);
+  if (cached != m_labelCache.end() &&
+      now - cached->second.second < std::chrono::seconds(1)) {
+    return cached->second.first;
+  }
+  std::string name;
+  bool label = readGameString(
+                   reinterpret_cast<uintptr_t>(actor) +
+                       offsets::kActorFilteredNameTag,
+                   name) &&
+               !cleanPlayerName(name).empty();
+  if (!label) {
+    // Fallback: реальный Actor::getNameTag(). Для обычных мобов без
+    // кастомного имени он пустой, у серверных табличек — текст.
+    const uintptr_t base = reinterpret_cast<uintptr_t>(actor);
+    uintptr_t vtable = 0;
+    uintptr_t stateVector = 0;
+    const bool callable =
+        mem::isPlausiblePointer(base) && mem::read(base, vtable) &&
+        mem::isGameAddress(reinterpret_cast<const void *>(vtable)) &&
+        mem::read(base + offsets::kActorStateVectorComponent, stateVector) &&
+        mem::isPlausiblePointer(stateVector);
+    if (callable) {
+      if (ActorGetNameTagFn fn = actorGetNameTagFn()) {
+        label = !cleanPlayerName(fn(actor)).empty();
+      }
+    }
+  }
+  if (m_labelCache.size() > 2048) m_labelCache.clear();
+  m_labelCache[actor] = {label, now};
+  return label;
+}
+
 void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
                          const float camera[3]) {
   std::vector<NameTagLabel> labels;
@@ -1026,6 +1071,12 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
     const bool isPlayer = m_bridge.isPlayer(actor);
     if (isPlayer ? !showPlayers : !showMobs) continue;
     if (isPlayer && AntiBot::instance().isBot(actor)) continue;
+    // Серверные надписи («привилегии», «информация») — это мобы/NPC с
+    // кастомным ником. В списке мобов они не нужны.
+    if (!isPlayer && m_hideLabels.load(std::memory_order_relaxed) &&
+        isLabelActor(actor)) {
+      continue;
+    }
 
     Aabb bounds{};
     if (!boundsFor(actor, bounds)) continue;
@@ -1332,6 +1383,10 @@ void Esp::render(void *levelRenderer, void *screenContext) {
       if (!showMobs) continue;
       const uint32_t categories = m_bridge.getActorCategories(actor);
       if ((categories & offsets::kMobCategory) == 0) continue;
+      if (m_hideLabels.load(std::memory_order_relaxed) &&
+          isLabelActor(actor)) {
+        continue;
+      }
     }
 
     Aabb bounds{};

@@ -690,6 +690,7 @@
     <string name="mod_config_esp_range">Дальность ESP (блоки)</string>
     <string name="mod_config_esp_players">Показывать игроков</string>
     <string name="mod_config_esp_mobs">Показывать мобов</string>
+    <string name="mod_config_esp_hide_labels">Скрывать надписи (NPC)</string>
     <string name="mod_config_esp_armor_colors">Цвет игроков по броне</string>
     <string name="mod_config_esp_armored_color">Цвет игроков в броне</string>
     <string name="mod_config_esp_player_color">Цвет бокса игроков</string>

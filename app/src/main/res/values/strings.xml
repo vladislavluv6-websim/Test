@@ -688,6 +688,7 @@
     <string name="mod_config_esp_range">ESP range (blocks)</string>
     <string name="mod_config_esp_players">Show players</string>
     <string name="mod_config_esp_mobs">Show mobs</string>
+    <string name="mod_config_esp_hide_labels">Hide signs / NPC text</string>
     <string name="mod_config_esp_armor_colors">Armor-based player colors</string>
     <string name="mod_config_esp_armored_color">Armored player color</string>
     <string name="mod_config_esp_player_color">Player box color</string>
