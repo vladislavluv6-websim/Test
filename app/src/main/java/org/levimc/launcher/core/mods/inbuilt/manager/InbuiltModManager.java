@@ -167,7 +167,7 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_AIM_ASSIST_WALL_CHECK = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_AIM_ASSIST_TARGET_MOBS = true;
-    private static final int DEFAULT_AIM_ASSIST_BODY_PART = 0;
+    private static final int DEFAULT_AIM_ASSIST_BODY_PART = 1;
     private static final int DEFAULT_AIM_ASSIST_MAX_SPEED = 3400;
     private static final int DEFAULT_AIM_ASSIST_SMOOTHING = 60;
     private static final int DEFAULT_AIM_ASSIST_ACCEL = 12000;
@@ -220,7 +220,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
     private static final String KEY_TUNING_REVISION = "tuning_revision";
-    private static final int TUNING_REVISION = 9;
+    private static final int TUNING_REVISION = 10;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
     private static final String KEY_ONYX_DEFAULTS_REVISION = "onyx_defaults_revision";
@@ -302,6 +302,7 @@ public class InbuiltModManager {
                 .putInt(KEY_AIM_ASSIST_SMOOTHING, DEFAULT_AIM_ASSIST_SMOOTHING)
                 .putInt(KEY_AIM_ASSIST_ACCEL, DEFAULT_AIM_ASSIST_ACCEL)
                 .putInt(KEY_AIM_ASSIST_DEADZONE, DEFAULT_AIM_ASSIST_DEADZONE)
+                .putInt(KEY_AIM_ASSIST_BODY_PART, DEFAULT_AIM_ASSIST_BODY_PART)
                 .putInt(KEY_AIM_ASSIST_FULL_RANGE, DEFAULT_AIM_ASSIST_FULL_RANGE)
                 .putInt(KEY_AIM_ASSIST_STICKY, DEFAULT_AIM_ASSIST_STICKY)
                 .putInt(KEY_AIM_ASSIST_GRACE, DEFAULT_AIM_ASSIST_GRACE)

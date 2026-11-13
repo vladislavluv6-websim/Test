@@ -55,7 +55,7 @@ struct Settings {
   float fullSpeedRangeDeg = 60.0f;
 
   TargetPriority targetPriority = TargetPriority::Angle;
-  TargetBone targetBone = TargetBone::Head;
+  TargetBone targetBone = TargetBone::Chest;
 
   int stickyTicks = 0;
   // Target lock: держим одну цель, пока она жива и в радиусе. Переключение

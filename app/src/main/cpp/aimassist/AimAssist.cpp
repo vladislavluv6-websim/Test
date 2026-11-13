@@ -1780,13 +1780,14 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     // game runs at 15-30 FPS, which read as mini teleports. A degree-based
     // cap keeps motion continuous at any frame rate; the ceiling is higher
     // for large corrections so a PvP flick still snaps in ~100-200 ms.
-    // Fast PvP flick: the cap still guarantees an interpolated glide (never
-    // a one-frame teleport), but a 90 deg correction now takes ~5 frames at
-    // 30-34 FPS instead of ~20. Small errors keep a low cap so tracking the
-    // last few tenths of a degree stays smooth.
+    // PC-cheat feel: a fast flick that still interpolates every frame. The
+    // cap grows with dt so the angular speed stays similar at any FPS, but it
+    // never exceeds ~10-12 deg/frame - the range where a 30-60 FPS camera
+    // reads as motion, not as a teleport. Large errors get a small bonus and
+    // the exponential tail settles the last degrees smoothly.
     const float frameCap =
-        clampf(220.0f * fastDt, 6.0f, 16.0f) +
-        11.0f * clampf((errMag - 8.0f) / 30.0f, 0.0f, 1.0f);
+        clampf(240.0f * fastDt, 5.0f, 10.0f) +
+        2.5f * clampf((errMag - 10.0f) / 50.0f, 0.0f, 1.0f);
 
     float stepYaw;
     float stepPitch;
@@ -1796,11 +1797,11 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
       // the whole remaining error in a single frame, which read as a camera
       // teleport whenever the crosshair was outside the hitbox.
       //
-      // PvP tuning: an 80 ms floor (was 150) plus distanceEase makes the
-      // crosshair reach the box in a few frames while still interpolating.
+      // ~50 ms time constant: the exponential tail settles quickly, while
+      // the per-frame cap above keeps the initial flick continuous.
       const float tauMs =
-          clampf(std::max(settings.fastAimTimeMs * 2.0f, 80.0f),
-                 70.0f, 200.0f);
+          clampf(std::max(settings.fastAimTimeMs * 1.5f, 45.0f),
+                 40.0f, 120.0f);
       const float smoothAlpha =
           1.0f - std::exp(-fastDt * 1000.0f / tauMs);
       const float distanceEase =
@@ -1901,8 +1902,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
   // Same per-frame degree ceiling as the fast path: the old smoothing could
   // move 40%+ of the remaining error in a single frame at low FPS.
   const float frameCap =
-      clampf(180.0f * h, 5.0f, 12.0f) +
-      8.0f * clampf((errMag - 8.0f) / 30.0f, 0.0f, 1.0f);
+      clampf(200.0f * h, 4.0f, 9.0f) +
+      2.5f * clampf((errMag - 10.0f) / 50.0f, 0.0f, 1.0f);
   const float maxStep = std::min(
       settings.maxDegPerSecond * (0.5f + 0.5f * strengthScale) * m_motorScale * h,
       frameCap);
