@@ -1139,6 +1139,49 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     }
   }
 
+  // Hard engagement lock. While the current target is alive, visible and
+  // inside targetLockRange, keep aiming at it even if it left the FOV cone
+  // (e.g. ran behind the player) and even if another actor is under the
+  // crosshair. This both stops accidental target stealing and makes the
+  // camera turn around when an opponent runs behind the back.
+  if (settings.targetLock && m_target.valid && m_target.actor) {
+    const bool playerActor = m_bridge.isPlayer(m_target.actor);
+    const bool allowed =
+        playerActor ? settings.targetPlayers : settings.targetMobs;
+    const float lockRange = clampf(settings.targetLockRange, 3.0f, 20.0f);
+    const Vec3 lockPoint =
+        getTargetPoint(m_target.actor, settings.targetBone, true);
+    Vec3 lockPos{};
+    const bool havePos = m_bridge.getPosition(m_target.actor, lockPos);
+    if (allowed && havePos) {
+      const float dx = lockPoint.x - eye.x;
+      const float dy = lockPoint.y - eye.y;
+      const float dz = lockPoint.z - eye.z;
+      const float lockDist = std::sqrt(dx * dx + dy * dy + dz * dz);
+      const bool alive = gameecs::readHealth(m_target.actor) > 0.05f;
+      const bool los =
+          !settings.visibleCheck ||
+          m_bridge.hasLineOfSight(player, eye, lockPoint);
+      if (alive && lockDist <= lockRange && los) {
+        const Angles a = calculateAnglesToPoint(lockPoint);
+        const float ly = shortestDelta(localYaw, a.yaw);
+        const float lp = a.pitch - localPitch;
+        Target locked{};
+        locked.actor = m_target.actor;
+        locked.point = lockPoint;
+        locked.distance = lockDist;
+        locked.yaw = a.yaw;
+        locked.pitch = a.pitch;
+        locked.angle = std::sqrt(ly * ly + lp * lp);
+        locked.valid = true;
+        m_target = locked;
+        m_target.valid = true;
+        m_targetGrace = settings.targetGraceFrames;
+        return;
+      }
+    }
+  }
+
   Target chosen = settings.targetPriority == TargetPriority::Angle
                       ? bestAngle
                       : bestDistance;
@@ -1544,6 +1587,21 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     hitPoint = randomHitPoint(bestActor, hitPoint);
   }
 
+  // Pull the attack point a few centimetres inside the hitbox. A ray that
+  // only clips the side of the client AABB otherwise lands outside the
+  // server's slightly different (interpolated) box and the hit is dropped.
+  {
+    Aabb box{};
+    if (m_bridge.getActorBounds(bestActor, box)) {
+      const float mx = std::min(0.09f, (box.max.x - box.min.x) * 0.30f);
+      const float my = std::min(0.09f, (box.max.y - box.min.y) * 0.20f);
+      const float mz = std::min(0.09f, (box.max.z - box.min.z) * 0.30f);
+      hitPoint.x = clampf(hitPoint.x, box.min.x + mx, box.max.x - mx);
+      hitPoint.y = clampf(hitPoint.y, box.min.y + my, box.max.y - my);
+      hitPoint.z = clampf(hitPoint.z, box.min.z + mz, box.max.z - mz);
+    }
+  }
+
   // Never send an attack through a wall: the server rejects it (and
   // anti-cheat treats it as a reach/through-wall hit). The ray test only
   // knows actor boxes, not blocks.
@@ -1620,13 +1678,16 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
                       m_bridge.getGameMode());
     }
   }
-  // TriggerBot always resets sprint on the attack tick, even when the player
-  // is running. Critical hits need a non-sprinting server state, and keeping
-  // the reset unconditional avoids a sprinting hit packet after a chase.
-  combatstate::suppressSprint(120);
-  if (player) {
-    gameecs::setMoveSprinting(player, false);
-    gameecs::setSprintingFlag(player, false);
+  // Only criticals need the server-side sprint state cleared. Doing it on
+  // every attack silently cancelled the player's sprint and made running
+  // fights feel like the trigger stopped working; normal sprint hits are
+  // valid vanilla behavior.
+  if (settings.onlyCrit) {
+    combatstate::suppressSprint(120);
+    if (player) {
+      gameecs::setMoveSprinting(player, false);
+      gameecs::setSprintingFlag(player, false);
+    }
   }
 
   if (m_bridge.attackActor(bestActor, hitPoint)) {
@@ -2109,19 +2170,24 @@ bool AimAssist::isFallingForCrit(const Settings &settings, int64_t now) {
     return false;
   }
   const float gate = -std::max(0.10f, settings.critMinFallSpeed);
-  if (!(m_vertVel <= gate)) {
+  // Clearly rising means a new jump (or jump boost): restart the timer.
+  // Small wobble around the apex must NOT restart it, otherwise the settle
+  // window keeps resetting and the attack lands late in the fall.
+  if (m_vertVel > 0.6f) {
     m_fallingSinceMs = 0;
     return false;
   }
-  // Wait one server tick after the descent starts: the attack packet is
-  // validated against the last PlayerAuthInput, which must already say
-  // "airborne and falling" for the server to award the crit.
-  if (m_fallingSinceMs == 0) {
+  if (m_vertVel <= gate && m_fallingSinceMs == 0) {
     m_fallingSinceMs = now;
   }
+  if (m_fallingSinceMs == 0) return false;
+  // Wait at least one 20 Hz tick after the descent starts so the server has
+  // already received a PlayerAuthInput with "airborne, falling, not
+  // sprinting". Then only attack while vv is still negative: at the apex
+  // noise the server may see the player as rising and refuse the crit.
   const int64_t settleMs =
       static_cast<int64_t>(std::max(0, settings.critSettleMs));
-  return now - m_fallingSinceMs >= settleMs;
+  return m_vertVel < 0.0f && now - m_fallingSinceMs >= settleMs;
 }
 
 // ============================================================

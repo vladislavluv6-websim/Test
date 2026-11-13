@@ -61,6 +61,10 @@ struct Settings {
   // Target lock: держим одну цель, пока она жива и в радиусе. Переключение
   // только если прицел стоит точно на другой цели.
   bool targetLock = true;
+  // Keep the current engagement until it dies, is no longer visible, or
+  // leaves this radius. Prevents the assist from jumping to another player
+  // (and from freezing when the locked target runs behind the camera).
+  float targetLockRange = 7.0f;
   // Fast aim: довод по экспоненте за fastAimTimeMs, без шума/overshoot/
   // deadzone/бюджета. Всегда ближайшая цель и lock до смерти/выхода из range.
   bool fastAim = true;
@@ -142,7 +146,7 @@ struct Settings {
   int switchDelayMs = 45;
   // Триггер: максимальный угол от прицела до центра цели для «мягкого»
   // добивания, если луч не попал в AABB. В legit-режиме не используется.
-  float attackMaxAngleDeg = 2.0f;
+  float attackMaxAngleDeg = 3.0f;
   // Вероятность «промаха» (пропуска удара) для humanization.
   float attackMissChance = 0.02f;
   // Разброс интервала между ударами, мс (±).
@@ -168,11 +172,11 @@ struct Settings {
   // Бить только в падении (после прыжка), чтобы каждый удар был критом.
   bool onlyCrit = false;
   // Минимальная скорость падения по Y, блоков/с.
-  float critMinFallSpeed = 0.17f;
+  float critMinFallSpeed = 0.5f;
   // Сколько миллисекунд нужно непрерывно падать перед ударом.
   // At least one 50 ms server tick: the attack packet is processed against
   // the last PlayerAuthInput, so the server must already see airborne state.
-  int critSettleMs = 50;
+  int critSettleMs = 60;
 
   // ------------------------------------------------------------
   // Сетевое формирование ротации (то, что реально видит сервер)
