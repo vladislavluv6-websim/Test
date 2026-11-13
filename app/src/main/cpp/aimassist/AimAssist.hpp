@@ -445,6 +445,7 @@ private:
   void loadRotationPattern();
   float m_lastTargetYaw = 0.0f;
   float m_lastTargetPitch = 0.0f;
+  bool m_haveTargetSample = false;
   float m_fastSpeedScale = 1.0f;
   float m_fastStealthScale = 1.0f;
   int64_t m_nextFastPauseMs = 0;

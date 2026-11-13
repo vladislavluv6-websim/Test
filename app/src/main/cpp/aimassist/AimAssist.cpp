@@ -1712,22 +1712,40 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     float stepYaw;
     float stepPitch;
     if (settings.legit) {
-      // Legit rotation ported from a working killaura: a rate-limited
-      // shortest-arc approach whose speed eases with a smoothstep as it nears
-      // the target (never a constant rate), plus a catchup term that tracks the
-      // target's own angular velocity so a strafing target is not trailed.
-      const float t = clampf(errMag / 45.0f, 0.0f, 1.0f);
-      const float smooth = t * t * (3.0f - 2.0f * t);
-      const float targetRate =
-          (std::fabs(shortestDelta(m_lastTargetYaw, targetYaw)) +
-           std::fabs(targetPitch - m_lastTargetPitch)) /
-          std::max(fastDt, 1e-3f);
-      m_catchupRate += (targetRate - m_catchupRate) *
-                       (1.0f - std::exp(-fastDt / 0.12f));
-      float rate = maxSpeed * (0.35f + 0.65f * smooth) +
-                   clampf(m_catchupRate, 0.0f, 900.0f) * 0.5f;
-      rate = clampf(rate, 30.0f, 4000.0f);
-      const float stepLen = std::min(errMag, rate * fastDt);
+      // Smooth approach instead of the old rate-limited variant that moved
+      // stepLen = errMag for every error below maxSpeed * dt. That consumed
+      // the whole remaining error in a single frame, which read as a camera
+      // teleport whenever the crosshair was outside the hitbox.
+      //
+      // The time constant is floored so a very small "fast aim time" setting
+      // cannot reintroduce the snap, and distanceEase keeps the first part of
+      // a large correction slightly slower than the tail. The hard 45% cap
+      // guarantees at least a few frames of interpolation even at low FPS.
+      const float tauMs =
+          clampf(std::max(settings.fastAimTimeMs, 70.0f), 40.0f, 220.0f);
+      const float smoothAlpha =
+          1.0f - std::exp(-fastDt * 1000.0f / tauMs);
+      const float distanceEase =
+          0.55f + 0.45f * clampf(errMag / 6.0f, 0.0f, 1.0f);
+      float stepLen =
+          errMag * clampf(smoothAlpha * distanceEase, 0.0f, 0.45f);
+
+      // Feed-forward of the target's own angular velocity so strafing targets
+      // are not trailed. It must not use a sample from a different actor:
+      // a target switch would inject a huge fake velocity and snap the view.
+      if (m_haveTargetSample) {
+        const float targetRate =
+            (std::fabs(shortestDelta(m_lastTargetYaw, targetYaw)) +
+             std::fabs(targetPitch - m_lastTargetPitch)) /
+            std::max(fastDt, 1e-3f);
+        m_catchupRate += (targetRate - m_catchupRate) *
+                         (1.0f - std::exp(-fastDt / 0.12f));
+        stepLen += clampf(m_catchupRate, 0.0f, 600.0f) * fastDt * 0.35f;
+      } else {
+        m_catchupRate = 0.0f;
+      }
+      stepLen = std::min(stepLen, maxSpeed * fastDt);
+      stepLen = std::min(stepLen, errMag);
       stepYaw = errMag > 1e-6f ? errYaw * (stepLen / errMag) : errYaw;
       stepPitch = errMag > 1e-6f ? errPitch * (stepLen / errMag) : errPitch;
     } else {
@@ -1744,6 +1762,7 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     }
     m_lastTargetYaw = targetYaw;
     m_lastTargetPitch = targetPitch;
+    m_haveTargetSample = true;
     if (errMag < 0.01f) {
       stepYaw = errYaw;
       stepPitch = errPitch;
@@ -1857,6 +1876,9 @@ void AimAssist::resetHumanProfile() {
   m_nextMotorMs = 0;
   m_nextRestMs = 0;
   m_targetLockMs = 0;
+  // A new engagement must not inherit the previous target's angular velocity.
+  m_catchupRate = 0.0f;
+  m_haveTargetSample = false;
 }
 
 void AimAssist::updateHumanProfile(const Settings &settings, float, int64_t now) {
