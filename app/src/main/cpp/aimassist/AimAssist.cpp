@@ -680,21 +680,40 @@ void AimAssist::updateVisual(float dt) {
     m_triggerDistance.store(0.0f, std::memory_order_relaxed);
   }
 
-  // Диагностика: раз в ~2 секунды (120 кадров) пишем состояние триггера.
-  // Помогает понять, где именно обрывается цепочка на устройстве.
+  // Диагностика: раз в ~60 кадров пишем состояние и реальный dt.
+  // Помогает понять, где именно обрывается цепочка на устройстве и с какой
+  // частотой игра вызывает ClientInstance::update (от неё зависит плавность).
   static uint64_t s_diagFrame = 0;
-  if ((++s_diagFrame % 120) == 0) {
+  static float s_diagDtSum = 0.0f;
+  static int s_diagDtCount = 0;
+  s_diagDtSum += dt;
+  ++s_diagDtCount;
+  if ((++s_diagFrame % 60) == 0) {
+    const float avgDt = s_diagDtSum / static_cast<float>(
+        std::max(1, s_diagDtCount));
+    s_diagDtSum = 0.0f;
+    s_diagDtCount = 0;
     aimbot::diagLog(kTag,
-        "diag player=%p view=(%.1f,%.1f) eye=(%.2f,%.2f,%.2f) actors=%zu "
-        "trigger=%d range=%.2f target=%p onTarget=%d gm=%p",
-        player, static_cast<double>(current.pitch),
+        "diag t=%lld player=%p view=(%.1f,%.1f) eye=(%.2f,%.2f,%.2f) "
+        "actors=%zu trigger=%d range=%.2f target=%p onTarget=%d gm=%p "
+        "dt=%.4f fps=%.1f fast=%d legit=%d smooth=%.1f fastTime=%.1f "
+        "maxSpeed=%.0f strength=%.0f",
+        static_cast<long long>(nowMs()), player,
+        static_cast<double>(current.pitch),
         static_cast<double>(current.yaw), static_cast<double>(eyeNow.x),
         static_cast<double>(eyeNow.y), static_cast<double>(eyeNow.z),
         m_actors.size(), settings.triggerBot ? 1 : 0,
         static_cast<double>(settings.triggerRange),
         m_triggerActor.load(std::memory_order_acquire),
         m_onTarget.load(std::memory_order_acquire) ? 1 : 0,
-        m_bridge.getGameMode());
+        m_bridge.getGameMode(),
+        static_cast<double>(avgDt),
+        static_cast<double>(avgDt > 1e-5f ? 1.0f / avgDt : 0.0f),
+        settings.fastAim ? 1 : 0, settings.legit ? 1 : 0,
+        static_cast<double>(settings.smoothingSpeed),
+        static_cast<double>(settings.fastAimTimeMs),
+        static_cast<double>(settings.fastAimMaxSpeed),
+        static_cast<double>(settings.strength));
   }
 
   if (!m_enabled.load(std::memory_order_acquire)) {
@@ -756,6 +775,9 @@ void AimAssist::updateVisual(float dt) {
       m_nextFastPauseMs = aimNow + randomInt(700, 1700);
       m_fastPauseUntilMs = 0;
       resetHumanProfile();
+      // Trace the first ~45 frames of every engagement so the per-frame step
+      // can be inspected in native.log on the device.
+      m_stepTraceLeft = 45;
     }
     if (aimNow < m_aimEngageAtMs) {
       m_fastAimTurnApplied = false;
@@ -777,6 +799,10 @@ void AimAssist::updateVisual(float dt) {
     updateFastAimStealth(settings, dt);
     const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
     const float beforePitch = m_localPitch.load(std::memory_order_relaxed);
+    const float preErrYaw = shortestDelta(beforeYaw, m_target.yaw);
+    const float preErrPitch = m_target.pitch - beforePitch;
+    const float preErr =
+        std::sqrt(preErrYaw * preErrYaw + preErrPitch * preErrPitch);
     applySmoothRotationInternal(m_target.yaw, m_target.pitch, dt, settings);
     const float afterYaw = m_localYaw.load(std::memory_order_relaxed);
     const float afterPitch = m_localPitch.load(std::memory_order_relaxed);
@@ -784,6 +810,23 @@ void AimAssist::updateVisual(float dt) {
     m_lastStepPitch = afterPitch - beforePitch;
     m_lastDelta = std::sqrt(m_lastStepYaw * m_lastStepYaw +
                             m_lastStepPitch * m_lastStepPitch);
+    if (m_stepTraceLeft > 0) {
+      --m_stepTraceLeft;
+      aimbot::diagLog(kTag,
+          "trace t=%lld dt=%.4f err=%.2f step=(p%.3f y%.3f) "
+          "len=%.2f view=(p%.2f y%.2f) tgt=(p%.2f y%.2f) "
+          "fastTime=%.1f legit=%d",
+          static_cast<long long>(aimNow), static_cast<double>(m_lastDt),
+          static_cast<double>(preErr),
+          static_cast<double>(m_lastStepPitch),
+          static_cast<double>(m_lastStepYaw),
+          static_cast<double>(m_lastDelta),
+          static_cast<double>(afterPitch), static_cast<double>(afterYaw),
+          static_cast<double>(m_target.pitch),
+          static_cast<double>(m_target.yaw),
+          static_cast<double>(settings.fastAimTimeMs),
+          settings.legit ? 1 : 0);
+    }
     if (settings.debugOverlay) {
       aimbot::diagLog(kTag,
           "fast aim target=%p step=(p %.3f y %.3f) dt=%.4f",
@@ -1709,6 +1752,17 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
                    m_motorScale,
                300.0f, 4000.0f);
 
+    // Hard ceiling on how much the view may move in ONE rendered frame.
+    // Exponential smoothing alone still produces a large first step when the
+    // game runs at 15-30 FPS (at dt=50 ms a 70 ms time constant already moves
+    // ~50% of the error per frame, which reads as a series of mini teleports).
+    // Keeping the step in degrees, not percent, makes the motion visually
+    // continuous at any frame rate. Slightly more room is allowed for large
+    // corrections so a real flick does not crawl.
+    const float frameCap =
+        clampf(45.0f * fastDt, 1.2f, 2.2f) +
+        1.6f * clampf((errMag - 8.0f) / 30.0f, 0.0f, 1.0f);
+
     float stepYaw;
     float stepPitch;
     if (settings.legit) {
@@ -1717,18 +1771,16 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
       // the whole remaining error in a single frame, which read as a camera
       // teleport whenever the crosshair was outside the hitbox.
       //
-      // The time constant is floored so a very small "fast aim time" setting
-      // cannot reintroduce the snap, and distanceEase keeps the first part of
-      // a large correction slightly slower than the tail. The hard 45% cap
-      // guarantees at least a few frames of interpolation even at low FPS.
+      // The time constant has a 150 ms floor; combined with frameCap this
+      // guarantees a multi-frame glide even when the UI slider is at minimum.
       const float tauMs =
-          clampf(std::max(settings.fastAimTimeMs, 70.0f), 40.0f, 220.0f);
+          clampf(std::max(settings.fastAimTimeMs * 3.0f, 150.0f),
+                 120.0f, 260.0f);
       const float smoothAlpha =
           1.0f - std::exp(-fastDt * 1000.0f / tauMs);
       const float distanceEase =
           0.55f + 0.45f * clampf(errMag / 6.0f, 0.0f, 1.0f);
-      float stepLen =
-          errMag * clampf(smoothAlpha * distanceEase, 0.0f, 0.45f);
+      float stepLen = errMag * smoothAlpha * distanceEase;
 
       // Feed-forward of the target's own angular velocity so strafing targets
       // are not trailed. It must not use a sample from a different actor:
@@ -1745,13 +1797,14 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
         m_catchupRate = 0.0f;
       }
       stepLen = std::min(stepLen, maxSpeed * fastDt);
+      stepLen = std::min(stepLen, frameCap);
       stepLen = std::min(stepLen, errMag);
       stepYaw = errMag > 1e-6f ? errYaw * (stepLen / errMag) : errYaw;
       stepPitch = errMag > 1e-6f ? errPitch * (stepLen / errMag) : errPitch;
     } else {
       stepYaw = errYaw * alpha;
       stepPitch = errPitch * alpha;
-      const float maxStep = maxSpeed * fastDt;
+      const float maxStep = std::min(maxSpeed * fastDt, frameCap);
       const float stepMag =
           std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
       if (stepMag > maxStep && stepMag > 1e-6f) {
@@ -1820,8 +1873,15 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
   float stepYaw = errYaw * alpha;
   float stepPitch = errPitch * alpha;
 
-  const float maxStep =
-      settings.maxDegPerSecond * (0.5f + 0.5f * strengthScale) * m_motorScale * h;
+  // Same per-frame degree ceiling as the fast path: the old smoothing could
+  // move 40%+ of the remaining error in a single frame at low FPS, which was
+  // visible as mini teleports while the crosshair approached the hitbox.
+  const float frameCap =
+      clampf(40.0f * h, 1.2f, 2.2f) +
+      1.6f * clampf((errMag - 8.0f) / 30.0f, 0.0f, 1.0f);
+  const float maxStep = std::min(
+      settings.maxDegPerSecond * (0.5f + 0.5f * strengthScale) * m_motorScale * h,
+      frameCap);
   const float stepMag =
       std::sqrt(stepYaw * stepYaw + stepPitch * stepPitch);
   if (stepMag > maxStep && stepMag > 1e-6f) {
@@ -1879,6 +1939,7 @@ void AimAssist::resetHumanProfile() {
   // A new engagement must not inherit the previous target's angular velocity.
   m_catchupRate = 0.0f;
   m_haveTargetSample = false;
+  m_stepTraceLeft = 0;
 }
 
 void AimAssist::updateHumanProfile(const Settings &settings, float, int64_t now) {

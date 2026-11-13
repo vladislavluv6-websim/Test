@@ -416,6 +416,8 @@ private:
   float m_lastDelta = 0.0f;
   float m_lastFactor = 0.0f;
   float m_lastDt = 0.0f;
+  // Frames left to write per-frame step trace for the current engagement.
+  int m_stepTraceLeft = 0;
   bool m_deadzoneHit = false;
   // Fast aim сам вызывает applyTurnDelta; внешний onTick не должен
   // применять тот же шаг второй раз.
