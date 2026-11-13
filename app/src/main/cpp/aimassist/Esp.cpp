@@ -833,6 +833,33 @@ std::string Esp::offhandFor(void *actor, std::chrono::steady_clock::time_point n
   return name;
 }
 
+bool Esp::boundsFor(void *actor, Aabb &out) {
+  const auto now = std::chrono::steady_clock::now();
+  if (m_bridge.getActorBounds(actor, out)) {
+    m_boundsCache[actor] = CachedBounds{out, now};
+    if (now - m_boundsCacheCleanup >= std::chrono::seconds(2)) {
+      m_boundsCacheCleanup = now;
+      for (auto it = m_boundsCache.begin(); it != m_boundsCache.end();) {
+        if (now - it->second.at > std::chrono::seconds(5)) {
+          it = m_boundsCache.erase(it);
+        } else {
+          ++it;
+        }
+      }
+    }
+    return true;
+  }
+  // Один неудачный read компонента между тиками не должен гасить бокс/ник:
+  // держим последний валидный AABB максимум 150 мс.
+  const auto it = m_boundsCache.find(actor);
+  if (it != m_boundsCache.end() &&
+      now - it->second.at <= std::chrono::milliseconds(150)) {
+    out = it->second.bounds;
+    return true;
+  }
+  return false;
+}
+
 void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
                          const float camera[3]) {
   std::vector<NameTagLabel> labels;
@@ -883,18 +910,21 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
       if (!m_bridge.isPlayer(actor)) continue;
 
       Aabb bounds{};
-      if (!m_bridge.getActorBounds(actor, bounds)) continue;
+      if (!boundsFor(actor, bounds)) continue;
 
       const float dx = (bounds.min.x + bounds.max.x) * 0.5f - camera[0];
       const float dy = bounds.max.y + 0.12f - camera[1];
       const float dz = (bounds.min.z + bounds.max.z) * 0.5f - camera[2];
       const float depth = dx * fx + dy * fy + dz * fz;
-      if (depth <= 0.15f) continue;
+      if (depth <= 0.02f) continue;
 
       const float right = dx * rx + dz * rz;
       const float up = dx * ux + dy * uy + dz * uz;
-      const float labelX = width * 0.5f + (right / depth) * focal;
-      const float labelY = height * 0.5f - (up / depth) * focal;
+      // В упор точка над головой уходит за near plane, и ник пропадал.
+      // Проецируем по near plane, а дистанцию для логики оставляем реальной.
+      const float projDepth = std::max(depth, 0.05f);
+      const float labelX = width * 0.5f + (right / projDepth) * focal;
+      const float labelY = height * 0.5f - (up / projDepth) * focal;
       if (labelX < -64.0f || labelX > width + 64.0f || labelY < -64.0f ||
           labelY > height + 64.0f) {
         continue;
@@ -985,6 +1015,12 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
   const uint32_t mobColor = m_mobColor.load(std::memory_order_relaxed);
   const uint32_t armoredColor = m_armoredColor.load(std::memory_order_relaxed);
 
+  struct CamPoint {
+    float right = 0.0f;
+    float up = 0.0f;
+    float depth = 0.0f;
+  };
+
   for (void *actor : m_actors) {
     if (!actor || actor == player) continue;
     const bool isPlayer = m_bridge.isPlayer(actor);
@@ -992,13 +1028,14 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
     if (isPlayer && AntiBot::instance().isBot(actor)) continue;
 
     Aabb bounds{};
-    if (!m_bridge.getActorBounds(actor, bounds)) continue;
+    if (!boundsFor(actor, bounds)) continue;
 
-    float minX = 1e9f;
-    float minY = 1e9f;
-    float maxX = -1e9f;
-    float maxY = -1e9f;
-    bool anyBehind = false;
+    // Near-plane clipping. Раньше один угол за камерой выбрасывал весь
+    // бокс: в упор хитбокс пересекает плоскость камеры, и игрок пропадал
+    // из ESP именно на близкой дистанции. Теперь 12 рёбер режутся по
+    // near plane, поэтому бокс дорисовывается до края экрана.
+    constexpr float kNearDepth = 0.05f;
+    CamPoint cam[8];
     for (int corner = 0; corner < 8; ++corner) {
       const float px = (corner & 1) ? bounds.max.x : bounds.min.x;
       const float py = (corner & 2) ? bounds.max.y : bounds.min.y;
@@ -1006,21 +1043,43 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
       const float dx = px - camera[0];
       const float dy = py - camera[1];
       const float dz = pz - camera[2];
-      const float depth = dx * fx + dy * fy + dz * fz;
-      if (depth <= 0.15f) {
-        anyBehind = true;
-        break;
-      }
-      const float right = dx * rx + dz * rz;
-      const float up = dx * ux + dy * uy + dz * uz;
-      const float sx = width * 0.5f + (right / depth) * focal;
-      const float sy2 = height * 0.5f - (up / depth) * focal;
+      cam[corner].depth = dx * fx + dy * fy + dz * fz;
+      cam[corner].right = dx * rx + dz * rz;
+      cam[corner].up = dx * ux + dy * uy + dz * uz;
+    }
+    float minX = 1e9f;
+    float minY = 1e9f;
+    float maxX = -1e9f;
+    float maxY = -1e9f;
+    auto addPoint = [&](float right, float up, float depth) {
+      const float d = std::max(depth, kNearDepth);
+      const float sx = width * 0.5f + (right / d) * focal;
+      const float sy2 = height * 0.5f - (up / d) * focal;
+      if (!std::isfinite(sx) || !std::isfinite(sy2)) return;
       minX = std::min(minX, sx);
       minY = std::min(minY, sy2);
       maxX = std::max(maxX, sx);
       maxY = std::max(maxY, sy2);
+    };
+    for (int corner = 0; corner < 8; ++corner) {
+      if (cam[corner].depth >= kNearDepth) {
+        addPoint(cam[corner].right, cam[corner].up, cam[corner].depth);
+      }
     }
-    if (anyBehind || minX >= maxX || minY >= maxY) continue;
+    static const int kEdges[12][2] = {
+        {0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3},
+        {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+    for (const auto &edge : kEdges) {
+      const CamPoint &a = cam[edge[0]];
+      const CamPoint &b = cam[edge[1]];
+      const bool aIn = a.depth >= kNearDepth;
+      const bool bIn = b.depth >= kNearDepth;
+      if (aIn == bIn) continue;
+      const float t = (kNearDepth - a.depth) / (b.depth - a.depth);
+      addPoint(a.right + (b.right - a.right) * t,
+               a.up + (b.up - a.up) * t, kNearDepth);
+    }
+    if (minX >= maxX || minY >= maxY) continue;
     if (maxX < -32.0f || minX > width + 32.0f ||
         maxY < -32.0f || minY > height + 32.0f) {
       continue;
@@ -1276,7 +1335,7 @@ void Esp::render(void *levelRenderer, void *screenContext) {
     }
 
     Aabb bounds{};
-    if (!m_bridge.getActorBounds(actor, bounds)) continue;
+    if (!boundsFor(actor, bounds)) continue;
     uint32_t color = mobColor;
     if (isPlayer) {
       color = (armorColors && gameecs::hasArmor(actor)) ? armoredColor

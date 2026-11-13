@@ -15,6 +15,8 @@ import org.levimc.launcher.core.versions.GameVersion;
 public class EspOverlay extends BaseOverlayButton {
     private static final String TAG = "EspOverlay";
     private static final String SUPPORTED_MINECRAFT_VERSION = "1.26.60";
+    /** Дальность ESP и NameTags фиксирована: 100 блоков. */
+    private static final float RANGE_BLOCKS = 100.0f;
     private static boolean versionLogged = false;
     private boolean isActive = false;
     private boolean wantActive = false;
@@ -38,7 +40,7 @@ public class EspOverlay extends BaseOverlayButton {
     }
 
     private void applyNativeSettings(InbuiltModManager manager) {
-        EspMod.setRange(manager.getEspRange());
+        EspMod.setRange(RANGE_BLOCKS);
         EspMod.setPlayers(manager.isEspShowPlayers());
         EspMod.setMobs(manager.isEspShowMobs());
         EspMod.setPlayerColor(manager.getEspPlayerColor());

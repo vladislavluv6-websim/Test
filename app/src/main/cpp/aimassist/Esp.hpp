@@ -120,6 +120,9 @@ private:
   std::string actorName(void *actor, std::chrono::steady_clock::time_point now);
   uint32_t armorMaskFor(void *actor, std::chrono::steady_clock::time_point now);
   std::string offhandFor(void *actor, std::chrono::steady_clock::time_point now);
+  // AABB с коротким hold-last-good: одиночный сбой чтения компонента не
+  // должен выкидывать игрока из кадра ESP/NameTags.
+  bool boundsFor(void *actor, Aabb &out);
 
   ClientBridge &m_bridge = ClientBridge::instance();
   std::mutex m_initMutex;
@@ -127,7 +130,8 @@ private:
   std::atomic<bool> m_enabled{false};
   std::atomic<bool> m_showPlayers{true};
   std::atomic<bool> m_showMobs{true};
-  std::atomic<float> m_range{32.0f};
+  // ESP/NameTags всегда 100 блоков: отдельной настройки дальности больше нет.
+  std::atomic<float> m_range{100.0f};
   std::atomic<uint32_t> m_playerColor{0xFFFF5555u};
   std::atomic<uint32_t> m_mobColor{0xFFFFAA00u};
   std::atomic<uint32_t> m_armoredColor{0xFF4E83FFu};
@@ -162,6 +166,12 @@ private:
   std::unordered_map<void *, std::pair<std::string,
                                        std::chrono::steady_clock::time_point>>
       m_offhandCache;
+  struct CachedBounds {
+    Aabb bounds{};
+    std::chrono::steady_clock::time_point at{};
+  };
+  std::unordered_map<void *, CachedBounds> m_boundsCache;
+  std::chrono::steady_clock::time_point m_boundsCacheCleanup{};
 };
 
 } // namespace aimbot

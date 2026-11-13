@@ -245,6 +245,10 @@ public class NameTagsOverlay extends View {
         moduleEnabled = manager.isNameTagsEnabled();
         EspMod.initializeAsync(ok -> mainHandler.post(() -> {
             if (!attached || !ok) return;
+            // NameTags живут на скане ESP; фиксируем те же 100 блоков,
+            // иначе лимит остаётся от старого значения (32) и ники
+            // пропадают раньше, чем боксы.
+            EspMod.setRange(100.0f);
             EspMod.setNameTags(moduleEnabled);
             updateSurfaceSize(getWidth(), getHeight());
             postFrameCallback();

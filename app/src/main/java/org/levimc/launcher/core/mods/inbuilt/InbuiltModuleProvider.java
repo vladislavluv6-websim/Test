@@ -695,11 +695,6 @@ public final class InbuiltModuleProvider {
                     "true", "", "",
                     String.valueOf(manager.isAimAssistLegitMode())));
         } else if (ModIds.ESP.equals(modId)) {
-            configs.add(config(CFG_ESP_RANGE,
-                    context.getString(R.string.mod_config_esp_range),
-                    UnifiedMod.ConfigType.SLIDER_INT,
-                    "32", "4", "512",
-                    String.valueOf(manager.getEspRange())));
             configs.add(config(CFG_ESP_BOX_STYLE,
                     context.getString(R.string.mod_config_esp_box_style),
                     UnifiedMod.ConfigType.RADIO,
@@ -1203,9 +1198,6 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_LEGIT:
                 manager.setAimAssistLegitMode(parseBoolean(value));
-                break;
-            case CFG_ESP_RANGE:
-                manager.setEspRange(parseInt(value, manager.getEspRange()));
                 break;
             case CFG_ESP_BOX_STYLE:
                 manager.setEspBoxStyle(parseInt(value, manager.getEspBoxStyle()));
