@@ -865,7 +865,7 @@ public final class InbuiltModuleProvider {
             configs.add(config(CFG_TRIGGER_BOT_INTERVAL,
                     context.getString(R.string.mod_config_trigger_bot_interval),
                     UnifiedMod.ConfigType.SLIDER_INT,
-                    "220", "100", "1200",
+                    "500", "500", "1200",
                     String.valueOf(manager.getTriggerBotInterval())));
             configs.add(config(CFG_TRIGGER_BOT_INTERVAL_JITTER,
                     context.getString(R.string.mod_config_trigger_bot_interval_jitter),

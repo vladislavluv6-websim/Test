@@ -370,6 +370,7 @@ void AimAssist::setTriggerBot(bool enabled) {
   m_settings.triggerBot = enabled;
   m_triggerSinceActor = nullptr;
   m_triggerSinceMs = 0;
+  m_triggerLastSeenMs = 0;
   m_triggerDelayForTargetMs = 0;
   m_nextAttackAtMs = 0;
   if (!enabled) {
@@ -381,7 +382,8 @@ void AimAssist::setTriggerBot(bool enabled) {
 
 void AimAssist::setTriggerDelay(int delayMs) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
-  m_settings.triggerDelayMs = std::max(120, std::min(400, delayMs));
+  // 0 is valid: PvP needs the hit on the first frame the crosshair lands.
+  m_settings.triggerDelayMs = std::max(0, std::min(400, delayMs));
 }
 
 void AimAssist::setTriggerInterval(int intervalMs) {
@@ -743,7 +745,8 @@ void AimAssist::updateVisual(float dt) {
   }
 
   // Высота цели задаётся режимом: голова / грудь / ноги.
-  m_target.point = getTargetPoint(m_target.actor, settings.targetBone);
+  m_target.point = getTargetPoint(m_target.actor, settings.targetBone,
+                                settings.triggerBot);
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -768,11 +771,13 @@ void AimAssist::updateVisual(float dt) {
   if (settings.fastAim) {
     if (m_lastAimActor != m_target.actor) {
       m_lastAimActor = m_target.actor;
-      m_aimEngageAtMs = aimNow + randomInt(45, 165);
-      m_fastTimeScale = randomFloat(0.82f, 1.22f);
-      m_fastSpeedScale = randomFloat(0.82f, 1.12f);
+      // PvP: engage almost immediately. The old 45-165 ms reaction plus
+      // random pauses lost the first hit of every fight.
+      m_aimEngageAtMs = aimNow + randomInt(0, 25);
+      m_fastTimeScale = randomFloat(0.85f, 1.12f);
+      m_fastSpeedScale = randomFloat(0.9f, 1.1f);
       m_fastStealthScale = randomFloat(0.65f, 1.35f);
-      m_nextFastPauseMs = aimNow + randomInt(700, 1700);
+      m_nextFastPauseMs = aimNow + 60000; // pauses disabled for PvP
       m_fastPauseUntilMs = 0;
       resetHumanProfile();
       // Trace the first ~45 frames of every engagement so the per-frame step
@@ -780,16 +785,6 @@ void AimAssist::updateVisual(float dt) {
       m_stepTraceLeft = 45;
     }
     if (aimNow < m_aimEngageAtMs) {
-      m_fastAimTurnApplied = false;
-      return;
-    }
-    if (aimNow >= m_nextFastPauseMs) {
-      m_nextFastPauseMs = aimNow + randomInt(900, 2100);
-      if (randomFloat(0.0f, 1.0f) < 0.18f) {
-        m_fastPauseUntilMs = aimNow + randomInt(35, 110);
-      }
-    }
-    if (aimNow < m_fastPauseUntilMs) {
       m_fastAimTurnApplied = false;
       return;
     }
@@ -1081,7 +1076,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     Vec3 targetPosition{};
     if (!m_bridge.getPosition(actor, targetPosition)) continue;
 
-    const Vec3 point = getTargetPoint(actor, settings.targetBone);
+    const Vec3 point = getTargetPoint(actor, settings.targetBone, settings.triggerBot);
     const Angles angles = calculateAnglesToPoint(point);
 
     const float deltaYaw = shortestDelta(localYaw, angles.yaw);
@@ -1201,7 +1196,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
       m_lastAimActor = nullptr;
       m_lastSwitchMs = nowMs();
       m_currentSwitchDelayMs =
-          std::max(35, settings.switchDelayMs + randomInt(-30, 60));
+          std::max(25, settings.switchDelayMs + randomInt(-30, 60));
       m_aimPointActor = nullptr;
       m_nextAimPointMs = 0;
       m_serverViewSinceMs = 0;
@@ -1282,7 +1277,7 @@ void AimAssist::updateKillaura(void *player, const Settings &settings,
   m_triggerActor.store(best, std::memory_order_release);
   m_onTarget.store(true, std::memory_order_release);
 
-  const Vec3 point = getTargetPoint(best, settings.targetBone);
+  const Vec3 point = getTargetPoint(best, settings.targetBone, true);
   const Angles aim = calculateAnglesToPoint(point);
   // SILENT aura: only the outgoing PlayerAuthInput rotation is set to the
   // target; the local camera never moves. The attack is then aligned on the
@@ -1328,16 +1323,11 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   Vec3 minAngleCenter{};
   void *minAngleActor = nullptr;
 
-  void *lockedActor = nullptr;
-  if (settings.targetLock && m_target.valid) lockedActor = m_target.actor;
-  if (lockedActor && settings.antiBot &&
-      AntiBot::instance().isBot(lockedActor)) {
-    lockedActor = nullptr;
-  }
-
   for (void *actor : m_actors) {
     if (!actor || actor == player) continue;
-    if (lockedActor && actor != lockedActor) continue;
+    // Do not restrict the ray test to the AimAssist target: in PvP another
+    // player can step under the crosshair while the locked target is behind
+    // them. Whichever hitbox the crosshair is actually on gets hit.
 
     const bool playerActor = m_bridge.isPlayer(actor);
     if (playerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
@@ -1378,13 +1368,16 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     ++tested;
 
     // Допуск по горизонтали: позиция актёра интерполируется, и хитбокс
-    // может отставать от фактического положения на кадр-два.
+    // может отставать от фактического положения на кадр-два. Vertical
+    // tolerance is larger because crit PvP targets are airborne and the
+    // client box lags one 20 Hz tick behind.
+    const float tolY = std::max(tolerance, 0.06f) + 0.04f;
     bounds.min.x -= tolerance;
     bounds.min.z -= tolerance;
     bounds.max.x += tolerance;
     bounds.max.z += tolerance;
-    bounds.min.y -= tolerance * 0.5f;
-    bounds.max.y += tolerance * 0.5f;
+    bounds.min.y -= tolY;
+    bounds.max.y += tolY;
 
     float hit = 0.0f;
     if (!rayIntersectsAabb(eye, dir, bounds, bestDistance, hit)) continue;
@@ -1407,22 +1400,31 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     fallbackHit = true;
   }
 
+  const int64_t now = monotonicMs();
+
   static uint64_t s_triggerLog = 0;
   if ((++s_triggerLog % 60) == 1) {
+    const bool onGround = player && gameecs::hasOnGround(player);
+    const long long fallMs = m_fallingSinceMs != 0
+                                 ? static_cast<long long>(now - m_fallingSinceMs)
+                                 : -1;
+    const long long nextIn = m_nextAttackAtMs > now
+                                 ? static_cast<long long>(m_nextAttackAtMs - now)
+                                 : 0;
+    const long long sinceMs = m_triggerSinceMs != 0
+                                  ? static_cast<long long>(now - m_triggerSinceMs)
+                                  : -1;
     aimbot::diagLog(
         kTag,
-        "trigger actors=%zu tested=%d noBounds=%d dir=(%.2f,%.2f,%.2f) "
-        "eye=(%.2f,%.2f,%.2f) minAng=%.1f minDist=%.2f center=(%.2f,%.2f,%.2f) "
-        "minActor=%p best=%p bestDist=%.2f reach=%.2f p=%d m=%d",
-        m_actors.size(), tested, skippedBounds, static_cast<double>(dir.x),
-        static_cast<double>(dir.y), static_cast<double>(dir.z),
-        static_cast<double>(eye.x), static_cast<double>(eye.y),
-        static_cast<double>(eye.z), static_cast<double>(minAngle),
-        static_cast<double>(minAngleDist), static_cast<double>(minAngleCenter.x),
-        static_cast<double>(minAngleCenter.y),
-        static_cast<double>(minAngleCenter.z), minAngleActor, bestActor,
+        "trigger actors=%zu tested=%d noBounds=%d minAng=%.1f best=%p "
+        "bestDist=%.2f reach=%.2f vv=%.2f ground=%d fallMs=%lld "
+        "since=%lld delay=%d nextIn=%lld onlyCrit=%d fast=%d",
+        m_actors.size(), tested, skippedBounds,
+        static_cast<double>(minAngle), bestActor,
         static_cast<double>(bestDistance), static_cast<double>(reach),
-        settings.targetPlayers ? 1 : 0, settings.targetMobs ? 1 : 0);
+        static_cast<double>(m_vertVel), onGround ? 1 : 0, fallMs,
+        sinceMs, m_triggerDelayForTargetMs, nextIn,
+        settings.onlyCrit ? 1 : 0, settings.fastAim ? 1 : 0);
   }
 
   m_triggerActor.store(bestActor, std::memory_order_release);
@@ -1431,25 +1433,35 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   m_onTarget.store(bestActor != nullptr, std::memory_order_release);
 
   if (!bestActor) {
-    m_triggerSinceActor = nullptr;
-    m_triggerSinceMs = 0;
+    // One dropped frame (target bobbing between 20 Hz positions, or the
+    // crosshair clipping the box edge for a single frame) must not restart
+    // the reaction delay. Keep the acquisition timer for a short grace.
+    if (m_triggerSinceActor != nullptr &&
+        now - m_triggerLastSeenMs > 120) {
+      m_triggerSinceActor = nullptr;
+      m_triggerSinceMs = 0;
+    }
     return;
   }
+  m_triggerLastSeenMs = now;
 
   // Атака выполняется прямо здесь, на игровом потоке: тот же путь, что у
   // внутренних читов (Killaura/Aura) — GameMode::attack, без инъекции
   // касаний и без участия UI-потока.
-  const int64_t now = monotonicMs();
   if (settings.onlyCrit) {
     // Keep the server-side sprint state clear for the whole fall, not just
     // on the attack frame: the attack packet is processed before the next
     // auth input, so the previous ticks must already be non-sprinting.
-    if (isFallingForCrit(settings, now)) {
+    // This starts at the beginning of the descent, before the crit settle
+    // window, so the server has a non-sprint tick by the time we attack.
+    const float critGate = -std::max(0.10f, settings.critMinFallSpeed);
+    const bool descending =
+        player && !gameecs::hasOnGround(player) && m_vertVel <= critGate;
+    if (descending) {
+      if (m_fallingSinceMs == 0) m_fallingSinceMs = now;
       combatstate::suppressSprint(150);
-      if (player) {
-        gameecs::setMoveSprinting(player, false);
-        gameecs::setSprintingFlag(player, false);
-      }
+      gameecs::setMoveSprinting(player, false);
+      gameecs::setSprintingFlag(player, false);
     }
   }
 
@@ -1462,17 +1474,13 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     if (jitter > 0) {
       m_triggerDelayForTargetMs += randomInt(0, jitter);
     }
-    const float reactionRoll = randomFloat(0.0f, 1.0f);
-    if (reactionRoll < 0.08f) {
-      m_triggerDelayForTargetMs += randomInt(20, 70);
-    }
     if (settings.killaura) {
       m_triggerDelayForTargetMs =
           std::max(m_triggerDelayForTargetMs,
                    static_cast<int>(settings.killauraReactionMs));
     }
     m_triggerDelayForTargetMs =
-        std::max(0, std::min(650, m_triggerDelayForTargetMs));
+        std::max(0, std::min(400, m_triggerDelayForTargetMs));
   }
   // В режиме only crit окно падения короткое: не тратим его на полную
   // «человеческую» задержку и случайные пропуски.
@@ -1494,9 +1502,10 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     }
   }
 
-  // Не бьём сразу после смены цели и иногда «промахиваемся» (не жмём).
+  // Не бьём сразу после смены цели (короткий анти-дребезг, не 120 мс) и
+  // иногда «промахиваемся» (не жмём).
   if (settings.humanize && !settings.onlyCrit) {
-    if (m_lastSwitchMs != 0 && now - m_lastSwitchMs < 120) return;
+    if (m_lastSwitchMs != 0 && now - m_lastSwitchMs < 35) return;
     if (settings.attackMissChance > 0.0f &&
         randomFloat(0.0f, 1.0f) < settings.attackMissChance) {
       m_nextAttackAtMs = now + randomInt(80, 220);
@@ -1515,6 +1524,15 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   }
   if (settings.randomAimPoint) {
     hitPoint = randomHitPoint(bestActor, hitPoint);
+  }
+
+  // Never send an attack through a wall: the server rejects it (and
+  // anti-cheat treats it as a reach/through-wall hit). The ray test only
+  // knows actor boxes, not blocks.
+  if (settings.visibleCheck &&
+      !m_bridge.hasLineOfSight(player, eye, hitPoint)) {
+    m_nextAttackAtMs = now + 50;
+    return;
   }
 
   // Главная сетевая проверка: бьём только если ротация, которую сервер
@@ -1541,14 +1559,18 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
       }
       float guardTolerance = settings.serverViewToleranceDeg;
       if (settings.onlyCrit) {
+        // Vertical movement widens the error between the last 20 Hz auth
+        // rotation and the hit point; crits are impossible without it.
         guardTolerance = std::max(guardTolerance, 18.0f);
-      } else if (settings.antiCheatMode && settings.fastAim) {
-        // В Fast aim серверная ротация должна почти совпадать с ударом.
-        guardTolerance = std::min(guardTolerance, 4.0f);
+      } else {
+        // The old 4 deg cap blocked most attacks while the camera tracked a
+        // strafing player: the network sample is up to 50 ms old. 8 deg is
+        // still tight enough that the hit looks aligned server-side.
+        guardTolerance = std::max(guardTolerance, 8.0f);
       }
       if (netAngle > guardTolerance) {
         m_serverViewSinceMs = 0;
-        m_nextAttackAtMs = now + 40;
+        m_nextAttackAtMs = now + 30;
         static uint64_t s_guardLog = 0;
         if ((++s_guardLog % 20) == 1) {
           aimbot::diagLog(
@@ -1560,17 +1582,6 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
               static_cast<long long>(netAgeMs));
         }
         return;
-      }
-      // Сервер должен видеть прицел на цели минимум один тик. Крит-окно
-      // короткое, поэтому там ждём только фактическое совпадение ротации.
-      if (!settings.onlyCrit) {
-        if (m_serverViewSinceMs == 0) {
-          m_serverViewSinceMs = now;
-        }
-        if (now - m_serverViewSinceMs < 30) {
-          m_nextAttackAtMs = now + 15;
-          return;
-        }
       }
     }
   }
@@ -1605,19 +1616,15 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     Esp::instance().markTargetEspHit(bestActor);
     // Анимация взмаха применяется только к удару TriggerBot.
     m_bridge.armSwing();
-    // Интервал между ударами: база + разброс + редкая «задумчивость».
-    int64_t next = now + settings.triggerIntervalMs;
-    if (settings.attackIntervalJitterMs > 0) {
-      next += randomInt(-settings.attackIntervalJitterMs,
-                        settings.attackIntervalJitterMs);
-    }
-    if (settings.humanize && randomFloat(0.0f, 1.0f) < 0.08f) {
-      next += randomInt(120, 320);
-    } else if (randomFloat(0.0f, 1.0f) < 0.10f) {
-      next -= randomInt(30, 90);
-    }
-    m_nextAttackAtMs =
-        std::max(now + (settings.onlyCrit ? 80 : 120), next);
+    // Bedrock gives the victim a 10-tick (500 ms) damage-immunity window.
+    // Attacking every 220 ms (the old default) meant every second packet was
+    // discarded and crit windows were wasted. Never schedule inside the
+    // window; a tiny positive jitter avoids a perfectly periodic packet.
+    int64_t next =
+        now + std::max<int64_t>(settings.triggerIntervalMs, 500);
+    const int jitter = std::min(25, std::max(0, settings.attackIntervalJitterMs));
+    next += randomInt(0, jitter);
+    m_nextAttackAtMs = std::max(now + 80, next);
   } else {
     // GameMode ещё не готов (меню/загрузка) — не долбим каждый кадр.
     m_nextAttackAtMs = now + 100;
@@ -1633,7 +1640,7 @@ Angles AimAssist::calculateAngles(void *entity) const {
   if (!m_bridge.getEyePosition(player, eye)) return angles;
 
   const Settings settings = getSettings();
-  const Vec3 point = getTargetPoint(entity, settings.targetBone);
+  const Vec3 point = getTargetPoint(entity, settings.targetBone, settings.triggerBot);
   const float dx = point.x - eye.x;
   const float dy = point.y - eye.y;
   const float dz = point.z - eye.z;
@@ -1650,6 +1657,13 @@ Angles AimAssist::calculateAnglesToPoint(const Vec3 &point) const {
   const float dx = point.x - m_eye.x;
   const float dy = point.y - m_eye.y;
   const float dz = point.z - m_eye.z;
+  // Overlapping players can make the aim point coincide with the eye. Without
+  // this guard atan2(0,0) returned yaw=0/pitch=0 and the camera snapped.
+  if (dx * dx + dy * dy + dz * dz < 1.0e-6f) {
+    angles.pitch = m_localPitch.load(std::memory_order_relaxed);
+    angles.yaw = m_localYaw.load(std::memory_order_relaxed);
+    return angles;
+  }
   const float horizontal = std::max(0.0001f, std::sqrt(dx * dx + dz * dz));
 
   angles.yaw = normalizeYaw(std::atan2(-dx, dz) * kRadToDeg);
@@ -1754,14 +1768,12 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
 
     // Hard ceiling on how much the view may move in ONE rendered frame.
     // Exponential smoothing alone still produces a large first step when the
-    // game runs at 15-30 FPS (at dt=50 ms a 70 ms time constant already moves
-    // ~50% of the error per frame, which reads as a series of mini teleports).
-    // Keeping the step in degrees, not percent, makes the motion visually
-    // continuous at any frame rate. Slightly more room is allowed for large
-    // corrections so a real flick does not crawl.
+    // game runs at 15-30 FPS, which read as mini teleports. A degree-based
+    // cap keeps motion continuous at any frame rate; the ceiling is higher
+    // for large corrections so a PvP flick still snaps in ~100-200 ms.
     const float frameCap =
-        clampf(45.0f * fastDt, 1.2f, 2.2f) +
-        1.6f * clampf((errMag - 8.0f) / 30.0f, 0.0f, 1.0f);
+        clampf(70.0f * fastDt, 2.0f, 3.6f) +
+        1.4f * clampf((errMag - 12.0f) / 40.0f, 0.0f, 1.0f);
 
     float stepYaw;
     float stepPitch;
@@ -1771,15 +1783,15 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
       // the whole remaining error in a single frame, which read as a camera
       // teleport whenever the crosshair was outside the hitbox.
       //
-      // The time constant has a 150 ms floor; combined with frameCap this
-      // guarantees a multi-frame glide even when the UI slider is at minimum.
+      // PvP tuning: an 80 ms floor (was 150) plus distanceEase makes the
+      // crosshair reach the box in a few frames while still interpolating.
       const float tauMs =
-          clampf(std::max(settings.fastAimTimeMs * 3.0f, 150.0f),
-                 120.0f, 260.0f);
+          clampf(std::max(settings.fastAimTimeMs * 2.0f, 80.0f),
+                 70.0f, 200.0f);
       const float smoothAlpha =
           1.0f - std::exp(-fastDt * 1000.0f / tauMs);
       const float distanceEase =
-          0.55f + 0.45f * clampf(errMag / 6.0f, 0.0f, 1.0f);
+          0.70f + 0.30f * clampf(errMag / 6.0f, 0.0f, 1.0f);
       float stepLen = errMag * smoothAlpha * distanceEase;
 
       // Feed-forward of the target's own angular velocity so strafing targets
@@ -1874,11 +1886,10 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
   float stepPitch = errPitch * alpha;
 
   // Same per-frame degree ceiling as the fast path: the old smoothing could
-  // move 40%+ of the remaining error in a single frame at low FPS, which was
-  // visible as mini teleports while the crosshair approached the hitbox.
+  // move 40%+ of the remaining error in a single frame at low FPS.
   const float frameCap =
-      clampf(40.0f * h, 1.2f, 2.2f) +
-      1.6f * clampf((errMag - 8.0f) / 30.0f, 0.0f, 1.0f);
+      clampf(60.0f * h, 1.8f, 3.2f) +
+      1.4f * clampf((errMag - 10.0f) / 35.0f, 0.0f, 1.0f);
   const float maxStep = std::min(
       settings.maxDegPerSecond * (0.5f + 0.5f * strengthScale) * m_motorScale * h,
       frameCap);
@@ -2058,15 +2069,11 @@ void AimAssist::updateVerticalMotion(float feetY, int64_t now) {
 bool AimAssist::isFallingForCrit(const Settings &settings, int64_t now) {
   void *player = m_bridge.getLocalPlayer();
   if (!player) return false;
-  // Ported from the PC client's SolsticeCriticalPolicy: a crit needs the player
-  // airborne, not rising (jump pressed), and already falling faster than the
-  // gate (-0.17). No settle window — the window is the descent itself.
+  // Vanilla crit: airborne and descending. Holding the jump button while
+  // already airborne does NOT prevent a crit, so never disqualify on the
+  // jump input alone — doing so made onlyCrit silently stop firing for
+  // players who bunny-hop with the button held.
   if (gameecs::hasOnGround(player)) {
-    m_fallingSinceMs = 0;
-    return false;
-  }
-  gameecs::MoveInputState input{};
-  if (gameecs::readMoveInput(player, input) && input.jumping) {
     m_fallingSinceMs = 0;
     return false;
   }
@@ -2075,22 +2082,52 @@ bool AimAssist::isFallingForCrit(const Settings &settings, int64_t now) {
     m_fallingSinceMs = 0;
     return false;
   }
-  return true;
+  // Wait one server tick after the descent starts: the attack packet is
+  // validated against the last PlayerAuthInput, which must already say
+  // "airborne and falling" for the server to award the crit.
+  if (m_fallingSinceMs == 0) {
+    m_fallingSinceMs = now;
+  }
+  const int64_t settleMs =
+      static_cast<int64_t>(std::max(0, settings.critSettleMs));
+  return now - m_fallingSinceMs >= settleMs;
 }
 
 // ============================================================
 // Вспомогательное
 // ============================================================
-Vec3 AimAssist::getTargetPoint(void *actor, TargetBone) const {
+Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone,
+                               bool preferCenter) const {
   Aabb bounds{};
   if (!m_bridge.getActorBounds(actor, bounds)) {
     Vec3 position{};
     m_bridge.getPosition(actor, position);
     return position;
   }
-  const Vec3 center{(bounds.min.x + bounds.max.x) * 0.5f,
-                    (bounds.min.y + bounds.max.y) * 0.5f,
-                    (bounds.min.z + bounds.max.z) * 0.5f};
+  const float height = std::max(0.1f, bounds.max.y - bounds.min.y);
+  // Body-part aim. The bone used to be ignored (always AABB centre), so the
+  // Head/Chest/Legs UI setting did nothing. Keep every point safely inside
+  // the box so TriggerBot's ray still intersects it.
+  float pointY = (bounds.min.y + bounds.max.y) * 0.5f;
+  switch (bone) {
+    case TargetBone::Head:
+      pointY = bounds.max.y - std::min(0.22f, height * 0.12f);
+      break;
+    case TargetBone::UpperChest:
+      pointY = bounds.min.y + height * 0.78f;
+      break;
+    case TargetBone::Chest:
+      pointY = bounds.min.y + height * 0.64f;
+      break;
+    case TargetBone::LowerChest:
+      pointY = bounds.min.y + height * 0.54f;
+      break;
+    case TargetBone::Legs:
+      pointY = bounds.min.y + height * 0.26f;
+      break;
+  }
+  const Vec3 base{(bounds.min.x + bounds.max.x) * 0.5f, pointY,
+                  (bounds.min.z + bounds.max.z) * 0.5f};
 
   // Current crosshair direction (from the live camera).
   const float pitch = m_localPitch.load(std::memory_order_relaxed);
@@ -2100,10 +2137,16 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone) const {
   const Vec3 dir{-std::sin(yr) * std::cos(pr), -std::sin(pr),
                  std::cos(yr) * std::cos(pr)};
 
+  // TriggerBot wants the crosshair on the chosen body part (better server
+  // registration than parking on the near box surface).
+  if (preferCenter) {
+    return base;
+  }
+
   // Ray vs AABB (slab). If the crosshair already hits the box, return a point
   // on the ray so the aim error is 0 and the camera does not move — this is
-  // what removes the tremor while tracking. Otherwise return the fixed box
-  // centre so the approach target is stable (no feedback with the live ray).
+  // what removes the tremor while tracking. Otherwise return the fixed bone
+  // point so the approach target is stable (no feedback with the live ray).
   float tmin = 0.0f;
   float tmax = 1.0e9f;
   const float o[3] = {m_eye.x, m_eye.y, m_eye.z};
@@ -2111,11 +2154,13 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone) const {
   const float lo[3] = {bounds.min.x, bounds.min.y, bounds.min.z};
   const float hi[3] = {bounds.max.x, bounds.max.y, bounds.max.z};
   bool hits = true;
+  bool inside = true;
   for (int axis = 0; axis < 3; ++axis) {
     if (!std::isfinite(o[axis]) || !std::isfinite(d[axis])) {
       hits = false;
       break;
     }
+    if (o[axis] < lo[axis] || o[axis] > hi[axis]) inside = false;
     if (std::fabs(d[axis]) < 1.0e-7f) {
       if (o[axis] < lo[axis] || o[axis] > hi[axis]) {
         hits = false;
@@ -2133,11 +2178,14 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone) const {
       break;
     }
   }
-  if (hits && tmax >= 0.0f) {
-    const float t = std::max(0.0f, tmin);
-    return {m_eye.x + dir.x * t, m_eye.y + dir.y * t, m_eye.z + dir.z * t};
+  // If the eye is inside the target box (players overlap in melee PvP), the
+  // slab test returns t=0, i.e. the eye itself. calculateAnglesToPoint() then
+  // gets a zero vector and snaps yaw/pitch to 0. Fall back to the bone point.
+  if (hits && tmax >= 0.0f && !inside && tmin > 0.05f) {
+    return {m_eye.x + dir.x * tmin, m_eye.y + dir.y * tmin,
+            m_eye.z + dir.z * tmin};
   }
-  return center;
+  return base;
 }
 
 Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,

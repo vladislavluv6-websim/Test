@@ -66,11 +66,11 @@ struct Settings {
   bool fastAim = true;
   float fastAimTimeMs = 35.0f;
   float fastAimMaxSpeed = 2600.0f;
-  float switchHysteresisDeg = 0.75f;
+  float switchHysteresisDeg = 0.4f;
   // EMA-лаг позиции цели (в кадрах при 120 Гц). Даёт «догоняющее» наведение,
   // как у живой руки, вместо мгновенной привязки к центру хитбокса.
   int targetSmoothFrames = 0;
-  int targetGraceFrames = 3;
+  int targetGraceFrames = 6;
 
   float randomJitterDeg = 0.0f;
   int randomJitterIntervalMs = 150;
@@ -90,9 +90,11 @@ struct Settings {
   bool legit = true;
   float strength = 100.0f;
   bool triggerBot = false;
-  int triggerDelayMs = 250;
+  int triggerDelayMs = 25;
   // Пауза между ударами триггера (мс). Реакция берётся из triggerDelayMs.
-  int triggerIntervalMs = 620;
+  // 500 ms is the vanilla damage-immunity window: attacking faster only
+  // burns packets without dealing damage.
+  int triggerIntervalMs = 500;
 
   // Триггер работает по пересечению луча прицела с хитбоксом, а не по
   // углу до цели aim assist. Дальность — до поверхности хитбокса.
@@ -109,8 +111,8 @@ struct Settings {
   // Реакция перед началом доводки: живой игрок не начинает вести цель
   // в тот же кадр, в котором она появилась.
   bool humanize = true;
-  float reactionDelayMs = 45.0f;
-  float reactionJitterMs = 90.0f;
+  float reactionDelayMs = 15.0f;
+  float reactionJitterMs = 25.0f;
   // Дополнительный вклад в шум сопровождения (0 — только trackingNoiseDeg).
   float aimTremorDeg = 0.0f;
   // Верхний предел поворота за один серверный тик (50 мс). Защита от
@@ -137,7 +139,7 @@ struct Settings {
   // Медленная вариация «моторной» скорости (доля единицы).
   float motorVariation = 0.22f;
   // Минимальное время удержания текущей цели перед переключением, мс.
-  int switchDelayMs = 100;
+  int switchDelayMs = 45;
   // Триггер: максимальный угол от прицела до центра цели для «мягкого»
   // добивания, если луч не попал в AABB. В legit-режиме не используется.
   float attackMaxAngleDeg = 2.0f;
@@ -168,7 +170,9 @@ struct Settings {
   // Минимальная скорость падения по Y, блоков/с.
   float critMinFallSpeed = 0.17f;
   // Сколько миллисекунд нужно непрерывно падать перед ударом.
-  int critSettleMs = 20;
+  // At least one 50 ms server tick: the attack packet is processed against
+  // the last PlayerAuthInput, so the server must already see airborne state.
+  int critSettleMs = 50;
 
   // ------------------------------------------------------------
   // Сетевое формирование ротации (то, что реально видит сервер)
@@ -297,7 +301,10 @@ private:
   bool isActive(const Settings &settings) const;
   bool isInvisible(void *actor) const;
   bool isSameTeam(void *local, void *other) const;
-  Vec3 getTargetPoint(void *actor, TargetBone bone) const;
+  // preferCenter: used by TriggerBot, which needs the crosshair pulled to the
+  // chosen body part instead of parking on the near hitbox surface.
+  Vec3 getTargetPoint(void *actor, TargetBone bone,
+                      bool preferCenter = false) const;
   Vec3 jitteredAimPoint(void *actor, const Vec3 &base, TargetBone bone);
   Vec3 randomHitPoint(void *actor, const Vec3 &hitPoint);
   Angles calculateAnglesToPoint(const Vec3 &point) const;
@@ -348,6 +355,9 @@ private:
   int64_t m_nextAttackAtMs = 0;
   int m_triggerDelayForTargetMs = 0;
   void *m_triggerSinceActor = nullptr;
+  // Last frame the trigger ray actually hit something; used to keep the
+  // reaction timer alive across a one-frame miss.
+  int64_t m_triggerLastSeenMs = 0;
   int64_t m_lastSwitchMs = 0;
 
   bool m_hasLocal = false;

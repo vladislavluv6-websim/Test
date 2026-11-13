@@ -212,7 +212,7 @@ public class InbuiltModManager {
     private static final boolean DEFAULT_TRIGGER_BOT_TARGET_PLAYERS = true;
     private static final boolean DEFAULT_TRIGGER_BOT_TARGET_MOBS = true;
     private static final boolean DEFAULT_TRIGGER_BOT_HUMANIZATION = true;
-    private static final int DEFAULT_TRIGGER_BOT_INTERVAL = 220;
+    private static final int DEFAULT_TRIGGER_BOT_INTERVAL = 500;
     private static final int DEFAULT_TRIGGER_BOT_INTERVAL_JITTER = 50;
     private static final int DEFAULT_TRIGGER_BOT_SKIP_CHANCE = 0;
     private static final boolean DEFAULT_TRIGGER_BOT_ONLY_CRIT = false;
@@ -220,7 +220,7 @@ public class InbuiltModManager {
     private static final int DEFAULT_GYRO_SENSITIVITY = 100;
     private static final int DEFAULT_GYRO_DEADZONE = 5;
     private static final String KEY_TUNING_REVISION = "tuning_revision";
-    private static final int TUNING_REVISION = 8;
+    private static final int TUNING_REVISION = 9;
     private static final String KEY_FOV_360_REVISION = "fov_360_revision";
     private static final String KEY_SHORTCUT_REVISION = "shortcut_revision";
     private static final String KEY_ONYX_DEFAULTS_REVISION = "onyx_defaults_revision";
@@ -1126,16 +1126,12 @@ public class InbuiltModManager {
 
     public int getTriggerBotDelay() {
         int value = prefs.getInt(KEY_TRIGGER_BOT_DELAY, DEFAULT_TRIGGER_BOT_DELAY);
-        if (value < 120) {
-            value = 280;
-            prefs.edit().putInt(KEY_TRIGGER_BOT_DELAY, value).apply();
-        }
-        return Math.max(120, Math.min(400, value));
+        return Math.max(0, Math.min(400, value));
     }
 
     public void setTriggerBotDelay(int delayMs) {
         prefs.edit().putInt(KEY_TRIGGER_BOT_DELAY,
-                Math.max(120, Math.min(400, delayMs))).apply();
+                Math.max(0, Math.min(400, delayMs))).apply();
     }
 
     public int getTriggerBotReactionJitter() {
