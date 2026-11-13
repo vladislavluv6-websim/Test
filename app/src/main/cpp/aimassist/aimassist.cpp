@@ -12,6 +12,7 @@
 #include "ClientBridge.hpp"
 #include "Esp.hpp"
 #include "Fullbright.hpp"
+#include "InventorySwap.hpp"
 
 namespace {
 
@@ -603,4 +604,28 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_FullbrightMod_nativeIsEnabled(
     JNIEnv *, jclass) {
   return aimbot::Fullbright::instance().isEnabled() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_InventorySwapMod_nativeSetEnabled(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::InventorySwap::instance().request(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_InventorySwapMod_nativeGetStatus(
+    JNIEnv *, jclass) {
+  return static_cast<jint>(aimbot::InventorySwap::instance().status());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_InventorySwapMod_nativeGetResult(
+    JNIEnv *, jclass) {
+  return static_cast<jint>(aimbot::InventorySwap::instance().lastResult());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_InventorySwapMod_nativeReset(
+    JNIEnv *, jclass) {
+  aimbot::InventorySwap::instance().reset();
 }

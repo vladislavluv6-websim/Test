@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "AimAssist.hpp"
+#include "InventorySwap.hpp"
 #include "Memory.hpp"
 #include "Offsets.hpp"
 #include "CombatState.hpp"
@@ -1187,6 +1188,7 @@ void *clientUpdateDetour(void *client, bool value, bool second) {
     // фоне, из-за чего Android вешал ANR при старте, и относился к способу
     // «нажимать кнопку», который не используется.
     // ClientInstance::update вызывается в кадровом цикле.
+    InventorySwap::instance().update();
     AimAssist::instance().onRender(frameDelta());
   } else {
     g_clientInstance.store(nullptr, std::memory_order_release);

@@ -24,6 +24,7 @@ public class ModIconHelper {
             case ModIds.POJAV_CONTROLS -> R.drawable.ic_pojav_controls;
             case ModIds.MORE_BUTTONS -> R.drawable.ic_more_buttons_normal;
             case ModIds.HOTBAR_SLOT -> R.drawable.ic_hotbar_slot;
+            case ModIds.INVENTORY_SWAP -> R.drawable.ic_auto_swap_normal;
             default -> R.drawable.ic_settings;
         };
     }

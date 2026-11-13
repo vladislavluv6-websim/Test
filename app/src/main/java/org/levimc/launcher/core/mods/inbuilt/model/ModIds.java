@@ -14,6 +14,7 @@ public final class ModIds {
     public static final String TARGET_ESP = "target_esp";
     public static final String FULLBRIGHT = "fullbright";
     public static final String TRIGGER_BOT = "trigger_bot";
+    public static final String INVENTORY_SWAP = "inventory_swap";
     public static final String SWING = "swing";
     public static final String CHICK_PET = "chick_pet";
     public static final String ZOOM = "zoom";

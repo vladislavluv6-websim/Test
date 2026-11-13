@@ -8,6 +8,7 @@ add_library(aimassist SHARED
         ClientBridge.cpp
         Esp.cpp
         Fullbright.cpp
+        InventorySwap.cpp
         ../common/GameEcs.cpp)
 
 target_compile_features(aimassist PRIVATE cxx_std_20)

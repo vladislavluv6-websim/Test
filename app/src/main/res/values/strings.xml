@@ -750,6 +750,14 @@
     <string name="inbuilt_mod_friend">Friend</string>
     <string name="inbuilt_mod_friend_desc">Players in this list are ignored by AimAssist and TriggerBot and highlighted green by ESP</string>
     <string name="mod_config_friend_names">Friend names (comma separated)</string>
+    <string name="inbuilt_mod_inventory_swap">Auto Swap</string>
+    <string name="inbuilt_mod_inventory_swap_desc">Swaps the configured item into your offhand by identifier, and restores it on the next shortcut press</string>
+    <string name="auto_swap_unavailable">Auto Swap is unavailable on this Minecraft version</string>
+    <string name="auto_swap_equipped">Totem moved to your left hand</string>
+    <string name="auto_swap_restored">Previous offhand restored</string>
+    <string name="auto_swap_no_totem">No totem_of_undying found in inventory</string>
+    <string name="auto_swap_container_unavailable">Can not access inventory</string>
+    <string name="auto_swap_no_local_player">Auto Swap: no local player</string>
     <string name="inbuilt_mod_fullbright">Fullbright</string>
     <string name="inbuilt_mod_fullbright_desc">Removes darkness and fog by forcing full world lighting</string>
     <string name="fullbright_mod_unavailable">Fullbright is unavailable on this Minecraft version</string>

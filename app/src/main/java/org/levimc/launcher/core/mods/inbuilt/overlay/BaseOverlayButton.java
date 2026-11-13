@@ -85,6 +85,7 @@ public abstract class BaseOverlayButton {
         if (ModIds.ESP.equals(id)) return activity.getString(R.string.inbuilt_mod_esp);
         if (ModIds.FULLBRIGHT.equals(id)) return activity.getString(R.string.inbuilt_mod_fullbright);
         if (ModIds.TRIGGER_BOT.equals(id)) return activity.getString(R.string.inbuilt_mod_trigger_bot);
+        if (ModIds.INVENTORY_SWAP.equals(id)) return activity.getString(R.string.inbuilt_mod_inventory_swap);
         if (ModIds.SWING.equals(id)) return activity.getString(R.string.inbuilt_mod_swing);
         if (ModIds.ZOOM.equals(id)) return activity.getString(R.string.inbuilt_mod_zoom);
         if (ModIds.SNAPLOOK.equals(id)) return activity.getString(R.string.inbuilt_mod_snaplook);

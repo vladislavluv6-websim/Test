@@ -750,6 +750,14 @@
     <string name="inbuilt_mod_friend">Друзья</string>
     <string name="inbuilt_mod_friend_desc">Игроки из списка игнорируются AimAssist и TriggerBot и подсвечиваются зелёным в ESP</string>
     <string name="mod_config_friend_names">Ники друзей (через запятую)</string>
+    <string name="inbuilt_mod_inventory_swap">Auto Swap</string>
+    <string name="inbuilt_mod_inventory_swap_desc">Переносит выбранный предмет в левую руку по имени; следующий shortcut возвращает прежний предмет</string>
+    <string name="auto_swap_unavailable">Auto Swap недоступен на этой версии Minecraft</string>
+    <string name="auto_swap_equipped">Тотем перенесён в левую руку</string>
+    <string name="auto_swap_restored">Прежний предмет возвращён в левую руку</string>
+    <string name="auto_swap_no_totem">Totem of Undying не найден в инвентаре</string>
+    <string name="auto_swap_container_unavailable">Не удалось получить доступ к инвентарю</string>
+    <string name="auto_swap_no_local_player">Auto Swap: нет локального игрока</string>
     <string name="inbuilt_mod_fullbright">Полная яркость</string>
     <string name="inbuilt_mod_fullbright_desc">Убирает темноту и туман, принудительно включая полное освещение мира</string>
     <string name="fullbright_mod_unavailable">Полная яркость недоступна для этой версии Minecraft</string>

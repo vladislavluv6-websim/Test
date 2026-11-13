@@ -161,6 +161,9 @@ public final class InbuiltModuleProvider {
         mods.add(create(activity, manager, overlayManager, ModIds.TRIGGER_BOT,
                 R.string.inbuilt_mod_trigger_bot, R.string.inbuilt_mod_trigger_bot_desc,
                 groupName));
+        mods.add(create(activity, manager, overlayManager, ModIds.INVENTORY_SWAP,
+                R.string.inbuilt_mod_inventory_swap, R.string.inbuilt_mod_inventory_swap_desc,
+                groupName));
         mods.add(create(activity, manager, overlayManager, ModIds.SWING,
                 R.string.inbuilt_mod_swing, R.string.inbuilt_mod_swing_desc,
                 groupName));
@@ -424,7 +427,7 @@ public final class InbuiltModuleProvider {
                 || ModIds.AIM_ASSIST.equals(modId) || ModIds.ESP.equals(modId)
                 || ModIds.FULLBRIGHT.equals(modId) || ModIds.TRIGGER_BOT.equals(modId)
                 || ModIds.SWING.equals(modId) || ModIds.NAME_TAGS.equals(modId)
-                || ModIds.TARGET_ESP.equals(modId)) {
+                || ModIds.TARGET_ESP.equals(modId) || ModIds.INVENTORY_SWAP.equals(modId)) {
             configs.add(config(CFG_OVERLAY_SHORTCUT,
                     context.getString(R.string.mod_config_overlay_shortcut),
                     UnifiedMod.ConfigType.TOGGLE,

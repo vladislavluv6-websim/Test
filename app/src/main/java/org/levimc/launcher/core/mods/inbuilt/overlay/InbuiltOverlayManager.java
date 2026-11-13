@@ -55,7 +55,7 @@ public class InbuiltOverlayManager {
     };
     private static final String[] STANDARD_SHORTCUT_MOD_IDS = {
             ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.TRIGGER_BOT,
-            ModIds.SWING, ModIds.ESP, ModIds.FULLBRIGHT
+            ModIds.SWING, ModIds.ESP, ModIds.FULLBRIGHT, ModIds.INVENTORY_SWAP
     };
     private static final String[] TOGGLE_SHORTCUT_MOD_IDS = {
             ModIds.TARGET_ESP, ModIds.NAME_TAGS, ModIds.FRIEND, ModIds.KILLAURA
@@ -419,6 +419,7 @@ public class InbuiltOverlayManager {
             case ModIds.ESP: controller = new EspOverlay(activity); break;
             case ModIds.FULLBRIGHT: controller = new FullbrightOverlay(activity); break;
             case ModIds.TRIGGER_BOT: controller = new TriggerBotOverlay(activity); break;
+            case ModIds.INVENTORY_SWAP: controller = new InventorySwapOverlay(activity); break;
             case ModIds.SWING:
                 if (swingOverlay == null) swingOverlay = new SwingOverlay(activity);
                 controller = swingOverlay;
@@ -502,6 +503,12 @@ public class InbuiltOverlayManager {
                 triggerBot.show(savedX, savedY);
                 overlays.add(triggerBot);
                 modOverlayMap.put(modId, triggerBot);
+                break;
+            case ModIds.INVENTORY_SWAP:
+                InventorySwapOverlay swap = (InventorySwapOverlay) getKeybindController(ModIds.INVENTORY_SWAP);
+                swap.show(savedX, savedY);
+                overlays.add(swap);
+                modOverlayMap.put(modId, swap);
                 break;
             case ModIds.SWING:
                 SwingOverlay swing = (SwingOverlay) getKeybindController(ModIds.SWING);

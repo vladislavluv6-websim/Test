@@ -46,10 +46,9 @@ public class LogcatOverlayManager {
     }
 
     private void updateVisibility() {
-        boolean show = FeatureSettings.getInstance().isLogcatOverlayEnabled() && !onSplash && !onLoading && !gameHudHidden;
+        // Этот HUD-виджет полностью отключён: он занимал игровой экран слева.
         mainHandler.post(() -> {
-            if (overlay == null) return;
-            if (show) overlay.show(); else overlay.hide();
+            if (overlay != null) overlay.hide();
         });
     }
 
