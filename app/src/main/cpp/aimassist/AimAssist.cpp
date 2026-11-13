@@ -1155,6 +1155,10 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
 
   Target current = m_target;
   bool currentStillValid = false;
+  // Отдельный флаг: актёр текущей цели всё ещё пришёл из свежего списка.
+  // Нужен блоку hard-lock: тот работает даже вне конуса FOV, поэтому
+  // currentStillValid (после проверок дистанции/FOV/LOS) для него не годится.
+  bool currentInList = false;
 
   // Актёр, в чей хитбокс сейчас упирается прицел (посчитан updateTrigger).
   // Его aim assist обязан вести первым: иначе доводка утащит камеру с
@@ -1182,6 +1186,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
 
     Vec3 targetPosition{};
     if (!m_bridge.getPosition(actor, targetPosition)) continue;
+    if (actor == current.actor) currentInList = true;
 
     const Vec3 point = getTargetPoint(actor, settings.targetBone, settings.triggerBot);
     const Angles angles = calculateAnglesToPoint(point);
@@ -1238,7 +1243,11 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   // (e.g. ran behind the player) and even if another actor is under the
   // crosshair. This both stops accidental target stealing and makes the
   // camera turn around when an opponent runs behind the back.
-  if (settings.targetLock && m_target.valid && m_target.actor) {
+  // currentInList обязателен: если цель умерла/выгрузилась, m_target.actor —
+  // висячий указатель, и readHealth() уходил в освобождённый ECS-реестр
+  // (SIGSEGV ровно в момент добивания цели).
+  if (settings.targetLock && m_target.valid && m_target.actor &&
+      currentInList) {
     const bool playerActor = m_bridge.isPlayer(m_target.actor);
     const bool allowed =
         playerActor ? settings.targetPlayers : settings.targetMobs;

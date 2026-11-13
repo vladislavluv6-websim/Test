@@ -84,7 +84,41 @@ SparseSet *poolFor(void *actor, entt::id_type hash, EntityId &entity) {
   void *registry = nullptr;
   uint32_t raw = 0;
   if (!registryForActor(actor, &registry, &raw)) return nullptr;
-  if (!readable(registry, sizeof(void *) * 4)) return nullptr;
+
+  // entt::basic_registry::pools — dense_map: sparse-таблица начинается по
+  // +56/+64, packed — по +80 (подтверждено дизасмом storage()). Раньше
+  // проверялись только первые 32 байта реестра, а storage() читает sparse
+  // по +56: у мёртвого актёра реестр уже освобождён -> SIGSEGV.
+  struct RegistryHead {
+    uint8_t pad[56];
+    uintptr_t sparseBegin;
+    uintptr_t sparseEnd;
+    uintptr_t pad72;
+    uintptr_t packedBegin;
+  };
+  RegistryHead head{};
+  if (!readValue(reinterpret_cast<uintptr_t>(registry), &head, sizeof(head))) {
+    return nullptr;
+  }
+  if (head.sparseBegin < 0x1000 || head.packedBegin < 0x1000 ||
+      head.sparseEnd < head.sparseBegin ||
+      ((head.sparseEnd - head.sparseBegin) & 7u) != 0) {
+    return nullptr;
+  }
+  const uintptr_t pages = (head.sparseEnd - head.sparseBegin) >> 3;
+  if (pages == 0 || (pages & (pages - 1)) != 0 || pages > (1u << 20)) {
+    return nullptr;
+  }
+  // Слот, который будет читать storage(): sparse[hash & (pages - 1)].
+  uintptr_t packed = 0;
+  if (!readValue(head.sparseBegin + ((hash & (pages - 1)) << 3), packed)) {
+    return nullptr;
+  }
+  if (packed != ~uintptr_t(0) &&
+      !readable(reinterpret_cast<void *>(head.packedBegin + packed * 32), 32)) {
+    return nullptr;
+  }
+
   auto *reg = static_cast<Registry *>(registry);
   SparseSet *pool = reg->storage(hash);
   if (!pool) return nullptr;
