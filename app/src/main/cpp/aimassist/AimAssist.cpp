@@ -166,6 +166,9 @@ void AimAssist::onEnable() {
 
 void AimAssist::onDisable() {
   m_enabled.store(false, std::memory_order_release);
+  m_bridge.setSilentAim(false, 0.0f, 0.0f);
+  m_silentActive = false;
+  m_silentAlignedSinceMs = 0;
   clearTarget();
   m_velYaw = 0.0f;
   m_velPitch = 0.0f;
@@ -675,8 +678,10 @@ void AimAssist::updateVisual(float dt) {
     return;
   }
   if (settings.triggerBot && haveEye) {
-    updateTrigger(player, settings, current, eyeNow);
+    updateTrigger(player, settings, current, eyeNow, dt);
   } else {
+    // Let a spoofed view ramp back to the camera instead of snapping.
+    updateTriggerSilentAim(settings, current, false, nullptr, Vec3{}, dt);
     m_onTarget.store(false, std::memory_order_release);
     m_triggerActor.store(nullptr, std::memory_order_release);
     m_triggerDistance.store(0.0f, std::memory_order_relaxed);
@@ -1386,9 +1391,100 @@ void AimAssist::updateKillaura(void *player, const Settings &settings,
   }
 }
 
+// Wide-cone trigger bypass: move ONLY the rotation that goes into
+// PlayerAuthInput (what the server validates hits against) toward the hit
+// point, ramped at a human flick rate. The local camera is untouched, so the
+// player sees nothing while the server sees a smooth, aligned turn instead of
+// a hit with the crosshair 10-25 deg away.
+void AimAssist::updateTriggerSilentAim(const Settings &settings,
+                                       const ViewAngles &camera,
+                                       bool haveTarget, void *actor,
+                                       const Vec3 &point, float dt) {
+  const int64_t now = monotonicMs();
+  const bool keep = haveTarget && settings.triggerSmartCone && actor != nullptr;
+
+  float goalYaw = camera.yaw;
+  float goalPitch = camera.pitch;
+
+  bool newTarget = false;
+  if (!m_silentActive) {
+    if (!keep) return;
+    // Start from the camera: the first spoofed packet must not jump.
+    m_silentYaw = normalizeYaw(camera.yaw);
+    m_silentPitch = camera.pitch;
+    m_silentActive = true;
+    m_silentActor = actor;
+    m_silentAlignedSinceMs = 0;
+    newTarget = true;
+  } else if (keep && actor != m_silentActor) {
+    // Keep the current packet rotation continuous; just retarget.
+    m_silentActor = actor;
+    m_silentAlignedSinceMs = 0;
+    newTarget = true;
+  }
+  if (newTarget) {
+    // Never hold the exact hitbox center: a small per-fight placement and a
+    // slow sway make the server-side curve statistically human.
+    m_silentPlaceYaw = randomFloat(-1.0f, 1.0f) * settings.restOffsetDeg * 0.7f;
+    m_silentPlacePitch =
+        randomFloat(-0.7f, 0.7f) * settings.restOffsetDeg * 0.7f;
+    m_silentSwayPhase = randomFloat(0.0f, 6.2831853f);
+    m_silentSwayFreq = randomFloat(0.3f, 1.1f);
+  }
+  if (keep) {
+    const Angles aim = calculateAnglesToPoint(point);
+    m_silentSwayPhase +=
+        clampf(dt, 0.0f, 0.05f) * 6.2831853f * m_silentSwayFreq;
+    if (m_silentSwayPhase > 6.2831853f) m_silentSwayPhase -= 6.2831853f;
+    const float swayAmp =
+        clampf(settings.trackingNoiseDeg, 0.0f, 0.05f);
+    goalYaw = aim.yaw + m_silentPlaceYaw +
+              std::sin(m_silentSwayPhase) * swayAmp;
+    goalPitch = aim.pitch + m_silentPlacePitch +
+                std::sin(m_silentSwayPhase * 1.37f + 1.1f) * swayAmp * 0.7f;
+  }
+
+  const float rate =
+      clampf(settings.silentAimRateDegPerSec, 120.0f, 480.0f);
+  const float maxStep = rate * clampf(dt, 0.0f, 0.05f);
+  const float errYaw = shortestDelta(m_silentYaw, goalYaw);
+  const float errPitch = goalPitch - m_silentPitch;
+  const float err = std::sqrt(errYaw * errYaw + errPitch * errPitch);
+  if (err > 1e-5f) {
+    const float step = std::min(err, maxStep);
+    const float k = step / err;
+    m_silentYaw = normalizeYaw(m_silentYaw + errYaw * k);
+    m_silentPitch =
+        clampf(m_silentPitch + errPitch * k, -89.9f, 89.9f);
+  }
+
+  const float tol =
+      clampf(settings.silentAimToleranceDeg, 2.0f, 12.0f);
+  if (keep) {
+    if (err <= tol) {
+      if (m_silentAlignedSinceMs == 0) m_silentAlignedSinceMs = now;
+    } else {
+      m_silentAlignedSinceMs = 0;
+    }
+  } else {
+    m_silentAlignedSinceMs = 0;
+    // Do not switch the packet back to the camera in one tick: the server
+    // would see a snap. Ramp home first, then release.
+    if (err <= 1.2f) {
+      m_bridge.setSilentAim(false, 0.0f, 0.0f);
+      m_silentActive = false;
+      m_silentActor = nullptr;
+      return;
+    }
+  }
+  m_bridge.setSilentAim(true, m_silentPitch, m_silentYaw);
+}
+
 void AimAssist::updateTrigger(void *player, const Settings &settings,
-                              const ViewAngles &view, const Vec3 &eye) {
+                              const ViewAngles &view, const Vec3 &eye,
+                              float dt) {
   if (!player || !settings.triggerBot) {
+    updateTriggerSilentAim(settings, view, false, nullptr, Vec3{}, dt);
     m_triggerActor.store(nullptr, std::memory_order_release);
     m_triggerDistance.store(0.0f, std::memory_order_relaxed);
     m_onTarget.store(false, std::memory_order_release);
@@ -1477,9 +1573,16 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   // тиками), допускаем удар по очень маленькому угловому допуску. Это
   // компенсирует рассинхрон клиент/сервер, но не превращается в killaura:
   // допуск жёстко ограничен attackMaxAngleDeg (2°) и ванильной дистанцией.
+  // Smart wide cone: the old 3 deg fallback only covered crosshair jitter a
+  // few centimetres off the box. With the silent pre-aim below, hits up to
+  // ~25 deg away are possible without the server ever seeing you look away.
+  const float wideCone =
+      settings.triggerSmartCone
+          ? clampf(settings.triggerSmartConeDeg, 3.0f, 35.0f)
+          : settings.attackMaxAngleDeg;
   bool fallbackHit = false;
   if (!bestActor && minAngleActor &&
-      minAngle <= std::max(0.5f, settings.attackMaxAngleDeg) &&
+      minAngle <= std::max(0.5f, wideCone) &&
       minAngleDist <= reach + tolerance) {
     bestActor = minAngleActor;
     bestDistance = minAngleDist;
@@ -1487,6 +1590,51 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   }
 
   const int64_t now = monotonicMs();
+
+  Vec3 aimPoint{};
+  if (bestActor) {
+    if (fallbackHit) {
+      aimPoint = minAngleCenter;
+    } else {
+      aimPoint.x = eye.x + dir.x * bestDistance;
+      aimPoint.y = eye.y + dir.y * bestDistance;
+      aimPoint.z = eye.z + dir.z * bestDistance;
+    }
+  }
+  updateTriggerSilentAim(settings, view, bestActor != nullptr, bestActor,
+                         aimPoint, dt);
+
+  // The spoofed view is ready only after at least one auth packet carried a
+  // rotation within tolerance (the packet detour timestamps its writes).
+  bool silentReady = false;
+  if (settings.triggerSmartCone && m_silentActive && bestActor &&
+      m_silentAlignedSinceMs != 0) {
+    const int64_t wrote = m_bridge.silentAimLastWriteMs();
+    if (wrote >= m_silentAlignedSinceMs &&
+        now - m_silentAlignedSinceMs >= 55 && now - wrote <= 150) {
+      const Vec3 sd =
+          directionFromAngles(ViewAngles{m_silentPitch, m_silentYaw});
+      const float hx = aimPoint.x - eye.x;
+      const float hy = aimPoint.y - eye.y;
+      const float hz = aimPoint.z - eye.z;
+      const float hlen = std::sqrt(hx * hx + hy * hy + hz * hz);
+      if (hlen > 1e-4f) {
+        const float dot = clampf(
+            (sd.x * hx + sd.y * hy + sd.z * hz) / hlen, -1.0f, 1.0f);
+        const float tol =
+            std::max(4.0f, clampf(settings.silentAimToleranceDeg, 2.0f,
+                                  12.0f));
+        silentReady = std::acos(dot) * kRadToDeg <= tol;
+      }
+    }
+  }
+  // A wide-cone hit is only allowed if the server-side rotation is aligned;
+  // otherwise it is exactly the "hit while facing elsewhere" flag.
+  if (fallbackHit &&
+      minAngle > std::max(0.5f, settings.attackMaxAngleDeg) &&
+      !silentReady) {
+    return;
+  }
 
   static uint64_t s_triggerLog = 0;
   if ((++s_triggerLog % 60) == 1) {
@@ -1579,7 +1727,7 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   // Не бьём в кадре быстрого довода. Polar/ML смотрят не только на угол
   // прицела, но и на угловую скорость в момент удара: удар на 20-30°/тик
   // выглядит как killaura даже при идеальном попадании.
-  if (settings.antiCheatMode) {
+  if (settings.antiCheatMode && !silentReady) {
     const float attackSpeedLimit =
         std::max(14.0f, settings.sustainedTickDeltaDeg);
     if (m_prevTickDeltaDeg > attackSpeedLimit) {
@@ -1669,7 +1817,7 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
         // still tight enough that the hit looks aligned server-side.
         guardTolerance = std::max(guardTolerance, 8.0f);
       }
-      if (netAngle > guardTolerance) {
+      if (netAngle > guardTolerance && !silentReady) {
         m_serverViewSinceMs = 0;
         m_nextAttackAtMs = now + 30;
         static uint64_t s_guardLog = 0;
@@ -1697,10 +1845,13 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     static uint64_t s_fireLog = 0;
     const uint64_t n = ++s_fireLog;
     if (n <= 5 || (n % 20) == 0) {
-      aimbot::diagLog(kTag, "trigger fire #%llu actor=%p dist=%.2f gm=%p",
+      aimbot::diagLog(kTag,
+                      "trigger fire #%llu actor=%p dist=%.2f gm=%p "
+                      "camAng=%.1f silent=%d",
                       static_cast<unsigned long long>(n), bestActor,
                       static_cast<double>(bestDistance),
-                      m_bridge.getGameMode());
+                      m_bridge.getGameMode(),
+                      static_cast<double>(minAngle), silentReady ? 1 : 0);
     }
   }
   // Only criticals need the server-side sprint state cleared. Doing it on

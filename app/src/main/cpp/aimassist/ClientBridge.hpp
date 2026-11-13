@@ -105,6 +105,9 @@ public:
   // Silent aim: inject the given rotation into the outgoing PlayerAuthInput
   // without moving the local camera. active=false restores normal rotation.
   void setSilentAim(bool active, float pitch, float yaw);
+  // Monotonic ms of the last silent rotation actually written into a packet
+  // (0 if none). Used to confirm the server has the aligned view.
+  int64_t silentAimLastWriteMs() const;
   void sendMovePacket(void *player, float yaw, float pitch) const;
 
 private:

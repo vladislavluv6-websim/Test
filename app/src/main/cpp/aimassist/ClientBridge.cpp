@@ -90,9 +90,24 @@ std::atomic<ClientBridge::MovePacketSender> g_movePacketSender{nullptr};
 std::atomic<bool> g_silentAimActive{false};
 std::atomic<float> g_silentAimPitch{0.0f};
 std::atomic<float> g_silentAimYaw{0.0f};
+// Last time a silent rotation was actually written into an outgoing packet,
+// and last time the caller refreshed the silent aim request. The detour
+// ignores a stale request so a disabled module can never keep spoofing.
+std::atomic<int64_t> g_silentAimSetMs{0};
+std::atomic<int64_t> g_silentAimWriteMs{0};
+
+int64_t steadyMsNow() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
 
 void *playerAuthInputWriteDetour(void *packet, void *a1, void *a2, void *a3) {
-  if (packet && g_silentAimActive.load(std::memory_order_relaxed)) {
+  const bool silentRaw = g_silentAimActive.load(std::memory_order_relaxed);
+  const int64_t silentSetAt = g_silentAimSetMs.load(std::memory_order_relaxed);
+  const bool silentFresh =
+      silentRaw && steadyMsNow() - silentSetAt <= 250;
+  if (packet && silentFresh) {
     // Silent aim: write the aim rotation into the outgoing packet only. The
     // local camera/actor rotation is untouched, so the user sees nothing, but
     // the server receives the rotation the attack is aligned with.
@@ -105,6 +120,7 @@ void *playerAuthInputWriteDetour(void *packet, void *a1, void *a2, void *a3) {
       rot[1] = yaw;
       *reinterpret_cast<float *>(static_cast<char *>(packet) +
                                  offsets::kPlayerAuthInputYHeadRot) = yaw;
+      g_silentAimWriteMs.store(steadyMsNow(), std::memory_order_relaxed);
     }
   }
   if (packet && combatstate::sprintSuppressed()) {
@@ -1644,6 +1660,13 @@ void ClientBridge::setSilentAim(bool active, float pitch, float yaw) {
   g_silentAimYaw.store(yaw, std::memory_order_relaxed);
   g_silentAimPitch.store(pitch, std::memory_order_relaxed);
   g_silentAimActive.store(active, std::memory_order_relaxed);
+  if (active) {
+    g_silentAimSetMs.store(steadyMsNow(), std::memory_order_relaxed);
+  }
+}
+
+int64_t ClientBridge::silentAimLastWriteMs() const {
+  return g_silentAimWriteMs.load(std::memory_order_relaxed);
 }
 
 bool ClientBridge::isPlayer(void *actor) const {
