@@ -152,12 +152,18 @@ struct Settings {
   // (PlayerAuthInput) onto the hit point and attacks there. The local camera
   // is not touched, so the hit is aligned server-side without a visible snap.
   bool triggerSmartCone = true;
-  float triggerSmartConeDeg = 25.0f;
+  // Angular margin BEYOND the hitbox, in every direction. 10 deg at 3 m is
+  // ~0.5 m; the hit point itself always stays inside the real AABB, so reach
+  // is unchanged.
+  float triggerSmartConeDeg = 10.0f;
+  // Packet-level silent pre-aim. Off by default: writing the auth-input
+  // rotation is the risky part on some builds. Enable only if stable.
+  bool triggerSilentAim = false;
   // Silent pre-aim ramp speed (deg/sec) and required alignment at the hit.
   float silentAimRateDegPerSec = 240.0f;
   float silentAimToleranceDeg = 6.0f;
   // Вероятность «промаха» (пропуска удара) для humanization.
-  float attackMissChance = 0.02f;
+  float attackMissChance = 0.0f;
   // Разброс интервала между ударами, мс (±).
   int attackIntervalJitterMs = 90;
   // Задержка реакции триггера на новую цель (разброс), мс.
@@ -181,11 +187,11 @@ struct Settings {
   // Бить только в падении (после прыжка), чтобы каждый удар был критом.
   bool onlyCrit = false;
   // Минимальная скорость падения по Y, блоков/с.
-  float critMinFallSpeed = 0.5f;
+  float critMinFallSpeed = 1.0f;
   // Сколько миллисекунд нужно непрерывно падать перед ударом.
   // At least one 50 ms server tick: the attack packet is processed against
   // the last PlayerAuthInput, so the server must already see airborne state.
-  int critSettleMs = 60;
+  int critSettleMs = 120;
 
   // ------------------------------------------------------------
   // Сетевое формирование ротации (то, что реально видит сервер)
@@ -406,6 +412,9 @@ private:
   // flick rate so the server sees a continuous turn, never a snap.
   bool m_silentActive = false;
   void *m_silentActor = nullptr;
+  // Detects world/session changes so a stale actor pointer from the previous
+  // world is never dereferenced after returning to the menu.
+  void *m_lastLocalPlayer = nullptr;
   float m_silentYaw = 0.0f;
   float m_silentPitch = 0.0f;
   int64_t m_silentAlignedSinceMs = 0;
