@@ -154,8 +154,10 @@ private:
   mutable std::mutex m_friendMutex;
   std::unordered_set<std::string> m_friends;
   std::vector<NameTagLabel> m_nameSnapshot;
+  std::vector<NameTagLabel> m_nameScratch;  // render thread only
   mutable std::mutex m_boxMutex;
   std::vector<EspBoxLabel> m_boxSnapshot;
+  std::vector<EspBoxLabel> m_boxScratch;  // render thread only
   std::atomic<bool> m_targetEsp{false};
   std::atomic<int> m_targetEspHoldMs{650};
   mutable std::mutex m_targetMutex;

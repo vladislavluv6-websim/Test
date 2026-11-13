@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
  * or filled) and lets native draw only the original 3D variant.
  */
 public class EspBoxesOverlay extends View {
-    private static final long POLL_INTERVAL_NANOS = 33_000_000L;
+    private static final long POLL_INTERVAL_NANOS = 50_000_000L;
     private static final Pattern TAB = Pattern.compile("\t");
     private static final String[] EMPTY = new String[0];
 

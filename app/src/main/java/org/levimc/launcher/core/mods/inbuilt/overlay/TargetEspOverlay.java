@@ -30,7 +30,7 @@ public class TargetEspOverlay extends View {
     public static final int STYLE_SCAN = 2;
 
     private static final long FADE_MS = 180L;
-    private static final long POLL_INTERVAL_NANOS = 33_000_000L;
+    private static final long POLL_INTERVAL_NANOS = 50_000_000L;
     private static final int RING_SEGMENTS = 56;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());

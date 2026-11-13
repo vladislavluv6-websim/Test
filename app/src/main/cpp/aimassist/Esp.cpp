@@ -757,7 +757,7 @@ std::string Esp::actorName(void *actor,
     std::lock_guard<std::mutex> lock(m_nameMutex);
     const auto it = m_nameCache.find(actor);
     if (it != m_nameCache.end() &&
-        now - it->second.second < std::chrono::seconds(1)) {
+        now - it->second.second < std::chrono::seconds(3)) {
       return it->second.first;
     }
   }
@@ -810,7 +810,7 @@ uint32_t Esp::armorMaskFor(void *actor, std::chrono::steady_clock::time_point no
     std::lock_guard<std::mutex> lock(m_metaMutex);
     const auto it = m_armorCache.find(actor);
     if (it != m_armorCache.end() &&
-        now - it->second.second < std::chrono::milliseconds(400)) {
+        now - it->second.second < std::chrono::milliseconds(1500)) {
       return it->second.first;
     }
   }
@@ -828,7 +828,7 @@ std::string Esp::offhandFor(void *actor, std::chrono::steady_clock::time_point n
     std::lock_guard<std::mutex> lock(m_metaMutex);
     const auto it = m_offhandCache.find(actor);
     if (it != m_offhandCache.end() &&
-        now - it->second.second < std::chrono::milliseconds(400)) {
+        now - it->second.second < std::chrono::milliseconds(1500)) {
       return it->second.first;
     }
   }
@@ -874,7 +874,7 @@ bool Esp::isLabelActor(void *actor) {
   const auto now = std::chrono::steady_clock::now();
   const auto cached = m_labelCache.find(actor);
   if (cached != m_labelCache.end() &&
-      now - cached->second.second < std::chrono::seconds(1)) {
+      now - cached->second.second < std::chrono::seconds(2)) {
     return cached->second.first;
   }
   std::string name;
@@ -907,7 +907,9 @@ bool Esp::isLabelActor(void *actor) {
 
 void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
                          const float camera[3]) {
-  std::vector<NameTagLabel> labels;
+  std::vector<NameTagLabel> &labels = m_nameScratch;
+  labels.clear();
+  labels.reserve(64);
 
   const float width = m_surfaceWidth.load(std::memory_order_relaxed);
   const float height = m_surfaceHeight.load(std::memory_order_relaxed);
@@ -1001,12 +1003,15 @@ void Esp::updateNameTags(void *player, uintptr_t playerRenderer,
   }
 
   std::lock_guard<std::mutex> lock(m_nameMutex);
-  m_nameSnapshot = std::move(labels);
+  m_nameSnapshot.clear();
+  m_nameSnapshot.swap(labels);
 }
 
 void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
                          const float camera[3]) {
-  std::vector<EspBoxLabel> boxes;
+  std::vector<EspBoxLabel> &boxes = m_boxScratch;
+  boxes.clear();
+  boxes.reserve(64);
   const auto now = std::chrono::steady_clock::now();
 
   const float width = m_surfaceWidth.load(std::memory_order_relaxed);
@@ -1015,7 +1020,7 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
   if (width <= 1.0f || height <= 1.0f ||
       !m_bridge.getViewAngles(player, view)) {
     std::lock_guard<std::mutex> lock(m_boxMutex);
-    m_boxSnapshot = std::move(boxes);
+    m_boxSnapshot.clear();
     return;
   }
 
@@ -1153,7 +1158,8 @@ void Esp::updateEspBoxes(void *player, uintptr_t playerRenderer,
   }
 
   std::lock_guard<std::mutex> lock(m_boxMutex);
-  m_boxSnapshot = std::move(boxes);
+  m_boxSnapshot.clear();
+  m_boxSnapshot.swap(boxes);
 }
 
 void Esp::updateTargetEsp(void *player, uintptr_t playerRenderer,
@@ -1333,8 +1339,10 @@ void Esp::render(void *levelRenderer, void *screenContext) {
   // single most expensive per-frame call; isPlayer is fault-guarded and
   // getActorBounds uses safe reads, so a slightly stale list can never fault.
   const auto boxNow = std::chrono::steady_clock::now();
-  if (m_actors.empty() ||
-      boxNow - m_lastBoxCompute >= std::chrono::milliseconds(33)) {
+  // 20 Гц достаточно для ESP/NameTags. Раньше пустой список заставлял
+  // пересканировать ВСЕХ актёров каждый кадр — лишняя нагрузка на main thread.
+  if (m_lastBoxCompute.time_since_epoch().count() == 0 ||
+      boxNow - m_lastBoxCompute >= std::chrono::milliseconds(50)) {
     m_lastBoxCompute = boxNow;
     m_bridge.fillNearbyActors(player, scanRange, m_actors);
     AntiBot::instance().update(m_actors, player);

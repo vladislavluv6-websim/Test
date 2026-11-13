@@ -37,7 +37,7 @@ public class NameTagsOverlay extends View {
             "helmet", "chestplate", "leggings", "boots"
     };
     private static final int FRIEND_COLOR = 0xFF55FF66;
-    private static final long POLL_INTERVAL_NANOS = 33_000_000L;
+    private static final long POLL_INTERVAL_NANOS = 50_000_000L;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
