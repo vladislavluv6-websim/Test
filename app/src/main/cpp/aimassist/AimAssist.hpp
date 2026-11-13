@@ -437,6 +437,9 @@ private:
   // Fast aim сам вызывает applyTurnDelta; внешний onTick не должен
   // применять тот же шаг второй раз.
   bool m_fastAimTurnApplied = false;
+  // Per-frame step magnitude, smoothed so a flick accelerates and stops
+  // smoothly instead of jumping from 0 to the frame cap (jerk limit).
+  float m_smoothStep = 0.0f;
   // Fast aim: micro-фильтр углов цели. Гасит дрожание от 20-Гц
   // интерполяции позиции/хитбокса, не меняя скорость доводки на больших
   // ошибках (там значения сбрасываются напрямую).

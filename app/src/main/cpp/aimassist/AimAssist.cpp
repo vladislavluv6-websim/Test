@@ -1065,7 +1065,11 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   // Актёр, в чей хитбокс сейчас упирается прицел (посчитан updateTrigger).
   // Его aim assist обязан вести первым: иначе доводка утащит камеру с
   // хитбокса и триггер перестанет бить.
-  void *hitActor = (settings.triggerBot && !settings.fastAim)
+  // Whoever the crosshair ray is actually on is the aim target, fast aim or
+  // not. Previously this priority was disabled with fastAim enabled, so the
+  // assist could pull the crosshair off the enemy TriggerBot was hitting and
+  // then swing to another actor - the goal jumps read as teleports.
+  void *hitActor = settings.triggerBot
                        ? m_triggerActor.load(std::memory_order_acquire)
                        : nullptr;
   Target triggerTarget{};
@@ -1100,7 +1104,11 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     if (distance > settings.range) continue;
     if (assistFov < 359.5f && angular > assistFov) continue;
 
-    if (settings.visibleCheck &&
+    // The actor under the crosshair is already line-of-sight checked by
+    // TriggerBot against its actual hit point; a chest point can be behind a
+    // half-block while the head/arm is visible, and dropping the hit actor
+    // here made the assist swing away mid-fight.
+    if (settings.visibleCheck && actor != hitActor &&
         !m_bridge.hasLineOfSight(player, eye, point)) {
       continue;
     }
@@ -1144,11 +1152,12 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
   // Target lock: удерживаем выбранную цель, пока она валидна. Быстрое
   // переключение остаётся только когда прицел стоит точно на другой цели.
   if (settings.targetLock && currentStillValid && !triggerOverride) {
+    // Hard lock while the target is alive and visible. The only legitimate
+    // switch is the TriggerBot ray picking a different actor (handled above),
+    // or the current target becoming invalid. Angle-based switching between
+    // two nearby enemies moved the goal tens of degrees and looked like a
+    // teleport even when the per-frame step was small.
     chosen = current;
-    if (bestAngle.valid && bestAngle.actor != current.actor &&
-        bestAngle.angle <= 1.2f) {
-      chosen = bestAngle;
-    }
   }
 
   bool better = triggerOverride;
@@ -1786,8 +1795,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     // reads as motion, not as a teleport. Large errors get a small bonus and
     // the exponential tail settles the last degrees smoothly.
     const float frameCap =
-        clampf(240.0f * fastDt, 5.0f, 10.0f) +
-        2.5f * clampf((errMag - 10.0f) / 50.0f, 0.0f, 1.0f);
+        clampf(300.0f * fastDt, 6.0f, 13.0f) +
+        3.5f * clampf((errMag - 10.0f) / 50.0f, 0.0f, 1.0f);
 
     float stepYaw;
     float stepPitch;
@@ -1824,7 +1833,14 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
       }
       stepLen = std::min(stepLen, maxSpeed * fastDt);
       stepLen = std::min(stepLen, frameCap);
-      stepLen = std::min(stepLen, errMag);
+      // Jerk limit: the per-frame step ramps toward its target instead of
+      // starting/stopping instantly. This is what makes the flick read as a
+      // continuous mouse motion rather than a series of snap frames.
+      const float velAlpha =
+          1.0f - std::exp(-fastDt / 0.020f);
+      m_smoothStep += (stepLen - m_smoothStep) * velAlpha;
+      m_smoothStep = std::min(m_smoothStep, frameCap);
+      stepLen = std::min(m_smoothStep, errMag);
       stepYaw = errMag > 1e-6f ? errYaw * (stepLen / errMag) : errYaw;
       stepPitch = errMag > 1e-6f ? errPitch * (stepLen / errMag) : errPitch;
     } else {
@@ -1964,6 +1980,7 @@ void AimAssist::resetHumanProfile() {
   // A new engagement must not inherit the previous target's angular velocity.
   m_catchupRate = 0.0f;
   m_haveTargetSample = false;
+  m_smoothStep = 0.0f;
   m_reachFrames = 0;
 }
 
@@ -2112,6 +2129,7 @@ bool AimAssist::isFallingForCrit(const Settings &settings, int64_t now) {
 // ============================================================
 Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone,
                                bool preferCenter) const {
+  (void)preferCenter;
   Aabb bounds{};
   if (!m_bridge.getActorBounds(actor, bounds)) {
     Vec3 position{};
@@ -2119,9 +2137,11 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone,
     return position;
   }
   const float height = std::max(0.1f, bounds.max.y - bounds.min.y);
-  // Body-part aim. The bone used to be ignored (always AABB centre), so the
-  // Head/Chest/Legs UI setting did nothing. Keep every point safely inside
-  // the box so TriggerBot's ray still intersects it.
+  // One fixed body-part point per frame. The old "already on the hitbox ->
+  // return a point on the live ray" shortcut made the goal jump between the
+  // ray point (error 0) and the body point (10-20 deg) whenever the target
+  // crossed the hitbox edge, which read as a teleporting crosshair. A fixed
+  // bone gives the smoothing a continuous goal, like PC aimbots.
   float pointY = (bounds.min.y + bounds.max.y) * 0.5f;
   switch (bone) {
     case TargetBone::Head:
@@ -2140,66 +2160,8 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone,
       pointY = bounds.min.y + height * 0.26f;
       break;
   }
-  const Vec3 base{(bounds.min.x + bounds.max.x) * 0.5f, pointY,
-                  (bounds.min.z + bounds.max.z) * 0.5f};
-
-  // Current crosshair direction (from the live camera).
-  const float pitch = m_localPitch.load(std::memory_order_relaxed);
-  const float yaw = m_localYaw.load(std::memory_order_relaxed);
-  const float pr = pitch * 0.01745329252f;
-  const float yr = yaw * 0.01745329252f;
-  const Vec3 dir{-std::sin(yr) * std::cos(pr), -std::sin(pr),
-                 std::cos(yr) * std::cos(pr)};
-
-  // TriggerBot wants the crosshair on the chosen body part (better server
-  // registration than parking on the near box surface).
-  if (preferCenter) {
-    return base;
-  }
-
-  // Ray vs AABB (slab). If the crosshair already hits the box, return a point
-  // on the ray so the aim error is 0 and the camera does not move — this is
-  // what removes the tremor while tracking. Otherwise return the fixed bone
-  // point so the approach target is stable (no feedback with the live ray).
-  float tmin = 0.0f;
-  float tmax = 1.0e9f;
-  const float o[3] = {m_eye.x, m_eye.y, m_eye.z};
-  const float d[3] = {dir.x, dir.y, dir.z};
-  const float lo[3] = {bounds.min.x, bounds.min.y, bounds.min.z};
-  const float hi[3] = {bounds.max.x, bounds.max.y, bounds.max.z};
-  bool hits = true;
-  bool inside = true;
-  for (int axis = 0; axis < 3; ++axis) {
-    if (!std::isfinite(o[axis]) || !std::isfinite(d[axis])) {
-      hits = false;
-      break;
-    }
-    if (o[axis] < lo[axis] || o[axis] > hi[axis]) inside = false;
-    if (std::fabs(d[axis]) < 1.0e-7f) {
-      if (o[axis] < lo[axis] || o[axis] > hi[axis]) {
-        hits = false;
-        break;
-      }
-      continue;
-    }
-    float t1 = (lo[axis] - o[axis]) / d[axis];
-    float t2 = (hi[axis] - o[axis]) / d[axis];
-    if (t1 > t2) std::swap(t1, t2);
-    tmin = std::max(tmin, t1);
-    tmax = std::min(tmax, t2);
-    if (tmin > tmax) {
-      hits = false;
-      break;
-    }
-  }
-  // If the eye is inside the target box (players overlap in melee PvP), the
-  // slab test returns t=0, i.e. the eye itself. calculateAnglesToPoint() then
-  // gets a zero vector and snaps yaw/pitch to 0. Fall back to the bone point.
-  if (hits && tmax >= 0.0f && !inside && tmin > 0.05f) {
-    return {m_eye.x + dir.x * tmin, m_eye.y + dir.y * tmin,
-            m_eye.z + dir.z * tmin};
-  }
-  return base;
+  return {(bounds.min.x + bounds.max.x) * 0.5f, pointY,
+          (bounds.min.z + bounds.max.z) * 0.5f};
 }
 
 Vec3 AimAssist::jitteredAimPoint(void *actor, const Vec3 &base,
