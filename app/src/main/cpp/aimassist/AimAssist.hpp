@@ -389,6 +389,10 @@ private:
   // Detects world/session changes so a stale actor pointer from the previous
   // world is never dereferenced after returning to the menu.
   void *m_lastLocalPlayer = nullptr;
+  // Stable per-target point inside the chest..eyes zone (0.66..0.88 of the
+  // hitbox height). Chosen once per engagement, never per frame.
+  void *m_zoneActor = nullptr;
+  float m_zoneFrac = 0.0f;
 
   // Per-engagement aim placement offset (degrees) and slow sine sway: keeps
   // the crosshair from sitting mathematically in the same spot every fight

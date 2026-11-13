@@ -757,6 +757,17 @@ void AimAssist::updateVisual(float dt) {
   }
 
   // Высота цели задаётся режимом: голова / грудь / ноги.
+  // Chest is a ZONE, not a single point: a stable per-target fraction inside
+  // [chest .. eyes] is chosen once per engagement. It never leaves the zone
+  // and it does not change frame-to-frame, so the aim cannot tremor.
+  if (m_zoneActor != m_target.actor) {
+    m_zoneActor = m_target.actor;
+    m_zoneFrac = randomFloat(0.66f, 0.88f);
+    // New engagement: start the deadzone unlatch so the first correction is
+    // not swallowed by the previous target's latch.
+    m_deadzoneHit = false;
+    m_smoothStep = 0.0f;
+  }
   m_target.point = getTargetPoint(m_target.actor, settings.targetBone,
                                 settings.triggerBot);
   const Angles latest = calculateAnglesToPoint(m_target.point);
@@ -1695,11 +1706,21 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     if (n <= 5 || (n % 50) == 0) {
       aimbot::diagLog(kTag,
                       "trigger fire #%llu actor=%p dist=%.2f gm=%p "
-                      "camAng=%.1f",
+                      "camAng=%.1f vv=%.2f ground=%d fallMs=%lld tickAge=%lld "
+                      "onlyCrit=%d",
                       static_cast<unsigned long long>(n), bestActor,
                       static_cast<double>(bestDistance),
                       m_bridge.getGameMode(),
-                      static_cast<double>(minAngle));
+                      static_cast<double>(minAngle),
+                      static_cast<double>(m_vertVel),
+                      (player && gameecs::hasOnGround(player)) ? 1 : 0,
+                      m_fallingSinceMs != 0
+                          ? static_cast<long long>(now - m_fallingSinceMs)
+                          : -1LL,
+                      m_haveTickSample
+                          ? static_cast<long long>(now - m_lastNetTickMs)
+                          : -1LL,
+                      settings.onlyCrit ? 1 : 0);
     }
   }
   // Only criticals need the server-side sprint state cleared. Doing it on
@@ -1934,9 +1955,16 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
       m_smoothStep += (stepLen - m_smoothStep) * velAlpha;
       m_smoothStep = std::min(m_smoothStep, frameCap);
       stepLen = std::min(m_smoothStep, errMag);
-      // Deadzone: do not chase the last tenth of a degree. Those constant
-      // tiny corrections are what still read as crosshair tremor.
-      if (errMag < 0.12f) {
+      // Deadzone with hysteresis: stop chasing the last tenth of a degree,
+      // and do NOT resume until the error clearly exceeds it again. Without
+      // the latch, head bob / 20 Hz box steps push the error in and out of a
+      // fixed deadzone, which is exactly the visible crosshair tremor.
+      const float dzEnter = 0.12f;
+      const float dzExit = 0.45f;
+      if (m_deadzoneHit ? errMag > dzExit : errMag < dzEnter) {
+        m_deadzoneHit = !m_deadzoneHit;
+      }
+      if (m_deadzoneHit) {
         m_smoothStep = 0.0f;
         stepLen = 0.0f;
       }
@@ -1988,7 +2016,6 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     m_lastDelta = errMag;
     m_lastFactor = 1.0f;
     m_lastDt = fastDt;
-    m_deadzoneHit = false;
 
     void *rawPlayer = m_bridge.getLocalPlayer();
     if (rawPlayer && (std::fabs(stepYaw) > 0.00005f ||
@@ -2261,8 +2288,9 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone,
       pointY = bounds.min.y + height * 0.84f;
       break;
     case TargetBone::Chest:
-      // Slightly above the shoulders: between shoulder and eye level.
-      pointY = bounds.min.y + height * 0.80f;
+      // Zone from chest to eyes, stable per target (0.80 fallback).
+      pointY = bounds.min.y + height *
+               (m_zoneFrac > 0.0f ? m_zoneFrac : 0.80f);
       break;
     case TargetBone::LowerChest:
       pointY = bounds.min.y + height * 0.62f;
