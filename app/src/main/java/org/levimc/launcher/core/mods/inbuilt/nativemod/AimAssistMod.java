@@ -171,6 +171,16 @@ public final class AimAssistMod {
         if (initialized) nativeSetTargetMobs(enabled);
     }
 
+    /** Фильтр TriggerBot по игрокам (независим от aim assist). */
+    public static void setTriggerTargetPlayers(boolean enabled) {
+        if (initialized) nativeSetTriggerTargetPlayers(enabled);
+    }
+
+    /** Фильтр TriggerBot по мобам (независим от aim assist). */
+    public static void setTriggerTargetMobs(boolean enabled) {
+        if (initialized) nativeSetTriggerTargetMobs(enabled);
+    }
+
     public static void setTriggerBot(boolean enabled) {
         if (initialized) nativeSetTriggerBot(enabled);
     }
@@ -294,6 +304,8 @@ public final class AimAssistMod {
     private static native void nativeSetRotationPatternPath(String path);
     private static native void nativeSetTargetPlayers(boolean enabled);
     private static native void nativeSetTargetMobs(boolean enabled);
+    private static native void nativeSetTriggerTargetPlayers(boolean enabled);
+    private static native void nativeSetTriggerTargetMobs(boolean enabled);
     private static native void nativeSetLegitMode(boolean enabled);
     private static native void nativeSetBodyPart(int bodyPart);
     private static native void nativeSetMaxSpeed(float degPerSecond);

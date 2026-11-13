@@ -84,6 +84,11 @@ struct Settings {
   bool teamCheck = false;
   bool targetPlayers = true;
   bool targetMobs = true;
+  // TriggerBot фильтры отдельные от aim assist: в UI это независимые
+  // переключатели, и раньше они перезаписывали друг друга в общем Settings
+  // (кто последний применил настройки — тот и выигрывал цель).
+  bool triggerTargetPlayers = true;
+  bool triggerTargetMobs = true;
   bool debugOverlay = false;
   bool freezeNetwork = false;
   // Синхронизация body yaw на сетевом тике. По умолчанию выключена:
@@ -168,12 +173,16 @@ struct Settings {
   // ------------------------------------------------------------
   // Бить только в падении (после прыжка), чтобы каждый удар был критом.
   bool onlyCrit = false;
-  // Минимальная скорость падения по Y, блоков/с.
-  float critMinFallSpeed = 1.0f;
+  // Минимальная скорость падения по Y, блоков/с. Ванильный крит идёт с
+  // любой отрицательной скоростью; 1.0 блок/с отсекала первые ~10 тиков
+  // падения и делала криты редкими на быстрых прыжках.
+  float critMinFallSpeed = 0.35f;
   // Сколько миллисекунд нужно непрерывно падать перед ударом.
   // At least one 50 ms server tick: the attack packet is processed against
   // the last PlayerAuthInput, so the server must already see airborne state.
-  int critSettleMs = 120;
+  // Больше одного тика не нужно — окно падения короткое, а лишняя задержка
+  // переносит удар на приземление.
+  int critSettleMs = 60;
 
   // ------------------------------------------------------------
   // Сетевое формирование ротации (то, что реально видит сервер)
@@ -241,6 +250,8 @@ public:
   void setIgnoreInvisible(bool enabled);
   void setTargetPlayers(bool enabled);
   void setTargetMobs(bool enabled);
+  void setTriggerTargetPlayers(bool enabled);
+  void setTriggerTargetMobs(bool enabled);
   void setBodyPart(int bodyPart);
   void setMaxSpeed(float degPerSecond);
   void setSmoothing(float speed);
@@ -389,10 +400,18 @@ private:
   // Detects world/session changes so a stale actor pointer from the previous
   // world is never dereferenced after returning to the menu.
   void *m_lastLocalPlayer = nullptr;
-  // Stable per-target point inside the chest..eyes zone (0.66..0.88 of the
-  // hitbox height). Chosen once per engagement, never per frame.
+  // Стабильная точка в зоне груди (0.58..0.74 высоты хитбокса). Выше
+  // нельзя: при прыжке цель уходит вверх, и камера начинает качаться
+  // вверх-вниз вокруг уровня глаз.
   void *m_zoneActor = nullptr;
   float m_zoneFrac = 0.0f;
+
+  // Вертикальная скорость точки прицеливания: короткий упреждающий сдвиг,
+  // чтобы EMA не отставала от прыжка/падения цели.
+  void *m_pointActor = nullptr;
+  float m_pointPrevY = 0.0f;
+  float m_pointVy = 0.0f;
+  int64_t m_pointPrevMs = 0;
 
   // Per-engagement aim placement offset (degrees) and slow sine sway: keeps
   // the crosshair from sitting mathematically in the same spot every fight

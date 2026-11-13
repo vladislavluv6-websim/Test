@@ -251,6 +251,16 @@ void AimAssist::setTargetMobs(bool enabled) {
   m_settings.targetMobs = enabled;
 }
 
+void AimAssist::setTriggerTargetPlayers(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.triggerTargetPlayers = enabled;
+}
+
+void AimAssist::setTriggerTargetMobs(bool enabled) {
+  std::lock_guard<std::mutex> lock(m_settingsMutex);
+  m_settings.triggerTargetMobs = enabled;
+}
+
 void AimAssist::setBodyPart(int bodyPart) {
   std::lock_guard<std::mutex> lock(m_settingsMutex);
   switch (std::max(0, std::min(4, bodyPart))) {
@@ -681,9 +691,16 @@ void AimAssist::updateVisual(float dt) {
   if (settings.antiBot) {
     AntiBot::instance().update(m_actors, player);
   }
-  if (settings.killaura) {
+  // Killaura — это часть того же нативного модуля. Раньше ветка не
+  // проверяла m_enabled, поэтому при выключенном AimAssist (или выключенном
+  // модуле Killaura) silent-aura продолжала разворачивать исходящие
+  // пакеты — со стороны это выглядело как «аим ассист всё ещё наводится».
+  if (settings.killaura && m_enabled.load(std::memory_order_acquire)) {
     updateKillaura(player, settings, dt);
     return;
+  }
+  if (settings.killaura) {
+    m_bridge.setSilentAim(false, 0.0f, 0.0f);
   }
   if (settings.triggerBot && haveEye) {
     updateTrigger(player, settings, current, eyeNow, dt);
@@ -760,16 +777,46 @@ void AimAssist::updateVisual(float dt) {
   // Chest is a ZONE, not a single point: a stable per-target fraction inside
   // [chest .. eyes] is chosen once per engagement. It never leaves the zone
   // and it does not change frame-to-frame, so the aim cannot tremor.
+  // Зона смещена к центру груди, а не к глазам: точка у глаз заставляла
+  // камеру качаться вверх-вниз на каждом прыжке и выносила луч за хитбокс.
   if (m_zoneActor != m_target.actor) {
     m_zoneActor = m_target.actor;
-    m_zoneFrac = randomFloat(0.66f, 0.88f);
+    m_zoneFrac = randomFloat(0.58f, 0.74f);
     // New engagement: start the deadzone unlatch so the first correction is
     // not swallowed by the previous target's latch.
     m_deadzoneHit = false;
     m_smoothStep = 0.0f;
   }
-  m_target.point = getTargetPoint(m_target.actor, settings.targetBone,
-                                settings.triggerBot);
+  Vec3 goalPoint = getTargetPoint(m_target.actor, settings.targetBone,
+                                  settings.triggerBot);
+  // Vertical lead: the position EMA (when smoothing is on) lags by
+  // targetSmoothFrames/120 s. Compensating exactly that keeps the crosshair
+  // inside the box while the target rises/falls instead of trailing it.
+  {
+    const int64_t pointNow = nowMs();
+    if (m_pointActor == m_target.actor && m_pointPrevMs != 0) {
+      const float pdt = clampf(
+          static_cast<float>(pointNow - m_pointPrevMs) / 1000.0f, 0.001f,
+          0.20f);
+      const float inst = (goalPoint.y - m_pointPrevY) / pdt;
+      if (std::fabs(inst) < 30.0f) {
+        m_pointVy += (inst - m_pointVy) * clampf(pdt / 0.08f, 0.0f, 1.0f);
+      } else {
+        m_pointVy = 0.0f;
+      }
+    } else {
+      m_pointVy = 0.0f;
+    }
+    m_pointActor = m_target.actor;
+    m_pointPrevMs = pointNow;
+    m_pointPrevY = goalPoint.y;
+    // Компенсируем ровно ту задержку, которую вносит EMA позиции
+    // (targetSmoothFrames/120 c). Без сглаживания упреждение не нужно.
+    const float leadT = clampf(
+        static_cast<float>(settings.targetSmoothFrames) / 120.0f, 0.0f, 0.12f);
+    goalPoint.y += clampf(m_pointVy * leadT, -0.12f, 0.12f);
+  }
+  m_target.point = goalPoint;
   const Angles latest = calculateAnglesToPoint(m_target.point);
   m_target.yaw = latest.yaw;
   m_target.pitch = latest.pitch;
@@ -1402,9 +1449,16 @@ void AimAssist::updateKillaura(void *player, const Settings &settings,
   if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
 
   if (m_bridge.attackActor(best, point)) {
-    const int interval =
-        std::max(180, settings.triggerIntervalMs) + randomInt(-40, 70);
-    m_nextAttackAtMs = now + interval;
+    // 500 ms — ванильное окно иммунитета после удара. В режиме onlyCrit
+    // удар, отправленный на 460-490 ms, сервер просто игнорирует: игрок
+    // видит «промах» и теряет окно падения. Держим интервал строго выше
+    // окна иммунитета.
+    const int base = settings.onlyCrit
+                         ? std::max(520, settings.triggerIntervalMs)
+                         : std::max(180, settings.triggerIntervalMs);
+    const int jitter = settings.onlyCrit ? randomInt(0, 50)
+                                         : randomInt(-40, 70);
+    m_nextAttackAtMs = now + base + jitter;
   }
 }
 
@@ -1435,7 +1489,10 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     // Whichever hitbox the crosshair is actually on gets hit.
 
     const bool playerActor = m_bridge.isPlayer(actor);
-    if (playerActor ? !settings.targetPlayers : !settings.targetMobs) continue;
+    if (playerActor ? !settings.triggerTargetPlayers
+                    : !settings.triggerTargetMobs) {
+      continue;
+    }
     if (settings.ignoreInvisible && isInvisible(actor)) continue;
     if (settings.teamCheck && isSameTeam(player, actor)) continue;
     if (playerActor && Esp::instance().isFriend(actor)) continue;
@@ -1468,7 +1525,15 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
 
     // Normal trigger bot: only the real hitbox plus a small interpolation
     // tolerance is attackable. No angular expansion, no silent aim.
-    const float tolY = std::max(tolerance, 0.06f) + 0.04f;
+    // Vertical padding is larger and grows while either side is airborne:
+    // a jump moves the client box ~0.2-0.4 blocks between 20 Hz positions,
+    // so a 0.10 m pad simply missed the whole fall. The attack point is
+    // clamped into the real box below, so this never becomes an overreach.
+    const float baseTolY = std::max(tolerance, 0.06f);
+    const bool airborneTarget = !gameecs::hasOnGround(actor);
+    const bool airborneSelf = player && !gameecs::hasOnGround(player);
+    const float tolY = baseTolY +
+                       ((airborneTarget || airborneSelf) ? 0.22f : 0.10f);
     Aabb padded = bounds;
     padded.min.x -= tolerance;
     padded.min.z -= tolerance;
@@ -1566,10 +1631,10 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     m_triggerDelayForTargetMs =
         std::max(0, std::min(400, m_triggerDelayForTargetMs));
   }
-  // В режиме only crit окно падения короткое: не тратим его на полную
-  // «человеческую» задержку и случайные пропуски.
+  // В режиме only crit окно падения короткое: не тратим его на задержку
+  // реакции вообще — только на тик-синхронизацию ниже.
   const int64_t effectiveDelay =
-      settings.onlyCrit ? std::min(m_triggerDelayForTargetMs, 40)
+      settings.onlyCrit ? 0
                         : static_cast<int64_t>(m_triggerDelayForTargetMs);
   if (now - m_triggerSinceMs < effectiveDelay) return;
   if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
@@ -2288,9 +2353,9 @@ Vec3 AimAssist::getTargetPoint(void *actor, TargetBone bone,
       pointY = bounds.min.y + height * 0.84f;
       break;
     case TargetBone::Chest:
-      // Zone from chest to eyes, stable per target (0.80 fallback).
+      // Зона середины/верха груди, стабильная на цель (0.66 fallback).
       pointY = bounds.min.y + height *
-               (m_zoneFrac > 0.0f ? m_zoneFrac : 0.80f);
+               (m_zoneFrac > 0.0f ? m_zoneFrac : 0.66f);
       break;
     case TargetBone::LowerChest:
       pointY = bounds.min.y + height * 0.62f;
@@ -2410,6 +2475,10 @@ void AimAssist::clearTarget() {
   m_aimPointActor = nullptr;
   m_aimPointOffset = {};
   m_nextAimPointMs = 0;
+  m_pointActor = nullptr;
+  m_pointPrevY = 0.0f;
+  m_pointVy = 0.0f;
+  m_pointPrevMs = 0;
   m_currentSwitchDelayMs = 0;
   resetHumanProfile();
   // m_onTarget принадлежит триггеру: очистка цели aim assist не должна

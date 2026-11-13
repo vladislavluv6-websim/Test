@@ -118,8 +118,8 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setTriggerInterval(attackIntervalMs);
         AimAssistMod.setTriggerRange(triggerRange);
         AimAssistMod.setTriggerTolerance(triggerTolerance);
-        AimAssistMod.setTargetPlayers(manager.isTriggerBotTargetPlayers());
-        AimAssistMod.setTargetMobs(manager.isTriggerBotTargetMobs());
+        AimAssistMod.setTriggerTargetPlayers(manager.isTriggerBotTargetPlayers());
+        AimAssistMod.setTriggerTargetMobs(manager.isTriggerBotTargetMobs());
         AimAssistMod.setOnlyCrit(onlyCrit);
         AimAssistMod.setTargetLock(manager.isAimAssistTargetLock());
         AimAssistMod.setAttackMissChance(skipChancePercent / 100.0f);

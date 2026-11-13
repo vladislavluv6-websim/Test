@@ -1150,9 +1150,11 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_AIM_ASSIST_TARGET_PLAYERS:
                 manager.setAimAssistTargetPlayers(parseBoolean(value));
+                AimAssistMod.setTargetPlayers(manager.isAimAssistTargetPlayers());
                 break;
             case CFG_AIM_ASSIST_TARGET_MOBS:
                 manager.setAimAssistTargetMobs(parseBoolean(value));
+                AimAssistMod.setTargetMobs(manager.isAimAssistTargetMobs());
                 break;
             case CFG_AIM_ASSIST_BODY_PART:
                 manager.setAimAssistBodyPart(parseInt(value, manager.getAimAssistBodyPart()));
@@ -1283,9 +1285,11 @@ public final class InbuiltModuleProvider {
                 break;
             case CFG_TRIGGER_BOT_TARGET_PLAYERS:
                 manager.setTriggerBotTargetPlayers(parseBoolean(value));
+                AimAssistMod.setTriggerTargetPlayers(manager.isTriggerBotTargetPlayers());
                 break;
             case CFG_TRIGGER_BOT_TARGET_MOBS:
                 manager.setTriggerBotTargetMobs(parseBoolean(value));
+                AimAssistMod.setTriggerTargetMobs(manager.isTriggerBotTargetMobs());
                 break;
             case CFG_TRIGGER_BOT_HUMANIZATION:
                 manager.setTriggerBotHumanization(parseBoolean(value));

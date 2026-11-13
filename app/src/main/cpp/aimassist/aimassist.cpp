@@ -143,6 +143,18 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTarge
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerTargetPlayers(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setTriggerTargetPlayers(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTriggerTargetMobs(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setTriggerTargetMobs(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetLegitMode(
     JNIEnv *, jclass, jboolean enabled) {
   aimbot::AimAssist::instance().setLegitMode(enabled == JNI_TRUE);
