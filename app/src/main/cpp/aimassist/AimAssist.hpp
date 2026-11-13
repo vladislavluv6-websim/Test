@@ -117,7 +117,7 @@ struct Settings {
   float aimTremorDeg = 0.0f;
   // Верхний предел поворота за один серверный тик (50 мс). Защита от
   // «телепорт-снапов», которые ловят rotation-check'и.
-  float maxTickDeltaDeg = 32.0f;
+  float maxTickDeltaDeg = 48.0f;
 
   // ------------------------------------------------------------
   // Anti-cheat профиль (включён по умолчанию)
@@ -426,8 +426,13 @@ private:
   float m_lastDelta = 0.0f;
   float m_lastFactor = 0.0f;
   float m_lastDt = 0.0f;
-  // Frames left to write per-frame step trace for the current engagement.
-  int m_stepTraceLeft = 0;
+  // One-line-per-engagement summary: time to reach the target and the largest
+  // per-frame step. Kept instead of a per-frame file log, which stalled the
+  // render thread during exactly the frames that need to be fast.
+  int64_t m_reachStartMs = 0;
+  int m_reachFrames = 0;
+  float m_reachStartErr = 0.0f;
+  float m_reachMaxStep = 0.0f;
   bool m_deadzoneHit = false;
   // Fast aim сам вызывает applyTurnDelta; внешний onTick не должен
   // применять тот же шаг второй раз.

@@ -740,6 +740,7 @@ void AimAssist::updateVisual(float dt) {
     m_lastAimActor = nullptr;
     m_aimEngageAtMs = 0;
     m_targetLockMs = 0;
+    m_reachFrames = 0;
     resetHumanProfile();
     return;
   }
@@ -780,9 +781,9 @@ void AimAssist::updateVisual(float dt) {
       m_nextFastPauseMs = aimNow + 60000; // pauses disabled for PvP
       m_fastPauseUntilMs = 0;
       resetHumanProfile();
-      // Trace the first ~45 frames of every engagement so the per-frame step
-      // can be inspected in native.log on the device.
-      m_stepTraceLeft = 45;
+      m_reachFrames = 0;
+      m_reachStartMs = 0;
+      m_reachMaxStep = 0.0f;
     }
     if (aimNow < m_aimEngageAtMs) {
       m_fastAimTurnApplied = false;
@@ -805,22 +806,30 @@ void AimAssist::updateVisual(float dt) {
     m_lastStepPitch = afterPitch - beforePitch;
     m_lastDelta = std::sqrt(m_lastStepYaw * m_lastStepYaw +
                             m_lastStepPitch * m_lastStepPitch);
-    if (m_stepTraceLeft > 0) {
-      --m_stepTraceLeft;
+    // One log line per engagement (not per frame): a per-frame file write
+    // opened/closed the log 45 times in the middle of every approach, which
+    // itself caused frame hitches.
+    if (m_reachFrames == 0) {
+      m_reachStartMs = aimNow;
+      m_reachStartErr = preErr;
+      m_reachMaxStep = 0.0f;
+    }
+    ++m_reachFrames;
+    m_reachMaxStep = std::max(m_reachMaxStep, m_lastDelta);
+    if (preErr < 0.5f || m_reachFrames >= 60) {
+      const int64_t durMs =
+          m_reachStartMs != 0 ? aimNow - m_reachStartMs : 0;
       aimbot::diagLog(kTag,
-          "trace t=%lld dt=%.4f err=%.2f step=(p%.3f y%.3f) "
-          "len=%.2f view=(p%.2f y%.2f) tgt=(p%.2f y%.2f) "
-          "fastTime=%.1f legit=%d",
-          static_cast<long long>(aimNow), static_cast<double>(m_lastDt),
+          "reach frames=%d dur=%lldms startErr=%.2f endErr=%.2f "
+          "maxStep=%.2f fps=%.1f fastTime=%.1f legit=%d",
+          m_reachFrames, static_cast<long long>(durMs),
+          static_cast<double>(m_reachStartErr),
           static_cast<double>(preErr),
-          static_cast<double>(m_lastStepPitch),
-          static_cast<double>(m_lastStepYaw),
-          static_cast<double>(m_lastDelta),
-          static_cast<double>(afterPitch), static_cast<double>(afterYaw),
-          static_cast<double>(m_target.pitch),
-          static_cast<double>(m_target.yaw),
+          static_cast<double>(m_reachMaxStep),
+          static_cast<double>(m_lastDt > 1e-5f ? 1.0f / m_lastDt : 0.0f),
           static_cast<double>(settings.fastAimTimeMs),
           settings.legit ? 1 : 0);
+      m_reachFrames = 0;
     }
     if (settings.debugOverlay) {
       aimbot::diagLog(kTag,
@@ -1771,9 +1780,13 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     // game runs at 15-30 FPS, which read as mini teleports. A degree-based
     // cap keeps motion continuous at any frame rate; the ceiling is higher
     // for large corrections so a PvP flick still snaps in ~100-200 ms.
+    // Fast PvP flick: the cap still guarantees an interpolated glide (never
+    // a one-frame teleport), but a 90 deg correction now takes ~5 frames at
+    // 30-34 FPS instead of ~20. Small errors keep a low cap so tracking the
+    // last few tenths of a degree stays smooth.
     const float frameCap =
-        clampf(70.0f * fastDt, 2.0f, 3.6f) +
-        1.4f * clampf((errMag - 12.0f) / 40.0f, 0.0f, 1.0f);
+        clampf(220.0f * fastDt, 6.0f, 16.0f) +
+        11.0f * clampf((errMag - 8.0f) / 30.0f, 0.0f, 1.0f);
 
     float stepYaw;
     float stepPitch;
@@ -1888,8 +1901,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
   // Same per-frame degree ceiling as the fast path: the old smoothing could
   // move 40%+ of the remaining error in a single frame at low FPS.
   const float frameCap =
-      clampf(60.0f * h, 1.8f, 3.2f) +
-      1.4f * clampf((errMag - 10.0f) / 35.0f, 0.0f, 1.0f);
+      clampf(180.0f * h, 5.0f, 12.0f) +
+      8.0f * clampf((errMag - 8.0f) / 30.0f, 0.0f, 1.0f);
   const float maxStep = std::min(
       settings.maxDegPerSecond * (0.5f + 0.5f * strengthScale) * m_motorScale * h,
       frameCap);
@@ -1950,7 +1963,7 @@ void AimAssist::resetHumanProfile() {
   // A new engagement must not inherit the previous target's angular velocity.
   m_catchupRate = 0.0f;
   m_haveTargetSample = false;
-  m_stepTraceLeft = 0;
+  m_reachFrames = 0;
 }
 
 void AimAssist::updateHumanProfile(const Settings &settings, float, int64_t now) {
