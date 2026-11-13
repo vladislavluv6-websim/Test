@@ -2,12 +2,19 @@ package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.text.InputType;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.webkit.JavascriptInterface;
+import android.widget.EditText;
 
+import org.levimc.launcher.core.mods.inbuilt.InbuiltConfigStore;
 import org.levimc.launcher.core.mods.inbuilt.UnifiedMod;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class OnyxGuiBridge {
     private static final String TAG = "OnyxGuiBridge";
@@ -66,6 +73,57 @@ public class OnyxGuiBridge {
         post(overlay::exportLogs);
     }
 
+    @JavascriptInterface
+    public String listConfigs() {
+        try {
+            return InbuiltConfigStore.listJson(activity);
+        } catch (Throwable error) {
+            Log.e(TAG, "listConfigs failed", error);
+            return "[]";
+        }
+    }
+
+    @JavascriptInterface
+    public void refreshConfigs() {
+        post(overlay::refreshConfigs);
+    }
+
+    @JavascriptInterface
+    public void moveShortcuts() {
+        post(() -> {
+            InbuiltOverlayManager manager = InbuiltOverlayManager.getInstance();
+            if (manager != null) manager.enterShortcutMoveMode();
+        });
+    }
+
+    @JavascriptInterface
+    public void saveConfigPrompt() {
+        post(this::showSaveConfigDialog);
+    }
+
+    @JavascriptInterface
+    public void importConfig() {
+        post(() -> InbuiltConfigStore.requestImport(activity));
+    }
+
+    @JavascriptInterface
+    public void applyConfig(String name) {
+        post(() -> {
+            InbuiltConfigStore.apply(activity, name);
+            overlay.refreshConfigs();
+        });
+    }
+
+    @JavascriptInterface
+    public void shareConfig(String name) {
+        post(() -> InbuiltConfigStore.share(activity, name));
+    }
+
+    @JavascriptInterface
+    public void deleteConfigPrompt(String name) {
+        post(() -> showDeleteConfigDialog(name));
+    }
+
     private void post(Runnable action) {
         try {
             activity.runOnUiThread(() -> {
@@ -79,6 +137,39 @@ public class OnyxGuiBridge {
         } catch (Throwable error) {
             Log.e(TAG, "bridge post failed", error);
         }
+    }
+
+    private void showSaveConfigDialog() {
+        EditText input = new EditText(activity);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setHint("Название конфига");
+        String def = "cfg_" + new SimpleDateFormat("ddMM_HHmm", Locale.US)
+                .format(new Date());
+        input.setText(def);
+        input.setSelection(input.getText().length());
+        new AlertDialog.Builder(activity)
+                .setTitle("Сохранить конфиг")
+                .setView(input)
+                .setPositiveButton("Сохранить", (d, which) -> {
+                    InbuiltConfigStore.save(activity, input.getText().toString());
+                    overlay.refreshConfigs();
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void showDeleteConfigDialog(String name) {
+        if (name == null || name.isEmpty()) return;
+        new AlertDialog.Builder(activity)
+                .setTitle("Удалить конфиг")
+                .setMessage(name)
+                .setPositiveButton("Удалить", (d, which) -> {
+                    InbuiltConfigStore.delete(activity, name);
+                    overlay.refreshConfigs();
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
     }
 
     private void showKeybindDialog(String moduleKey, String configKey) {

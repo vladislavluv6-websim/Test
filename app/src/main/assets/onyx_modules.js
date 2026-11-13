@@ -525,4 +525,66 @@
     var dd = document.getElementById('modalDropdown');
     if (dd) dd.classList.remove('open');
   });
+
+  var cfgSelected = null;
+
+  function formatConfigDate(timestamp) {
+    try {
+      return new Date(timestamp || 0).toLocaleString();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  window.cfgSelectedName = function () {
+    return cfgSelected || '';
+  };
+
+  window.cfgRefresh = function () {
+    bridge('refreshConfigs');
+  };
+
+  window.onyxConfigs = function (list) {
+    var container = document.getElementById('cfgList');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!Array.isArray(list) || !list.length) {
+      cfgSelected = null;
+      var empty = document.createElement('div');
+      empty.className = 'cfg-empty';
+      empty.textContent = 'Нет сохранённых конфигов';
+      container.appendChild(empty);
+      return;
+    }
+    var hasSelected = false;
+    list.forEach(function (cfg) {
+      if (!cfg || !cfg.name) return;
+      if (cfg.name === cfgSelected) hasSelected = true;
+      var row = document.createElement('div');
+      row.className = 'cfg-row';
+      var name = document.createElement('div');
+      name.className = 'cfg-name';
+      name.textContent = cfg.name;
+      var date = document.createElement('div');
+      date.className = 'cfg-date';
+      date.textContent = formatConfigDate(cfg.saved);
+      var del = document.createElement('button');
+      del.className = 'cfg-del';
+      del.textContent = '✕';
+      del.addEventListener('click', function (event) {
+        event.stopPropagation();
+        bridge('deleteConfigPrompt', cfg.name);
+      });
+      row.appendChild(name);
+      row.appendChild(date);
+      row.appendChild(del);
+      row.addEventListener('click', function () {
+        cfgSelected = cfg.name;
+        bridge('applyConfig', cfg.name);
+      });
+      container.appendChild(row);
+    });
+    if (!hasSelected) cfgSelected = null;
+  };
+
 })();

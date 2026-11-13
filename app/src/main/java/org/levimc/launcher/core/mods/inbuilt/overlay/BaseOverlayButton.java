@@ -542,6 +542,61 @@ public abstract class BaseOverlayButton {
         InbuiltModManager.getInstance(activity).setOverlayPosition(getModId(), x, y);
     }
 
+    public void saveCurrentPosition() {
+        if (!isShowing || overlayView == null) return;
+        if (wmParams != null) {
+            savePosition(wmParams.x, wmParams.y);
+            return;
+        }
+        ViewGroup.LayoutParams params = overlayView.getLayoutParams();
+        if (params instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams frameParams = (FrameLayout.LayoutParams) params;
+            savePosition(frameParams.leftMargin, frameParams.topMargin);
+        }
+    }
+
+    public void reloadFromPreferences() {
+        if (!isShowing || overlayView == null) return;
+        InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+        if (wmParams != null) {
+            wmParams.x = manager.getOverlayPositionX(getModId(), wmParams.x);
+            wmParams.y = manager.getOverlayPositionY(getModId(), wmParams.y);
+        } else {
+            ViewGroup.LayoutParams params = overlayView.getLayoutParams();
+            if (params instanceof FrameLayout.LayoutParams) {
+                FrameLayout.LayoutParams frameParams = (FrameLayout.LayoutParams) params;
+                frameParams.leftMargin = manager.getOverlayPositionX(
+                        getModId(), frameParams.leftMargin);
+                frameParams.topMargin = manager.getOverlayPositionY(
+                        getModId(), frameParams.topMargin);
+            }
+        }
+        applyConfigurationChanges();
+    }
+
+    public void bringToFront() {
+        if (!isShowing || overlayView == null) return;
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post(this::bringToFront);
+            return;
+        }
+        try {
+            if (wmParams != null && windowManager != null) {
+                windowManager.removeViewImmediate(overlayView);
+                windowManager.addView(overlayView, wmParams);
+            } else {
+                ViewGroup parent = overlayView.getParent() instanceof ViewGroup
+                        ? (ViewGroup) overlayView.getParent() : null;
+                if (parent != null) {
+                    ViewGroup.LayoutParams params = overlayView.getLayoutParams();
+                    parent.removeView(overlayView);
+                    parent.addView(overlayView, params);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private boolean handleTouchFallback(View v, MotionEvent event) {
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) overlayView.getLayoutParams();
         switch (event.getActionMasked()) {

@@ -1,10 +1,20 @@
 package org.levimc.launcher.core.mods.inbuilt.overlay;
 
 import android.app.Activity;
+import android.content.Context;
+import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.DisplayMetrics;
+import android.util.Log;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.KeyEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import org.levimc.launcher.R;
 import org.levimc.launcher.core.mods.inbuilt.ExternalModBridge;
@@ -47,6 +57,10 @@ public class InbuiltOverlayManager {
             ModIds.AUTO_SPRINT, ModIds.SPEED, ModIds.AIM_ASSIST, ModIds.TRIGGER_BOT,
             ModIds.SWING, ModIds.ESP, ModIds.FULLBRIGHT
     };
+    private static final String[] TOGGLE_SHORTCUT_MOD_IDS = {
+            ModIds.TARGET_ESP, ModIds.NAME_TAGS, ModIds.FRIEND, ModIds.KILLAURA
+    };
+    private static final String TAG = "InbuiltOverlayManager";
     private final Map<String, Boolean> modActiveStates = new ConcurrentHashMap<>();
     private final Map<String, BaseOverlayButton> keybindControllers = new ConcurrentHashMap<>();
     private final Map<Integer, List<String>> pressedKeybinds = new ConcurrentHashMap<>();
@@ -78,6 +92,8 @@ public class InbuiltOverlayManager {
     private String selectedDisplayModId;
     private HudEditorSelectionListener hudEditorSelectionListener;
     private boolean hudEditorMode = false;
+    private boolean shortcutMoveMode = false;
+    private View shortcutMoveCatcher;
     private int baseY = 150;
     private static final int SPACING = 70;
     private static final int START_X = 50;
@@ -1220,6 +1236,135 @@ public class InbuiltOverlayManager {
             selectFirstHudEditorOverlay();
         } else {
             selectHudEditorOverlay(null);
+        }
+    }
+
+    public boolean isShortcutMoveMode() {
+        return shortcutMoveMode;
+    }
+
+    public void enterShortcutMoveMode() {
+        activity.runOnUiThread(() -> {
+            if (!isActivityUsable() || shortcutMoveMode) return;
+            hideModMenu();
+            releaseKeybinds();
+            shortcutMoveMode = true;
+            InbuiltModManager manager = InbuiltModManager.getInstance(activity);
+            for (String id : STANDARD_SHORTCUT_MOD_IDS) {
+                if (manager.isOverlayShortcutVisible(id)) syncShortcutVisibility(id);
+            }
+            for (String id : TOGGLE_SHORTCUT_MOD_IDS) {
+                if (manager.isOverlayShortcutVisible(id)) syncShortcutVisibility(id);
+            }
+            if (overlays.isEmpty()) {
+                shortcutMoveMode = false;
+                setHudEditorMode(false);
+                Toast.makeText(activity,
+                        "Нет включённых шорткатов для перемещения",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            setHudEditorMode(true);
+            addShortcutMoveCatcher();
+            if (!shortcutMoveMode) return;
+            for (BaseOverlayButton overlay : overlays) {
+                overlay.setHudEditorMode(true);
+                overlay.bringToFront();
+            }
+            Toast.makeText(activity,
+                    "Перетащи кнопки. Тап по пустому месту — сохранить",
+                    Toast.LENGTH_LONG).show();
+        });
+    }
+
+    public void exitShortcutMoveMode(boolean save) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(() -> exitShortcutMoveMode(save));
+            return;
+        }
+        if (!shortcutMoveMode) return;
+        shortcutMoveMode = false;
+        if (shortcutMoveCatcher != null) {
+            try {
+                WindowManager wm = (WindowManager) activity.getSystemService(Context.WINDOW_SERVICE);
+                if (wm != null) wm.removeView(shortcutMoveCatcher);
+            } catch (Throwable ignored) {
+            }
+            shortcutMoveCatcher = null;
+        }
+        if (save) {
+            for (BaseOverlayButton overlay : overlays) {
+                overlay.saveCurrentPosition();
+            }
+            try {
+                Toast.makeText(activity, "Раскладка сохранена", Toast.LENGTH_SHORT).show();
+            } catch (Throwable ignored) {
+            }
+        }
+        setHudEditorMode(false);
+    }
+
+    private void addShortcutMoveCatcher() {
+        if (shortcutMoveCatcher != null) return;
+        try {
+            WindowManager wm = (WindowManager) activity.getSystemService(Context.WINDOW_SERVICE);
+            if (wm == null) return;
+            DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
+            FrameLayout catcher = new FrameLayout(activity);
+            catcher.setBackgroundColor(0x33000000);
+            TextView hint = new TextView(activity);
+            hint.setText("Тап по пустому месту — сохранить раскладку");
+            hint.setTextColor(0xFFFFFFFF);
+            hint.setTextSize(14f);
+            hint.setGravity(Gravity.CENTER);
+            int padH = (int) (14 * metrics.density);
+            int padV = (int) (10 * metrics.density);
+            hint.setPadding(padH, padV, padH, padV);
+            hint.setBackgroundColor(0x99000000);
+            FrameLayout.LayoutParams hintParams = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT);
+            hintParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+            hintParams.topMargin = (int) (90 * metrics.density);
+            catcher.addView(hint, hintParams);
+            WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                            | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                            | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT);
+            params.gravity = Gravity.TOP | Gravity.START;
+            params.token = activity.getWindow().getDecorView().getWindowToken();
+            catcher.setOnClickListener(v -> exitShortcutMoveMode(true));
+            wm.addView(catcher, params);
+            shortcutMoveCatcher = catcher;
+        } catch (Throwable error) {
+            Log.w(TAG, "shortcut catcher failed", error);
+            shortcutMoveMode = false;
+            setHudEditorMode(false);
+        }
+    }
+
+    public void reloadAfterConfigApplied() {
+        if (!isActivityUsable()) return;
+        try {
+            for (BaseOverlayButton overlay : overlays) {
+                overlay.reloadFromPreferences();
+            }
+            for (String id : STANDARD_SHORTCUT_MOD_IDS) {
+                syncShortcutVisibility(id);
+            }
+            for (String id : TOGGLE_SHORTCUT_MOD_IDS) {
+                syncShortcutVisibility(id);
+            }
+            refreshRuntimeVisibility();
+            if (modMenuOverlay != null) {
+                modMenuOverlay.refreshMods();
+            }
+        } catch (Throwable error) {
+            Log.w(TAG, "reloadAfterConfigApplied failed", error);
         }
     }
 

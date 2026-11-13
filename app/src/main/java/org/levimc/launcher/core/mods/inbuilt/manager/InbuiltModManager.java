@@ -360,6 +360,10 @@ public class InbuiltModManager {
         return instance;
     }
 
+    public SharedPreferences getPreferences() {
+        return prefs;
+    }
+
     public int getAutoSprintKeybind() {
         return prefs.getInt(KEY_AUTOSPRINT_KEY, KeyEvent.KEYCODE_CTRL_LEFT);
     }

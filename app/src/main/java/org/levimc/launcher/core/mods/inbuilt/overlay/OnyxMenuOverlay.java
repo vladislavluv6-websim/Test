@@ -28,6 +28,7 @@ import android.widget.FrameLayout;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.levimc.launcher.core.mods.inbuilt.ExternalModuleProvider;
+import org.levimc.launcher.core.mods.inbuilt.InbuiltConfigStore;
 import org.levimc.launcher.core.mods.inbuilt.InbuiltModuleProvider;
 import org.levimc.launcher.core.mods.inbuilt.UnifiedMod;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
@@ -155,7 +156,30 @@ public class OnyxMenuOverlay {
             return;
         }
         loadModules();
-        if (showing && pageReady) pushModules();
+        if (showing && pageReady) {
+            pushModules();
+            pushConfigs();
+        }
+    }
+
+    void refreshConfigs() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post(this::refreshConfigs);
+            return;
+        }
+        pushConfigs();
+    }
+
+    void pushConfigs() {
+        WebView view = webView;
+        if (view == null || !pageReady || !attachedToWindow) return;
+        try {
+            String json = InbuiltConfigStore.listJson(activity);
+            view.evaluateJavascript(
+                    "if(window.onyxConfigs)window.onyxConfigs(" + json + ");", null);
+        } catch (Throwable error) {
+            Log.e(TAG, "pushConfigs failed", error);
+        }
     }
 
     void exportLogs() {
@@ -280,6 +304,7 @@ public class OnyxMenuOverlay {
                 pageReady = true;
                 try {
                     pushModules();
+                    pushConfigs();
                 } catch (Throwable error) {
                     Log.e(TAG, "onPageFinished push failed", error);
                 }

@@ -474,6 +474,104 @@ html, body {
   transform: translateX(0);
 }
 
+/* CFG PAGE */
+.cfg-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cfg-btn {
+  flex: 1 1 0;
+  min-width: 88px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: var(--module-bg);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cfg-btn:active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.cfg-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 0 2px;
+}
+
+.cfg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cfg-row {
+  position: relative;
+  background: var(--module-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 12px 46px 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cfg-row:active {
+  background: var(--module-hover);
+  border-color: rgba(var(--accent-rgb), 0.5);
+}
+
+.cfg-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-date {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 3px;
+}
+
+.cfg-del {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cfg-del:active {
+  color: #FF7675;
+  border-color: #FF7675;
+}
+
+.cfg-empty {
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+  padding: 26px 0;
+}
+
 /* EXPANDABLE MODULE CARDS (ВЫЕЗДНЫЕ НАСТРОЙКИ ВНИЗ) */
 .module-card {
   background: var(--module-bg);
@@ -1147,6 +1245,14 @@ body {
           </div>
           <span data-i18n="cat_misc">Misc</span>
         </div>
+
+        <!-- 5. CFG -->
+        <div class="nav-item" onclick="switchCategory('config', this); if(window.cfgRefresh)window.cfgRefresh()">
+          <div class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4zm-5 16a3 3 0 110-6 3 3 0 010 6zm3-10H5V5h10v4z"/></svg>
+          </div>
+          <span>CFG</span>
+        </div>
       </div>
 
       <!-- Account bottom button: by Masuel -->
@@ -1176,6 +1282,7 @@ body {
         </div>
       </div>
       <button class="toolbar-close-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="if(window.OnyxBridge)window.OnyxBridge.exportLogs()" aria-label="Export logs">Logs</button>
+      <button class="toolbar-close-btn" style="width:auto;padding:0 10px;font-size:11px" onclick="if(window.OnyxBridge)window.OnyxBridge.moveShortcuts()" aria-label="Move shortcuts">Move</button>
       <button class="toolbar-close-btn" onclick="toggleMenuVisibility()" aria-label="Close">✕</button>
     </div>
 
@@ -1187,6 +1294,17 @@ body {
       <div class="nl-page" id="page-movement"></div>
       <div class="nl-page" id="page-visual"></div>
       <div class="nl-page" id="page-misc"></div>
+
+      <!-- ================= 5. CFG ================= -->
+      <div class="nl-page" id="page-config">
+        <div class="cfg-actions">
+          <button class="cfg-btn" onclick="if(window.OnyxBridge)window.OnyxBridge.importConfig()">Импорт</button>
+          <button class="cfg-btn" onclick="if(window.OnyxBridge)window.OnyxBridge.saveConfigPrompt()">Сохранить</button>
+          <button class="cfg-btn" onclick="if(window.OnyxBridge)window.OnyxBridge.shareConfig(window.cfgSelectedName ? window.cfgSelectedName() : '')">Отправить</button>
+        </div>
+        <div class="cfg-hint">Тап по конфигу — применить. Крестик — удалить. Файлы также лежат в Download/LeviLauncher/CFG.</div>
+        <div class="cfg-list" id="cfgList"><div class="cfg-empty">Загрузка…</div></div>
+      </div>
     </div>
 
     <!-- MODAL DROPDOWN (SELECT) -->
