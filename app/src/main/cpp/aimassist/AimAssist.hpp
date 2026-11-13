@@ -144,24 +144,6 @@ struct Settings {
   float motorVariation = 0.22f;
   // Минимальное время удержания текущей цели перед переключением, мс.
   int switchDelayMs = 45;
-  // Триггер: максимальный угол от прицела до центра цели для «мягкого»
-  // добивания, если луч не попал в AABB. В legit-режиме не используется.
-  float attackMaxAngleDeg = 3.0f;
-  // Smart wide-cone trigger: if the crosshair is within this angle of the
-  // target (e.g. 25 deg) the trigger pre-aims the SERVER-VISIBLE rotation
-  // (PlayerAuthInput) onto the hit point and attacks there. The local camera
-  // is not touched, so the hit is aligned server-side without a visible snap.
-  bool triggerSmartCone = true;
-  // Angular margin BEYOND the hitbox, in every direction. 10 deg at 3 m is
-  // ~0.5 m; the hit point itself always stays inside the real AABB, so reach
-  // is unchanged.
-  float triggerSmartConeDeg = 10.0f;
-  // Packet-level silent pre-aim. Off by default: writing the auth-input
-  // rotation is the risky part on some builds. Enable only if stable.
-  bool triggerSilentAim = false;
-  // Silent pre-aim ramp speed (deg/sec) and required alignment at the hit.
-  float silentAimRateDegPerSec = 240.0f;
-  float silentAimToleranceDeg = 6.0f;
   // Вероятность «промаха» (пропуска удара) для humanization.
   float attackMissChance = 0.0f;
   // Разброс интервала между ударами, мс (±).
@@ -333,9 +315,6 @@ private:
   void updateFastAimStealth(const Settings &settings, float dt);
   void updateTrigger(void *player, const Settings &settings,
                      const ViewAngles &view, const Vec3 &eye, float dt);
-  void updateTriggerSilentAim(const Settings &settings,
-                              const ViewAngles &camera, bool haveTarget,
-                              void *actor, const Vec3 &point, float dt);
   void updateKillaura(void *player, const Settings &settings, float dt);
   void applySmoothRotationInternal(float targetYaw, float targetPitch,
                                    float dt, const Settings &settings);
@@ -407,23 +386,9 @@ private:
   float m_noiseTargetPitch = 0.0f;
   int64_t m_nextNoiseMs = 0;
   // Медленно блуждающая точка покоя относительно центра хитбокса.
-  // Silent pre-aim for the wide-cone trigger: only the outgoing
-  // PlayerAuthInput rotation is moved (the camera stays), ramped at a human
-  // flick rate so the server sees a continuous turn, never a snap.
-  bool m_silentActive = false;
-  void *m_silentActor = nullptr;
   // Detects world/session changes so a stale actor pointer from the previous
   // world is never dereferenced after returning to the menu.
   void *m_lastLocalPlayer = nullptr;
-  float m_silentYaw = 0.0f;
-  float m_silentPitch = 0.0f;
-  int64_t m_silentAlignedSinceMs = 0;
-  // Same humanization for the spoofed view: the server must not see a
-  // mathematically perfect center hold, or it tracks "zero variance" aim.
-  float m_silentPlaceYaw = 0.0f;
-  float m_silentPlacePitch = 0.0f;
-  float m_silentSwayPhase = 0.0f;
-  float m_silentSwayFreq = 0.0f;
 
   // Per-engagement aim placement offset (degrees) and slow sine sway: keeps
   // the crosshair from sitting mathematically in the same spot every fight
