@@ -781,6 +781,15 @@ void AimAssist::updateVisual(float dt) {
       m_nextFastPauseMs = aimNow + 60000; // pauses disabled for PvP
       m_fastPauseUntilMs = 0;
       resetHumanProfile();
+      // New fight, new small placement: a human never holds the exact same
+      // spot on the hitbox. Amplitude is well under 0.2 deg, so it does not
+      // change the perceived speed or add tremor.
+      m_placeYaw = randomFloat(-1.0f, 1.0f) * settings.restOffsetDeg;
+      m_placePitch = randomFloat(-0.7f, 0.7f) * settings.restOffsetDeg;
+      m_sinePhase1 = randomFloat(0.0f, 6.2831853f);
+      m_sinePhase2 = randomFloat(0.0f, 6.2831853f);
+      m_sineFreq1 = randomFloat(0.55f, 1.6f);
+      m_sineFreq2 = randomFloat(1.2f, 2.8f);
       m_reachFrames = 0;
       m_reachStartMs = 0;
       m_reachMaxStep = 0.0f;
@@ -793,13 +802,29 @@ void AimAssist::updateVisual(float dt) {
     m_fastAimTurnApplied = false;
     stabilizeFastAimAngles(dt);
     updateFastAimStealth(settings, dt);
+    // Slow sinusoidal sway (sub-0.1 deg) plus the per-fight placement offset.
+    // It is smooth by construction, so it breaks perfect-tracking statistics
+    // without introducing the high-frequency tremor of random noise.
+    const float fastDt = clampf(dt, 0.001f, 0.05f);
+    m_sinePhase1 += fastDt * 6.2831853f * m_sineFreq1;
+    m_sinePhase2 += fastDt * 6.2831853f * m_sineFreq2;
+    if (m_sinePhase1 > 6.2831853f) m_sinePhase1 -= 6.2831853f;
+    if (m_sinePhase2 > 6.2831853f) m_sinePhase2 -= 6.2831853f;
+    const float swayAmp = clampf(settings.trackingNoiseDeg, 0.0f, 0.08f);
+    const float swayYaw =
+        (std::sin(m_sinePhase1) + 0.5f * std::sin(m_sinePhase2)) * swayAmp;
+    const float swayPitch =
+        (std::sin(m_sinePhase1 * 1.13f + 1.7f) +
+         0.5f * std::sin(m_sinePhase2 * 0.87f)) * swayAmp * 0.75f;
+    const float aimYaw = m_target.yaw + m_placeYaw + swayYaw;
+    const float aimPitch = m_target.pitch + m_placePitch + swayPitch;
     const float beforeYaw = m_localYaw.load(std::memory_order_relaxed);
     const float beforePitch = m_localPitch.load(std::memory_order_relaxed);
-    const float preErrYaw = shortestDelta(beforeYaw, m_target.yaw);
-    const float preErrPitch = m_target.pitch - beforePitch;
+    const float preErrYaw = shortestDelta(beforeYaw, aimYaw);
+    const float preErrPitch = aimPitch - beforePitch;
     const float preErr =
         std::sqrt(preErrYaw * preErrYaw + preErrPitch * preErrPitch);
-    applySmoothRotationInternal(m_target.yaw, m_target.pitch, dt, settings);
+    applySmoothRotationInternal(aimYaw, aimPitch, dt, settings);
     const float afterYaw = m_localYaw.load(std::memory_order_relaxed);
     const float afterPitch = m_localPitch.load(std::memory_order_relaxed);
     m_lastStepYaw = shortestDelta(beforeYaw, afterYaw);
@@ -1701,8 +1726,14 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     // window; a tiny positive jitter avoids a perfectly periodic packet.
     int64_t next =
         now + std::max<int64_t>(settings.triggerIntervalMs, 500);
-    const int jitter = std::min(25, std::max(0, settings.attackIntervalJitterMs));
-    next += randomInt(0, jitter);
+    // Two-tier interval jitter: mostly a tight 0-28 ms, sometimes a longer
+    // 30-70 ms gap. A constant cadence is one of the easiest ML features.
+    const int maxJitter =
+        std::min(70, std::max(30, settings.attackIntervalJitterMs));
+    const int jitter = randomFloat(0.0f, 1.0f) < 0.75f
+                           ? randomInt(0, 28)
+                           : randomInt(30, maxJitter);
+    next += jitter;
     m_nextAttackAtMs = std::max(now + 80, next);
   } else {
     // GameMode ещё не готов (меню/загрузка) — не долбим каждый кадр.
@@ -1771,11 +1802,13 @@ void AimAssist::stabilizeFastAimAngles(float dt) {
   }
 
   // Малые дрожания сглаживаем, заметное движение цели пропускаем без
-  // задержки: alpha растёт до 1 уже на 0.35°, поэтому скорость доводки
-  // не меняется.
+  // задержки: alpha растёт до 1 уже на 0.6°, поэтому скорость флика не
+  // меняется. Базовый коэффициент снижен с 55 до 20 рад/с: точка цели
+  // приходит из интерполированного 20 Гц хитбокса, и её шаги были видны
+  // как остаточный микро-тремор.
   const float baseAlpha =
-      1.0f - std::exp(-clampf(dt, 0.0f, 0.05f) * 55.0f);
-  const float motion = clampf(err / 0.35f, 0.0f, 1.0f);
+      1.0f - std::exp(-clampf(dt, 0.0f, 0.05f) * 20.0f);
+  const float motion = clampf(err / 0.6f, 0.0f, 1.0f);
   const float alpha = baseAlpha + (1.0f - baseAlpha) * motion;
   m_stableAimYaw = normalizeYaw(m_stableAimYaw + errYaw * alpha);
   m_stableAimPitch =
@@ -1902,6 +1935,12 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
       m_smoothStep += (stepLen - m_smoothStep) * velAlpha;
       m_smoothStep = std::min(m_smoothStep, frameCap);
       stepLen = std::min(m_smoothStep, errMag);
+      // Deadzone: do not chase the last tenth of a degree. Those constant
+      // tiny corrections are what still read as crosshair tremor.
+      if (errMag < 0.12f) {
+        m_smoothStep = 0.0f;
+        stepLen = 0.0f;
+      }
       stepYaw = errMag > 1e-6f ? errYaw * (stepLen / errMag) : errYaw;
       stepPitch = errMag > 1e-6f ? errPitch * (stepLen / errMag) : errPitch;
     } else {

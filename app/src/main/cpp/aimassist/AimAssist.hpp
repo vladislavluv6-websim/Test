@@ -133,11 +133,11 @@ struct Settings {
   float assistConeDeg = 90.0f;
   // Шум сопровождения (Gauss-Markov / OU): плавно «плавает» вокруг цели,
   // из-за чего траектория не является точной функцией угла до цели.
-  float trackingNoiseDeg = 0.09f;
+  float trackingNoiseDeg = 0.04f;
   // Постоянное смещение точки прицеливания от центра хитбокса. Игрок не
   // держит прицел математически точно в центре; это ломает проверки
   // "aim placement"/"target offset" и статистику идеальной точности.
-  float restOffsetDeg = 0.15f;
+  float restOffsetDeg = 0.30f;
   // Одноразовый перелёт при захвате новой цели (доля начальной ошибки).
   float overshootFactor = 0.07f;
   // Медленная вариация «моторной» скорости (доля единицы).
@@ -389,6 +389,15 @@ private:
   float m_noiseTargetPitch = 0.0f;
   int64_t m_nextNoiseMs = 0;
   // Медленно блуждающая точка покоя относительно центра хитбокса.
+  // Per-engagement aim placement offset (degrees) and slow sine sway: keeps
+  // the crosshair from sitting mathematically in the same spot every fight
+  // (Polar/ML "aim placement" statistics) without adding visible tremor.
+  float m_placeYaw = 0.0f;
+  float m_placePitch = 0.0f;
+  float m_sinePhase1 = 0.0f;
+  float m_sinePhase2 = 0.0f;
+  float m_sineFreq1 = 0.0f;
+  float m_sineFreq2 = 0.0f;
   float m_restYaw = 0.0f;
   float m_restPitch = 0.0f;
   float m_restTargetYaw = 0.0f;
