@@ -845,15 +845,20 @@ void AimAssist::updateVisual(float dt) {
       // random pauses lost the first hit of every fight.
       // Живой игрок не начинает вести цель в тот же кадр. Без этого
       // ML-модель Polar видит нулевую реакцию на каждое появление цели.
-      m_aimEngageAtMs = aimNow +
-                        (settings.antiCheatMode ? randomInt(55, 145)
-                                                : randomInt(0, 25));
+      // Треугольное распределение ближе к человеческой реакции, чем
+      // равномерное: чаще ~100 мс, редко 200+ мс.
+      const int reaction =
+          settings.antiCheatMode
+              ? 70 + randomInt(0, 55) + randomInt(0, 85)
+              : randomInt(0, 25);
+      m_aimEngageAtMs = aimNow + reaction;
       m_fastTimeScale = randomFloat(0.85f, 1.12f);
       m_fastSpeedScale = randomFloat(0.9f, 1.1f);
       m_fastStealthScale = randomFloat(0.65f, 1.35f);
       m_nextFastPauseMs = aimNow +
-                          (settings.antiCheatMode ? randomInt(900, 2200)
+                          (settings.antiCheatMode ? randomInt(1100, 2600)
                                                   : 60000);
+      m_fastPauseIsDrop = false;
       m_fastPauseUntilMs = 0;
       resetHumanProfile();
       // New fight, new small placement: a human never holds the exact same
@@ -1436,7 +1441,7 @@ void AimAssist::updateKillaura(void *player, const Settings &settings,
     const float dz = pos.z - eye.z;
     const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
     if (distance > reach) continue;
-    if (settings.visibleCheck &&
+    if ((settings.visibleCheck || settings.antiCheatMode) &&
         !m_bridge.hasLineOfSight(player, eye, pos)) {
       continue;
     }
@@ -1673,7 +1678,9 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     // человеческое время реакции; для крита окно падения короче.
     if (settings.antiCheatMode && !settings.killaura) {
       const int floorMs =
-          settings.onlyCrit ? randomInt(35, 70) : randomInt(90, 180);
+          settings.onlyCrit
+              ? 35 + randomInt(0, 20) + randomInt(0, 35)
+              : 90 + randomInt(0, 35) + randomInt(0, 80);
       m_triggerDelayForTargetMs =
           std::max(m_triggerDelayForTargetMs, floorMs);
     }
@@ -1931,6 +1938,7 @@ Angles AimAssist::calculateAnglesToPoint(const Vec3 &point) const {
 }
 
 void AimAssist::stabilizeFastAimAngles(float dt) {
+  const Settings current = getSettings();
   if (!m_haveStableAim || m_stableAimActor != m_target.actor) {
     m_haveStableAim = true;
     m_stableAimActor = m_target.actor;
@@ -1944,8 +1952,20 @@ void AimAssist::stabilizeFastAimAngles(float dt) {
   const float err = std::sqrt(errYaw * errYaw + errPitch * errPitch);
 
   if (err > 6.0f) {
-    m_stableAimYaw = m_target.yaw;
-    m_stableAimPitch = m_target.pitch;
+    // Большой скачок точки — обычно интерполяция 20 Гц. В anti-cheat
+    // профиле не телепортируем стабильную точку: даём ей догнать цель
+    // ограниченным шагом, иначе получается снап-трекинг.
+    if (current.antiCheatMode) {
+      const float maxJump = clampf(dt, 0.0f, 0.05f) * 90.0f;
+      const float step = std::min(err, maxJump);
+      m_stableAimYaw = normalizeYaw(
+          m_stableAimYaw + errYaw * (step / err));
+      m_stableAimPitch = clampf(
+          m_stableAimPitch + errPitch * (step / err), -89.9f, 89.9f);
+    } else {
+      m_stableAimYaw = m_target.yaw;
+      m_stableAimPitch = m_target.pitch;
+    }
     return;
   }
 
@@ -1954,8 +1974,9 @@ void AimAssist::stabilizeFastAimAngles(float dt) {
   // меняется. Базовый коэффициент снижен с 55 до 20 рад/с: точка цели
   // приходит из интерполированного 20 Гц хитбокса, и её шаги были видны
   // как остаточный микро-тремор.
-  const float baseAlpha =
-      1.0f - std::exp(-clampf(dt, 0.0f, 0.05f) * 20.0f);
+  const float baseAlpha = 1.0f - std::exp(
+      -clampf(dt, 0.0f, 0.05f) *
+      (current.antiCheatMode ? 12.0f : 20.0f));
   const float motion = clampf(err / 0.6f, 0.0f, 1.0f);
   const float alpha = baseAlpha + (1.0f - baseAlpha) * motion;
   m_stableAimYaw = normalizeYaw(m_stableAimYaw + errYaw * alpha);
@@ -1986,10 +2007,16 @@ void AimAssist::updateFastAimStealth(const Settings &settings, float dt) {
   // человека. Она не выключает доводку, а замедляет её, поэтому удар всё
   // равно остаётся возможен, но скорость трекинга непостоянна.
   if (now >= m_nextFastPauseMs && now >= m_fastPauseUntilMs) {
-    m_fastPauseUntilMs = now + randomInt(50, 140);
-    m_nextFastPauseMs = m_fastPauseUntilMs + randomInt(1300, 3800);
+    // 78% — микрокоррекция со снижением скорости, 22% — короткая полная
+    // потеря цели, как у живой руки при резкой смене направления.
+    m_fastPauseIsDrop = randomFloat(0.0f, 1.0f) < 0.22f;
+    m_fastPauseUntilMs =
+        now + (m_fastPauseIsDrop ? randomInt(90, 190)
+                                 : randomInt(45, 120));
+    m_nextFastPauseMs = m_fastPauseUntilMs + randomInt(1400, 4200);
   }
-  const float target = now < m_fastPauseUntilMs ? 0.16f : 1.0f;
+  const float target =
+      now < m_fastPauseUntilMs ? (m_fastPauseIsDrop ? 0.0f : 0.16f) : 1.0f;
   const float alpha =
       1.0f - std::exp(-clampf(dt, 0.0f, 0.05f) * 7.0f);
   m_fastStealthScale += (target - m_fastStealthScale) * alpha;
@@ -2091,7 +2118,11 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
             std::max(fastDt, 1e-3f);
         m_catchupRate += (targetRate - m_catchupRate) *
                          (1.0f - std::exp(-fastDt / 0.12f));
-        stepLen += clampf(m_catchupRate, 0.0f, 600.0f) * fastDt * 0.35f;
+        // В anti-cheat профиле не предсказываем движение цели: идеальная
+        // компенсация страйфа — один из главных признаков aimbot для ML.
+        const float feedForward = settings.antiCheatMode ? 0.06f : 0.35f;
+        stepLen += clampf(m_catchupRate, 0.0f, 600.0f) * fastDt *
+                   feedForward;
       } else {
         m_catchupRate = 0.0f;
       }

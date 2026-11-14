@@ -507,6 +507,7 @@ private:
   float m_fastStealthScale = 1.0f;
   int64_t m_nextFastPauseMs = 0;
   int64_t m_fastPauseUntilMs = 0;
+  bool m_fastPauseIsDrop = false;
 
   void *m_aimPointActor = nullptr;
   Vec3 m_aimPointOffset{};

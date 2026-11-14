@@ -1446,9 +1446,9 @@ bool ClientBridge::initialize() {
   const uintptr_t actorIsPlayer =
       pl::memory::resolveSignature(offsets::kActorIsPlayerSignature,
                                    offsets::kMinecraftLibrary);
-  // RTTI-vtable надёжнее сигнатуры: BlockSource::isSolidBlockingBlock
-  // (BlockPos const&) стабильно на слоте 54 для 1.26.60, тогда как байтовая
-  // сигнатура из сторонних SDK в этой сборке уже не совпадает.
+  // Функция BlockSource::isSolidBlockingBlock ищется лениво по прологу в
+  // vtable реального BlockSource (см. hasLineOfSight). Номер слота может
+  // отличаться между ревизиями, поэтому хардкод только как подсказка.
   const uintptr_t solidBlock =
       pl::memory::resolveVtableFunction("11BlockSource", 54,
                                         offsets::kMinecraftLibrary);
@@ -1477,18 +1477,12 @@ bool ClientBridge::initialize() {
   g_fetchNearbyActors =
       reinterpret_cast<FetchNearbyActorsFn>(fetchNearbyActors);
   g_actorIsPlayer = reinterpret_cast<ActorIsPlayerFn>(actorIsPlayer);
-  // Проверяем, что слот 54 — действительно int-перегрузка
-  // isSolidBlockingBlock: её пролог начинает BlockPos-сборку с sub sp,#0x40.
-  // Если игра пропатчена и таблица сдвинулась, не вызываем чужой код.
-  bool solidOk = false;
-  if (validGameFn(solidBlock)) {
-    uint32_t prologue = 0;
-    solidOk = mem::read(solidBlock, prologue) && prologue == 0xD10103FFu;
-  }
-  g_isSolidBlockingBlock.store(solidOk ? solidBlock : 0,
-                               std::memory_order_release);
-  aimbot::diagLog(kTag, "LOS block probe=%p verified=%d",
-                  reinterpret_cast<void *>(solidBlock), solidOk ? 1 : 0);
+  // Окончательная проверка/поиск выполняется в hasLineOfSight, когда
+  // известен живой BlockSource текущего измерения.
+  const uintptr_t probe = validGameFn(solidBlock) ? solidBlock : 0;
+  g_isSolidBlockingBlock.store(probe, std::memory_order_release);
+  aimbot::diagLog(kTag, "LOS block probe candidate=%p",
+                  reinterpret_cast<void *>(probe));
 
   if (!g_hooksInstalled.load(std::memory_order_acquire)) {
     if (pl::memory::hook(reinterpret_cast<pl::memory::FuncPtr>(normalTick),
@@ -2128,15 +2122,44 @@ uint32_t ClientBridge::getActorCategories(void *actor) const {
   return categories;
 }
 
+// vtable BlockSource на 1.26.60: int-перегрузка isSolidBlockingBlock
+// начинается с sub sp,#0x40; stp x29,x30,[sp,#0x20]; str x19,[sp,#0x30].
+// Поиск по прологу не зависит от сдвига слота между патчами игры.
+uintptr_t discoverSolidBlockFn(void *region) {
+  uintptr_t fn = g_isSolidBlockingBlock.load(std::memory_order_acquire);
+  if (fn) {
+    uint32_t p0 = 0;
+    if (mem::read(fn, p0) && p0 == 0xD10103FFu) return fn;
+    g_isSolidBlockingBlock.store(0, std::memory_order_release);
+  }
+  uintptr_t vtable = 0;
+  if (!safeRead(reinterpret_cast<uintptr_t>(region), vtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
+    return 0;
+  }
+  for (size_t slot = 0; slot < 96; ++slot) {
+    uintptr_t candidate = 0;
+    if (!safeRead(vtable + slot * sizeof(uintptr_t), candidate) ||
+        !mem::isGameAddress(reinterpret_cast<const void *>(candidate))) {
+      continue;
+    }
+    uint32_t prologue[4]{};
+    if (!mem::read(candidate, prologue, sizeof(prologue))) continue;
+    if (prologue[0] == 0xD10103FFu && prologue[1] == 0xA9027BFDu &&
+        prologue[2] == 0xF9001BF3u) {
+      g_isSolidBlockingBlock.store(candidate, std::memory_order_release);
+      aimbot::diagLog(kTag, "LOS probe discovered slot=%zu fn=%p", slot,
+                      reinterpret_cast<void *>(candidate));
+      return candidate;
+    }
+  }
+  aimbot::diagLog(kTag, "LOS probe not found in BlockSource vtable");
+  return 0;
+}
+
 bool ClientBridge::hasLineOfSight(void *player, const Vec3 &from,
                                   const Vec3 &to) const {
-  const uintptr_t fnAddress =
-      g_isSolidBlockingBlock.load(std::memory_order_acquire);
-  if (!fnAddress || !player) {
-    // Fail-open только если сигнатура не найдена: иначе любой сбой чтения
-    // мира полностью выключил бы AimAssist. В рабочей сборке заглушки нет.
-    return true;
-  }
+  if (!player) return true;
 
   // Actor::mDimension -> Dimension::mBlockSource (профиль 1.26.60).
   uintptr_t dimension = 0;
@@ -2151,6 +2174,48 @@ bool ClientBridge::hasLineOfSight(void *player, const Vec3 &from,
   if (!safeRead(region, vtable) ||
       !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
     return true;
+  }
+  const uintptr_t fnAddress =
+      discoverSolidBlockFn(reinterpret_cast<void *>(region));
+  if (!fnAddress) {
+    // Fallback: сохранённый в Level результат трассировки прицела.
+    // Для TriggerBot этого достаточно: его луч почти совпадает с прицелом,
+    // а блок на пути даёт HitResult с типом Tile.
+    uintptr_t level = 0;
+    uintptr_t wrapper = 0;
+    uintptr_t hit = 0;
+    if (!safeRead(reinterpret_cast<uintptr_t>(player) + 0x1F0, level) ||
+        !isPlausiblePointer(level) ||
+        !safeRead(level + 0x1D0, wrapper) ||
+        !isPlausiblePointer(wrapper) || !safeRead(wrapper, hit) ||
+        !isPlausiblePointer(hit)) {
+      return true;
+    }
+    int32_t type = -1;
+    Vec3 hitStart{};
+    Vec3 hitPos{};
+    if (!mem::read(hit + 24, type) ||
+        !mem::read(hit + 0, hitStart) ||
+        !mem::read(hit + 44, hitPos)) {
+      return true;
+    }
+    if (type != 0) return true; // Tile; Entity/NoHit не блокируют.
+    const float abx = to.x - from.x;
+    const float aby = to.y - from.y;
+    const float abz = to.z - from.z;
+    const float abLen2 = abx * abx + aby * aby + abz * abz;
+    if (abLen2 < 1e-4f) return true;
+    const float t =
+        ((hitPos.x - from.x) * abx + (hitPos.y - from.y) * aby +
+         (hitPos.z - from.z) * abz) / abLen2;
+    if (t <= 0.02f || t >= 0.98f) return true;
+    const float px = from.x + abx * t;
+    const float py = from.y + aby * t;
+    const float pz = from.z + abz * t;
+    const float dx = hitPos.x - px;
+    const float dy = hitPos.y - py;
+    const float dz = hitPos.z - pz;
+    return dx * dx + dy * dy + dz * dz > 0.36f; // 0.6 блока
   }
 
   const float dx = to.x - from.x;
