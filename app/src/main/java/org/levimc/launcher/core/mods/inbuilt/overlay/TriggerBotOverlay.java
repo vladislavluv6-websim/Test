@@ -53,9 +53,18 @@ public class TriggerBotOverlay extends BaseOverlayButton {
             if (!isActive) return;
             if (AimAssistMod.consumeTapRequest() > 0 &&
                     activity instanceof MinecraftActivity) {
+                boolean sent = false;
                 try {
-                    ((MinecraftActivity) activity).performTriggerBotAttack();
+                    sent = ((MinecraftActivity) activity).performTriggerBotAttack();
                 } catch (Throwable ignored) {
+                }
+                if (!sent) {
+                    // Инъекция touch не прошла — разрешаем нативный удар
+                    // на короткое окно, чтобы удар не терялся.
+                    AimAssistMod.setExternalAttack(false);
+                    triggerHandler.postDelayed(() -> {
+                        if (isActive) AimAssistMod.setExternalAttack(true);
+                    }, 180L);
                 }
             }
             triggerHandler.postDelayed(this, 12L);

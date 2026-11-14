@@ -1514,7 +1514,10 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   }
 
   const Vec3 dir = directionFromAngles(view);
-  const float reach = clampf(settings.triggerRange, 2.0f, 5.0f);
+  // В anti-cheat профиле не выходим за ванильный reach (3 блока от глаз).
+  const float reach =
+      clampf(settings.triggerRange, 2.0f,
+             settings.antiCheatMode ? 3.0f : 5.0f);
   const float tolerance = clampf(settings.triggerBoxTolerance, 0.0f, 0.25f);
 
   void *bestActor = nullptr;
@@ -1873,6 +1876,17 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     }
   }
 
+  // Сервер проверяет reach по hit point, а не по центру AABB.
+  if (settings.antiCheatMode) {
+    const float hx = hitPoint.x - eye.x;
+    const float hy = hitPoint.y - eye.y;
+    const float hz = hitPoint.z - eye.z;
+    if (std::sqrt(hx * hx + hy * hy + hz * hz) > 3.05f) {
+      m_nextAttackAtMs = now + randomInt(70, 160);
+      return;
+    }
+  }
+
   bool attacked = false;
   if (m_externalAttack.load(std::memory_order_acquire)) {
     // Java отправит настоящий touch/клик по кнопке атаки. Сервер видит
@@ -2086,7 +2100,7 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     const float errMag =
         std::sqrt(errYaw * errYaw + errPitch * errPitch);
 
-    const float speedCeiling = settings.antiCheatMode ? 900.0f : 4000.0f;
+    const float speedCeiling = settings.antiCheatMode ? 700.0f : 4000.0f;
     const float maxSpeed =
         clampf(settings.fastAimMaxSpeed * strengthScale * m_fastSpeedScale *
                    m_motorScale * m_fastStealthScale,
@@ -2195,7 +2209,8 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     // сюда не упирается, а длинные снапы Polar/ML видят как rotation-check.
     if (settings.antiCheatMode) {
       const float tickCap =
-          clampf(settings.maxTickDeltaDeg, 12.0f, 60.0f);
+          clampf(settings.maxTickDeltaDeg, 12.0f,
+                 settings.antiCheatMode ? 36.0f : 60.0f);
       float ny = m_tickAccumYaw + stepYaw;
       float np = m_tickAccumPitch + stepPitch;
       const float mag = std::sqrt(ny * ny + np * np);
