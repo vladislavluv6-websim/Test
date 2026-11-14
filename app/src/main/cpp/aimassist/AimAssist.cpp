@@ -843,18 +843,28 @@ void AimAssist::updateVisual(float dt) {
       m_lastAimActor = m_target.actor;
       // PvP: engage almost immediately. The old 45-165 ms reaction plus
       // random pauses lost the first hit of every fight.
-      m_aimEngageAtMs = aimNow + randomInt(0, 25);
+      // Живой игрок не начинает вести цель в тот же кадр. Без этого
+      // ML-модель Polar видит нулевую реакцию на каждое появление цели.
+      m_aimEngageAtMs = aimNow +
+                        (settings.antiCheatMode ? randomInt(55, 145)
+                                                : randomInt(0, 25));
       m_fastTimeScale = randomFloat(0.85f, 1.12f);
       m_fastSpeedScale = randomFloat(0.9f, 1.1f);
       m_fastStealthScale = randomFloat(0.65f, 1.35f);
-      m_nextFastPauseMs = aimNow + 60000; // pauses disabled for PvP
+      m_nextFastPauseMs = aimNow +
+                          (settings.antiCheatMode ? randomInt(900, 2200)
+                                                  : 60000);
       m_fastPauseUntilMs = 0;
       resetHumanProfile();
       // New fight, new small placement: a human never holds the exact same
       // spot on the hitbox. Amplitude is well under 0.2 deg, so it does not
       // change the perceived speed or add tremor.
-      m_placeYaw = randomFloat(-1.0f, 1.0f) * settings.restOffsetDeg;
-      m_placePitch = randomFloat(-0.7f, 0.7f) * settings.restOffsetDeg;
+      const float placeAmp =
+          settings.antiCheatMode
+              ? std::max(settings.restOffsetDeg, 0.55f)
+              : settings.restOffsetDeg;
+      m_placeYaw = randomFloat(-1.0f, 1.0f) * placeAmp;
+      m_placePitch = randomFloat(-0.7f, 0.7f) * placeAmp;
       m_sinePhase1 = randomFloat(0.0f, 6.2831853f);
       m_sinePhase2 = randomFloat(0.0f, 6.2831853f);
       m_sineFreq1 = randomFloat(0.55f, 1.6f);
@@ -879,7 +889,12 @@ void AimAssist::updateVisual(float dt) {
     m_sinePhase2 += fastDt * 6.2831853f * m_sineFreq2;
     if (m_sinePhase1 > 6.2831853f) m_sinePhase1 -= 6.2831853f;
     if (m_sinePhase2 > 6.2831853f) m_sinePhase2 -= 6.2831853f;
-    const float swayAmp = clampf(settings.trackingNoiseDeg, 0.0f, 0.08f);
+    // Не нулевая ошибка сопровождения: 0.22° незаметны глазу, но ломают
+    // статистику "прицел всегда точно в одной точке хитбокса".
+    const float swayFloor =
+        settings.antiCheatMode ? 0.22f : 0.0f;
+    const float swayAmp = clampf(
+        std::max(settings.trackingNoiseDeg, swayFloor), 0.0f, 0.5f);
     const float swayYaw =
         (std::sin(m_sinePhase1) + 0.5f * std::sin(m_sinePhase2)) * swayAmp;
     const float swayPitch =
@@ -948,10 +963,13 @@ void AimAssist::updateVisual(float dt) {
         reactionJitter =
             randomInt(0, static_cast<int>(settings.reactionJitterMs));
       }
+      const float reactionFloor =
+          settings.antiCheatMode ? 85.0f : 0.0f;
       m_aimEngageAtMs = aimNow +
-                        static_cast<int64_t>(
-                            std::max(0.0f, settings.reactionDelayMs)) +
-                        reactionJitter;
+                        static_cast<int64_t>(std::max(
+                            reactionFloor, settings.reactionDelayMs)) +
+                        reactionJitter +
+                        (settings.antiCheatMode ? randomInt(0, 70) : 0);
     }
     if (aimNow < m_aimEngageAtMs) {
       // Держим камеру неподвижно, но не копим скорость.
@@ -1207,8 +1225,8 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
     // TriggerBot against its actual hit point; a chest point can be behind a
     // half-block while the head/arm is visible, and dropping the hit actor
     // here made the assist swing away mid-fight.
-    if (settings.visibleCheck && actor != hitActor &&
-        !m_bridge.hasLineOfSight(player, eye, point)) {
+    if ((settings.visibleCheck || settings.antiCheatMode) &&
+        actor != hitActor && !m_bridge.hasLineOfSight(player, eye, point)) {
       continue;
     }
 
@@ -1263,7 +1281,7 @@ void AimAssist::findTargetInternal(void *player, const Settings &settings,
       const float lockDist = std::sqrt(dx * dx + dy * dy + dz * dz);
       const bool alive = gameecs::readHealth(m_target.actor) > 0.05f;
       const bool los =
-          !settings.visibleCheck ||
+          (!settings.visibleCheck && !settings.antiCheatMode) ||
           m_bridge.hasLineOfSight(player, eye, lockPoint);
       if (alive && lockDist <= lockRange && los) {
         const Angles a = calculateAnglesToPoint(lockPoint);
@@ -1558,6 +1576,19 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     bestActor = actor;
   }
 
+  // Точка входа луча в (padded) хитбокс — достаточный пробник стены.
+  // Проверяем до публикации m_triggerActor, иначе AimAssist получил бы
+  // приоритет на цель, которую запрещено бить.
+  if (bestActor) {
+    const Vec3 wallProbe{eye.x + dir.x * bestDistance,
+                         eye.y + dir.y * bestDistance,
+                         eye.z + dir.z * bestDistance};
+    if (!m_bridge.hasLineOfSight(player, eye, wallProbe)) {
+      bestActor = nullptr;
+      bestDistance = reach + tolerance;
+    }
+  }
+
   const int64_t now = monotonicMs();
 
   static uint64_t s_triggerLog = 0;
@@ -1637,14 +1668,25 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
           std::max(m_triggerDelayForTargetMs,
                    static_cast<int>(settings.killauraReactionMs));
     }
+    // Мгновенная атака на первое появление цели — сильнейший признак
+    // triggerbot/ML. Даже при сохранённом конфиге delay=0 держим
+    // человеческое время реакции; для крита окно падения короче.
+    if (settings.antiCheatMode && !settings.killaura) {
+      const int floorMs =
+          settings.onlyCrit ? randomInt(35, 70) : randomInt(90, 180);
+      m_triggerDelayForTargetMs =
+          std::max(m_triggerDelayForTargetMs, floorMs);
+    }
     m_triggerDelayForTargetMs =
         std::max(0, std::min(400, m_triggerDelayForTargetMs));
   }
   // В режиме only crit окно падения короткое: не тратим его на задержку
   // реакции вообще — только на тик-синхронизацию ниже.
   const int64_t effectiveDelay =
-      settings.onlyCrit ? 0
-                        : static_cast<int64_t>(m_triggerDelayForTargetMs);
+      settings.onlyCrit
+          ? (settings.antiCheatMode ? 20
+                                    : 0)
+          : static_cast<int64_t>(m_triggerDelayForTargetMs);
   if (now - m_triggerSinceMs < effectiveDelay) return;
   if (m_nextAttackAtMs != 0 && now < m_nextAttackAtMs) return;
 
@@ -1654,8 +1696,10 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   if (settings.antiCheatMode) {
     // A 14 deg/tick cap blocked hits during the aim-assist approach itself
     // (the camera legitimately turns 20-25 deg/tick on a fast flick).
+    // Не бьём на быстром доводе: rotation-check в момент удара видит
+    // нечеловеческую угловую скорость даже при попадании в хитбокс.
     const float attackSpeedLimit =
-        std::max(30.0f, settings.sustainedTickDeltaDeg);
+        std::max(20.0f, settings.sustainedTickDeltaDeg);
     if (m_prevTickDeltaDeg > attackSpeedLimit) {
       m_nextAttackAtMs = now + 45;
       return;
@@ -1666,9 +1710,13 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   // иногда «промахиваемся» (не жмём).
   if (settings.humanize && !settings.onlyCrit) {
     if (m_lastSwitchMs != 0 && now - m_lastSwitchMs < 35) return;
-    if (settings.attackMissChance > 0.0f &&
-        randomFloat(0.0f, 1.0f) < settings.attackMissChance) {
-      m_nextAttackAtMs = now + randomInt(80, 220);
+    // Даже при skip_chance=0 в anti-cheat профиле иногда не жмём.
+    // 100% попаданий на каждом окне — статистический признак бота.
+    const float missChance =
+        std::max(settings.attackMissChance,
+                 settings.antiCheatMode ? 0.035f : 0.0f);
+    if (missChance > 0.0f && randomFloat(0.0f, 1.0f) < missChance) {
+      m_nextAttackAtMs = now + randomInt(90, 260);
       return;
     }
   }
@@ -1699,9 +1747,10 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
   // Never send an attack through a wall: the server rejects it (and
   // anti-cheat treats it as a reach/through-wall hit). The ray test only
   // knows actor boxes, not blocks.
-  if (settings.visibleCheck &&
-      !m_bridge.hasLineOfSight(player, eye, hitPoint)) {
-    m_nextAttackAtMs = now + 50;
+  // Never attack through a wall, даже если пользователь выключил
+  // visibleCheck. Это и сетевой reject, и прямой reach/through-wall маркер.
+  if (!m_bridge.hasLineOfSight(player, eye, hitPoint)) {
+    m_nextAttackAtMs = now + randomInt(45, 110);
     return;
   }
 
@@ -1828,6 +1877,11 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
                            ? randomInt(0, 28)
                            : randomInt(30, maxJitter);
     next += jitter;
+    // Редкий «сбитый ритм»: человек не бьёт по секундомеру. Это ломает
+    // периодичность attack-пакетов у ML-моделей, не снижая DPS заметно.
+    if (settings.antiCheatMode && randomFloat(0.0f, 1.0f) < 0.06f) {
+      next += randomInt(120, 360);
+    }
     m_nextAttackAtMs = std::max(now + 80, next);
   } else {
     // GameMode ещё не готов (меню/загрузка) — не долбим каждый кадр.
@@ -1911,13 +1965,34 @@ void AimAssist::stabilizeFastAimAngles(float dt) {
   m_target.pitch = m_stableAimPitch;
 }
 
-void AimAssist::updateFastAimStealth(const Settings &, float) {
+void AimAssist::updateFastAimStealth(const Settings &settings, float dt) {
   m_noiseYaw = 0.0f;
   m_noisePitch = 0.0f;
   m_restYaw = 0.0f;
   m_restPitch = 0.0f;
   m_restTargetYaw = 0.0f;
   m_restTargetPitch = 0.0f;
+
+  if (!settings.antiCheatMode) {
+    m_fastStealthScale = 1.0f;
+    return;
+  }
+
+  const int64_t now = nowMs();
+  if (m_nextFastPauseMs == 0) {
+    m_nextFastPauseMs = now + randomInt(900, 2200);
+  }
+  // Короткая (50-140 мс) потеря точности — естественная микрокоррекция
+  // человека. Она не выключает доводку, а замедляет её, поэтому удар всё
+  // равно остаётся возможен, но скорость трекинга непостоянна.
+  if (now >= m_nextFastPauseMs && now >= m_fastPauseUntilMs) {
+    m_fastPauseUntilMs = now + randomInt(50, 140);
+    m_nextFastPauseMs = m_fastPauseUntilMs + randomInt(1300, 3800);
+  }
+  const float target = now < m_fastPauseUntilMs ? 0.16f : 1.0f;
+  const float alpha =
+      1.0f - std::exp(-clampf(dt, 0.0f, 0.05f) * 7.0f);
+  m_fastStealthScale += (target - m_fastStealthScale) * alpha;
 }
 
 // ============================================================
@@ -1967,10 +2042,11 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     const float errMag =
         std::sqrt(errYaw * errYaw + errPitch * errPitch);
 
+    const float speedCeiling = settings.antiCheatMode ? 900.0f : 4000.0f;
     const float maxSpeed =
         clampf(settings.fastAimMaxSpeed * strengthScale * m_fastSpeedScale *
-                   m_motorScale,
-               300.0f, 4000.0f);
+                   m_motorScale * m_fastStealthScale,
+               260.0f, speedCeiling);
 
     // Hard ceiling on how much the view may move in ONE rendered frame.
     // Exponential smoothing alone still produces a large first step when the
@@ -2033,8 +2109,10 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
       // and do NOT resume until the error clearly exceeds it again. Without
       // the latch, head bob / 20 Hz box steps push the error in and out of a
       // fixed deadzone, which is exactly the visible crosshair tremor.
-      const float dzEnter = 0.12f;
-      const float dzExit = 0.45f;
+      // Слишком узкий deadzone = идеальная привязка к центру. В anti-cheat
+      // профиле намеренно оставляем человеческий промах 0.3-0.9 градуса.
+      const float dzEnter = settings.antiCheatMode ? 0.30f : 0.12f;
+      const float dzExit = settings.antiCheatMode ? 0.90f : 0.45f;
       if (m_deadzoneHit ? errMag > dzExit : errMag < dzEnter) {
         m_deadzoneHit = !m_deadzoneHit;
       }
@@ -2060,8 +2138,9 @@ void AimAssist::applySmoothRotationInternal(float targetYaw, float targetPitch,
     m_lastTargetPitch = targetPitch;
     m_haveTargetSample = true;
     if (errMag < 0.01f) {
-      stepYaw = errYaw;
-      stepPitch = errPitch;
+      const float residual = settings.antiCheatMode ? 0.65f : 1.0f;
+      stepYaw = errYaw * residual;
+      stepPitch = errPitch * residual;
     }
 
     // Ограничение именно на серверный тик 20 Гц. Обычное сопровождение

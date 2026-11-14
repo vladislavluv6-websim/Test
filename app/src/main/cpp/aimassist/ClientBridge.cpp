@@ -26,6 +26,7 @@
 #include "CombatState.hpp"
 #include "pl/memory/Hook.hpp"
 #include "pl/memory/Signature.hpp"
+#include "pl/memory/Vtable.hpp"
 
 namespace aimbot {
 namespace {
@@ -58,6 +59,7 @@ using GetLocalPlayerFn = void *(*)(void *);
 using ApplyTurnDeltaFn = void (*)(void *, const Rotation &);
 using FetchNearbyActorsFn = ActorVec (*)(void *, const Vec3 *, int);
 using ActorIsPlayerFn = bool (*)(void *);
+using IsSolidBlockingBlockFn = bool (*)(void *, int32_t, int32_t, int32_t);
 // Touch-HUD builder: принимает указатель на объект-layout с вектором контролов.
 using ControlBuilderFn = void (*)(void *);
 using PlayerAuthInputWriteFn = void *(*)(void *, void *, void *, void *);
@@ -68,6 +70,7 @@ GetLocalPlayerFn g_getLocalPlayer = nullptr;
 ApplyTurnDeltaFn g_applyTurnDelta = nullptr;
 FetchNearbyActorsFn g_fetchNearbyActors = nullptr;
 ActorIsPlayerFn g_actorIsPlayer = nullptr;
+std::atomic<uintptr_t> g_isSolidBlockingBlock{0};
 ControlBuilderFn g_controlBuilderOriginal = nullptr;
 PlayerAuthInputWriteFn g_playerAuthWriteOriginal = nullptr;
 
@@ -1443,6 +1446,12 @@ bool ClientBridge::initialize() {
   const uintptr_t actorIsPlayer =
       pl::memory::resolveSignature(offsets::kActorIsPlayerSignature,
                                    offsets::kMinecraftLibrary);
+  // RTTI-vtable надёжнее сигнатуры: BlockSource::isSolidBlockingBlock
+  // (BlockPos const&) стабильно на слоте 54 для 1.26.60, тогда как байтовая
+  // сигнатура из сторонних SDK в этой сборке уже не совпадает.
+  const uintptr_t solidBlock =
+      pl::memory::resolveVtableFunction("11BlockSource", 54,
+                                        offsets::kMinecraftLibrary);
 
   const auto validGameFn = [](uintptr_t address) {
     return address != 0 && mem::isGameAddress(
@@ -1468,6 +1477,18 @@ bool ClientBridge::initialize() {
   g_fetchNearbyActors =
       reinterpret_cast<FetchNearbyActorsFn>(fetchNearbyActors);
   g_actorIsPlayer = reinterpret_cast<ActorIsPlayerFn>(actorIsPlayer);
+  // Проверяем, что слот 54 — действительно int-перегрузка
+  // isSolidBlockingBlock: её пролог начинает BlockPos-сборку с sub sp,#0x40.
+  // Если игра пропатчена и таблица сдвинулась, не вызываем чужой код.
+  bool solidOk = false;
+  if (validGameFn(solidBlock)) {
+    uint32_t prologue = 0;
+    solidOk = mem::read(solidBlock, prologue) && prologue == 0xD10103FFu;
+  }
+  g_isSolidBlockingBlock.store(solidOk ? solidBlock : 0,
+                               std::memory_order_release);
+  aimbot::diagLog(kTag, "LOS block probe=%p verified=%d",
+                  reinterpret_cast<void *>(solidBlock), solidOk ? 1 : 0);
 
   if (!g_hooksInstalled.load(std::memory_order_acquire)) {
     if (pl::memory::hook(reinterpret_cast<pl::memory::FuncPtr>(normalTick),
@@ -2107,10 +2128,72 @@ uint32_t ClientBridge::getActorCategories(void *actor) const {
   return categories;
 }
 
-bool ClientBridge::hasLineOfSight(void *player, const Vec3 &, const Vec3 &) const {
-  // Сигнатура Level::raycast зависит от версии. Пока не заполнишь её —
-  // visibleCheck работает как no-op, чтобы не ломать наведение.
-  (void)player;
+bool ClientBridge::hasLineOfSight(void *player, const Vec3 &from,
+                                  const Vec3 &to) const {
+  const uintptr_t fnAddress =
+      g_isSolidBlockingBlock.load(std::memory_order_acquire);
+  if (!fnAddress || !player) {
+    // Fail-open только если сигнатура не найдена: иначе любой сбой чтения
+    // мира полностью выключил бы AimAssist. В рабочей сборке заглушки нет.
+    return true;
+  }
+
+  // Actor::mDimension -> Dimension::mBlockSource (профиль 1.26.60).
+  uintptr_t dimension = 0;
+  uintptr_t region = 0;
+  if (!safeRead(reinterpret_cast<uintptr_t>(player) + 0x1E0, dimension) ||
+      !isPlausiblePointer(dimension) ||
+      !safeRead(dimension + 0xD0, region) ||
+      !isPlausiblePointer(region)) {
+    return true;
+  }
+  uintptr_t vtable = 0;
+  if (!safeRead(region, vtable) ||
+      !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
+    return true;
+  }
+
+  const float dx = to.x - from.x;
+  const float dy = to.y - from.y;
+  const float dz = to.z - from.z;
+  const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+  if (!std::isfinite(distance) || distance < 0.05f) return true;
+
+  // 0.35 блока: компромисс между точностью для полублоков и ценой вызова.
+  int steps = static_cast<int>(std::ceil(distance / 0.35f));
+  steps = std::max(2, std::min(steps, 96));
+  const auto isSolid = reinterpret_cast<IsSolidBlockingBlockFn>(fnAddress);
+
+  int32_t prevX = INT32_MIN;
+  int32_t prevY = INT32_MIN;
+  int32_t prevZ = INT32_MIN;
+  const int32_t sourceX = static_cast<int32_t>(std::floor(from.x));
+  const int32_t sourceY = static_cast<int32_t>(std::floor(from.y));
+  const int32_t sourceZ = static_cast<int32_t>(std::floor(from.z));
+  const int32_t targetX = static_cast<int32_t>(std::floor(to.x));
+  const int32_t targetY = static_cast<int32_t>(std::floor(to.y));
+  const int32_t targetZ = static_cast<int32_t>(std::floor(to.z));
+
+  for (int step = 1; step < steps; ++step) {
+    const float t = static_cast<float>(step) / static_cast<float>(steps);
+    const int32_t x = static_cast<int32_t>(
+        std::floor(from.x + dx * t));
+    const int32_t y = static_cast<int32_t>(
+        std::floor(from.y + dy * t));
+    const int32_t z = static_cast<int32_t>(
+        std::floor(from.z + dz * t));
+    if ((x == prevX && y == prevY && z == prevZ) ||
+        (x == sourceX && y == sourceY && z == sourceZ) ||
+        (x == targetX && y == targetY && z == targetZ)) {
+      continue;
+    }
+    prevX = x;
+    prevY = y;
+    prevZ = z;
+    if (isSolid(reinterpret_cast<void *>(region), x, y, z)) {
+      return false;
+    }
+  }
   return true;
 }
 

@@ -85,6 +85,14 @@ inline constexpr const char *kFullbrightPatchHex =
 
 // Actor::getNameTag() — ARM64-сигнатура для 1.26.6X (любезно проверена
 // BedrockTools, тот же Preloader/ABI). Возвращает std::string по значению.
+// BlockSource::isSolidBlockingBlock(BlockSource*, BlockPos const*): bool.
+// Используется для настоящей проверки линии видимости глаза -> цель.
+inline constexpr const char *kBlockSourceIsSolidBlockingBlockSignature =
+    "? ? ? F9 ? ? ? B9 ? ? ? 29 ? ? ? F9 E1 03 08 2A 80 00 1F D6 "
+    "? ? ? D1 ? ? ? A9 ? ? ? A9 ? ? ? 91 ? ? ? F9 ? ? ? F8 ? ? ? F9 "
+    "? ? ? 91 ? ? ? F8 ? ? ? F9 ? ? ? 91 ? ? ? F8 ? ? ? F9 ? ? ? 91 "
+    "? ? ? F9 ? ? ? 54";
+
 inline constexpr const char *kActorGetNameTagSignature =
     "? ? ? D1 ? ? ? A9 ? ? ? F9 ? ? ? A9 ? ? ? 91 55 D0 3B D5 F3 03 08 AA "
     "F4 03 00 AA ? ? ? F9 ? ? ? F8 E8 03 00 91 ? ? ? ? E0 03 00 91";
