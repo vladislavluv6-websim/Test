@@ -150,9 +150,14 @@ std::string itemIdentifier(void *stack) {
 }
 
 bool isTotem(void *stack) {
-  const std::string identifier = itemIdentifier(stack);
-  return identifier == kTargetIdentifier ||
-         identifier.find("totem_of_undying") != std::string::npos;
+  std::string identifier = itemIdentifier(stack);
+  std::replace(identifier.begin(), identifier.end(), ' ', '_');
+  for (char &ch : identifier) {
+    if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+  }
+  // getDescriptionId у разных типов предметов может вернуть полный
+  // идентификатор, короткое имя или локализованное "Totem of Undying".
+  return identifier.find("totem_of_undying") != std::string::npos;
 }
 
 void dumpInventory(void *player, void *inventory) {
@@ -197,7 +202,9 @@ void InventorySwap::reset() {
 }
 
 void InventorySwap::request(bool enabled) {
-  // C++ HTTP status устанавливается через таблицу compact-int и читается.
+  diagLog(kTag, "request: enabled=%d previous_status=%d original_slot=%d",
+          enabled ? 1 : 0, g_status.load(std::memory_order_relaxed),
+          g_originalSlot.load(std::memory_order_relaxed));
   g_status.store(enabled ? 1 : 0, std::memory_order_relaxed);
   g_action.store(static_cast<int>(enabled ? Pending::On : Pending::Off),
                  std::memory_order_release);
@@ -230,6 +237,8 @@ void InventorySwap::update() {
       return;
     }
     void *inventory = playerInventory(player);
+    diagLog(kTag, "enable: player=%p inventory=%p offhand_present=%d",
+            player, inventory, equippedTotemIsExpected(player) ? 1 : 0);
     int source = -1;
     if (inventory) {
       for (int slot = 0; slot < static_cast<int>(kMaxSlots); ++slot) {
@@ -270,6 +279,7 @@ void InventorySwap::update() {
                          std::memory_order_relaxed);
       g_status.store(static_cast<int>(Outcome::NoContainer),
                      std::memory_order_relaxed);
+      diagLog(kTag, "error: Actor::setOffhandSlot call failed");
       return;
     }
     if (!setInventorySlot(inventory, source, previous)) {
@@ -277,6 +287,7 @@ void InventorySwap::update() {
                          std::memory_order_relaxed);
       g_status.store(static_cast<int>(Outcome::NoContainer),
                      std::memory_order_relaxed);
+      diagLog(kTag, "error: Inventory::setItem call failed for old offhand");
       return;
     }
     g_originalSlot.store(source, std::memory_order_relaxed);
