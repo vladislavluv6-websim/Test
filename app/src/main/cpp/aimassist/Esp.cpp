@@ -799,25 +799,49 @@ std::string Esp::actorName(void *actor,
 
   {
     std::lock_guard<std::mutex> lock(m_nameMutex);
-    if (m_nameCache.size() > 4096) m_nameCache.clear();
-    m_nameCache[actor] = {name, now};
+    // Пустое имя — обычно неудачный read между тиками. Не кэшируем его,
+    // иначе ник пропадает на 3 секунды.
+    if (!name.empty()) {
+      if (m_nameCache.size() > 4096) m_nameCache.clear();
+      m_nameCache[actor] = {name, now};
+    }
   }
   return name;
 }
 
 uint32_t Esp::armorMaskFor(void *actor, std::chrono::steady_clock::time_point now) {
+  uint32_t previous = 0;
+  bool havePrevious = false;
+  int64_t previousAgeMs = 0;
   {
     std::lock_guard<std::mutex> lock(m_metaMutex);
     const auto it = m_armorCache.find(actor);
-    if (it != m_armorCache.end() &&
-        now - it->second.second < std::chrono::milliseconds(1500)) {
-      return it->second.first;
+    if (it != m_armorCache.end()) {
+      previousAgeMs =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              now - it->second.second)
+              .count();
+      previous = it->second.first;
+      havePrevious = previous != 0;
+      if (havePrevious && previousAgeMs < 1500) {
+        return previous;
+      }
+      // Пустая маска может быть и реальным снятием брони, и сбоем чтения.
+      // Держим последнюю непустую до 3 секунд, затем разрешаем сброс.
+      if (!havePrevious && previousAgeMs < 300) {
+        return 0;
+      }
     }
   }
   const uint32_t mask = gameecs::armorMaterialMask(actor);
   {
     std::lock_guard<std::mutex> lock(m_metaMutex);
     if (m_armorCache.size() > 4096) m_armorCache.clear();
+    // Не затираем валидную броню одним неудачным чтением, но и не держим
+    // её бесконечно: максимум 3 секунды от последнего валидного чтения.
+    if (mask == 0 && havePrevious && previousAgeMs < 3000) {
+      return previous;
+    }
     m_armorCache[actor] = {mask, now};
   }
   return mask;
