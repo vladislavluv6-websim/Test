@@ -37,6 +37,9 @@ std::atomic<bool> g_armed{false};
 
 using ContainerRemoveItemFn = void (*)(void *, int, int);
 uintptr_t virtualFunction(void *object, size_t index);
+bool isTotem(void *stack);
+bool setInventorySlot(void *inventory, int slot, const void *item);
+const void *offhandItem(void *player);
 
 bool clearContainerSlot(void *container, int slot) {
   const uintptr_t fn = virtualFunction(container, 15);
@@ -164,7 +167,12 @@ bool equipOffhand(void *player, const void *item) {
   const uintptr_t fn = virtualFunction(player, kSetOffhandSlotVtableIndex);
   if (!fn || !item) return false;
   reinterpret_cast<ActorOffhandFn>(fn)(player, item);
-  return true;
+  // В survival Actor::setOffhandSlot иногда не обновляет hand-контейнер
+  // до серверного подтверждения. Проверяем и при необходимости пишем
+  // напрямую в offhand-слот контейнера (тот же ItemStack, без дубля).
+  if (isTotem(const_cast<void *>(offhandItem(player)))) return true;
+  void *hand = gameecs::handItemContainer(player);
+  return hand && setInventorySlot(hand, kOffhandSlot, item);
 }
 
 bool setInventorySlot(void *inventory, int slot, const void *item) {
