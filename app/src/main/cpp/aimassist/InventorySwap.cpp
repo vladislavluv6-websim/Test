@@ -35,10 +35,20 @@ std::atomic<int> g_status{0};
 std::atomic<int> g_originalSlot{-1};
 std::atomic<bool> g_armed{false};
 
-// Пустой ItemStack в памяти: поля нулевые, shared-указатели null. Нужен
-// только как аргумент Container::setItem для очистки служебного слота.
-alignas(16) unsigned char g_emptyItem[kItemStackSize]{};
-const void *emptyItem() { return g_emptyItem; }
+using ContainerRemoveItemFn = void (*)(void *, int, int);
+uintptr_t virtualFunction(void *object, size_t index);
+
+bool clearContainerSlot(void *container, int slot) {
+  const uintptr_t fn = virtualFunction(container, 15);
+  if (!fn) return false;
+  // Container::removeItem(slot, count); 0xFF гарантированно очищает слот.
+  reinterpret_cast<ContainerRemoveItemFn>(fn)(container, slot, 0xFF);
+  return true;
+}
+
+bool clearHandSlot(void *player, int slot) {
+  return clearContainerSlot(gameecs::handItemContainer(player), slot);
+}
 
 bool readPointer(uintptr_t address, uintptr_t &value) {
   if (!aimbot::mem::read(address, value)) return false;
@@ -324,9 +334,9 @@ void InventorySwap::update() {
     bool ok = true;
     if (temp >= 0) {
       ok = setInventorySlot(inventory, source, itemAt(inventory, temp)) &&
-           setInventorySlot(inventory, temp, emptyItem());
+           clearContainerSlot(inventory, temp);
     } else {
-      ok = setInventorySlot(inventory, source, emptyItem());
+      ok = clearContainerSlot(inventory, source);
     }
     if (!ok) {
       diagLog(kTag, "inventory restore after equip failed");
@@ -356,7 +366,7 @@ void InventorySwap::update() {
   if (original < 0) {
     const int empty = findEmptySlot(inventory, -1);
     if (empty < 0 || !setInventorySlot(inventory, empty, current) ||
-        !equipOffhand(player, emptyItem())) {
+        !clearHandSlot(player, kOffhandSlot)) {
       diagLog(kTag, "no space to return manually equipped totem");
       setError(-2);
       return;
@@ -378,7 +388,7 @@ void InventorySwap::update() {
     // Прежний offhand был пуст: сначала копируем тотем в исходный слот,
     // затем очищаем руку.
     if (!setInventorySlot(inventory, original, current) ||
-        !equipOffhand(player, emptyItem())) {
+        !clearHandSlot(player, kOffhandSlot)) {
       diagLog(kTag, "restore empty offhand failed");
       setError(-2);
       return;
@@ -394,7 +404,7 @@ void InventorySwap::update() {
       return;
     }
     if (!equipOffhand(player, itemAt(inventory, temp)) ||
-        !setInventorySlot(inventory, temp, emptyItem())) {
+        !clearContainerSlot(inventory, temp)) {
       diagLog(kTag, "restore old offhand from temp failed");
       setError(-2);
       return;
