@@ -37,6 +37,8 @@ std::string offhandItemName(void *actor);
 std::string stackItemName(uintptr_t stack);
 // Основной контейнер руки/инвентаря из ActorEquipmentComponent::hand.
 void *handItemContainer(void *actor);
+// ItemStack* из hand-контейнера (0 — основная рука, 1 — offhand).
+void *handItemStack(void *actor, int slot);
 bool isInvisible(void *actor);
 bool setSprintingFlag(void *actor, bool value);
 

@@ -556,4 +556,24 @@ void *handItemContainer(void *actor) {
   return reinterpret_cast<void *>(container);
 }
 
+void *handItemStack(void *actor, int slot) {
+  void *container = handItemContainer(actor);
+  if (!container || slot < 0) return nullptr;
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!readValue(reinterpret_cast<uintptr_t>(container) + kContainerItems,
+                 begin) ||
+      !readValue(reinterpret_cast<uintptr_t>(container) + kContainerItems +
+                     sizeof(uintptr_t),
+                 end) ||
+      begin < 0x1000 || end < begin ||
+      (end - begin) % kStackSize != 0) {
+    return nullptr;
+  }
+  const size_t count = (end - begin) / kStackSize;
+  if (count > 64 || static_cast<size_t>(slot) >= count) return nullptr;
+  return reinterpret_cast<void *>(begin + static_cast<uintptr_t>(slot) *
+                                            kStackSize);
+}
+
 } // namespace gameecs
