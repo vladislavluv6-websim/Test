@@ -18,7 +18,7 @@ constexpr uintptr_t kPlayerInventoryContainer = 0xB8;
 constexpr uintptr_t kContainerItems = 0x140;
 constexpr size_t kItemStackSize = 0x98;
 constexpr size_t kMaxSlots = 36;
-constexpr int kOffhandSlot = 1;
+constexpr int kOffhandSlotPreferred = 1;
 constexpr size_t kSetOffhandSlotVtableIndex = 79;
 constexpr size_t kSetItemVtableIndex = 13;
 constexpr size_t kItemGetDescriptionIdVtableIndex = 5;
@@ -40,6 +40,7 @@ uintptr_t virtualFunction(void *object, size_t index);
 bool isTotem(void *stack);
 bool setInventorySlot(void *inventory, int slot, const void *item);
 const void *offhandItem(void *player);
+int offhandSlotIndex(void *player);
 
 bool clearContainerSlot(void *container, int slot) {
   const uintptr_t fn = virtualFunction(container, 15);
@@ -49,8 +50,9 @@ bool clearContainerSlot(void *container, int slot) {
   return true;
 }
 
-bool clearHandSlot(void *player, int slot) {
-  return clearContainerSlot(gameecs::handItemContainer(player), slot);
+bool clearHandSlot(void *player, int) {
+  return clearContainerSlot(gameecs::handItemContainer(player),
+                            offhandSlotIndex(player));
 }
 
 bool readPointer(uintptr_t address, uintptr_t &value) {
@@ -159,8 +161,17 @@ int findEmptySlot(void *inventory, int excluded) {
   return -1;
 }
 
+int offhandSlotIndex(void *player) {
+  // На client-сборках hand-контейнер бывает как 2-слотовым
+  // (main/offhand), так и 1-слотовым (только offhand).
+  if (gameecs::handItemStack(player, kOffhandSlotPreferred)) {
+    return kOffhandSlotPreferred;
+  }
+  return 0;
+}
+
 const void *offhandItem(void *player) {
-  return gameecs::handItemStack(player, kOffhandSlot);
+  return gameecs::handItemStack(player, offhandSlotIndex(player));
 }
 
 bool equipOffhand(void *player, const void *item) {
@@ -172,7 +183,7 @@ bool equipOffhand(void *player, const void *item) {
   // напрямую в offhand-слот контейнера (тот же ItemStack, без дубля).
   if (isTotem(const_cast<void *>(offhandItem(player)))) return true;
   void *hand = gameecs::handItemContainer(player);
-  return hand && setInventorySlot(hand, kOffhandSlot, item);
+  return hand && setInventorySlot(hand, offhandSlotIndex(player), item);
 }
 
 bool setInventorySlot(void *inventory, int slot, const void *item) {
@@ -376,7 +387,7 @@ void InventorySwap::update() {
   if (original < 0) {
     const int empty = findEmptySlot(inventory, -1);
     if (empty < 0 || !setInventorySlot(inventory, empty, current) ||
-        !clearHandSlot(player, kOffhandSlot)) {
+        !clearHandSlot(player, 0)) {
       diagLog(kTag, "no space to return manually equipped totem");
       setError(-2);
       return;
@@ -398,7 +409,7 @@ void InventorySwap::update() {
     // Прежний offhand был пуст: сначала копируем тотем в исходный слот,
     // затем очищаем руку.
     if (!setInventorySlot(inventory, original, current) ||
-        !clearHandSlot(player, kOffhandSlot)) {
+        !clearHandSlot(player, 0)) {
       diagLog(kTag, "restore empty offhand failed");
       setError(-2);
       return;
