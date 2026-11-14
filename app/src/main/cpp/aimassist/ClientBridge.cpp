@@ -2157,6 +2157,47 @@ uintptr_t discoverSolidBlockFn(void *region) {
   return 0;
 }
 
+bool storedHitBlocksLine(void *player, const Vec3 &from, const Vec3 &to) {
+  // Level::mHitResultWrapper -> HitResult. HitResultType::Tile == 0.
+  uintptr_t level = 0;
+  uintptr_t wrapper = 0;
+  uintptr_t hit = 0;
+  if (!player ||
+      !safeRead(reinterpret_cast<uintptr_t>(player) + 0x1F0, level) ||
+      !isPlausiblePointer(level) ||
+      !safeRead(level + 0x1D0, wrapper) ||
+      !isPlausiblePointer(wrapper) || !safeRead(wrapper, hit) ||
+      !isPlausiblePointer(hit)) {
+    return false;
+  }
+  int32_t type = -1;
+  Vec3 start{};
+  Vec3 pos{};
+  if (!mem::read(hit + 24, type) || !mem::read(hit + 0, start) ||
+      !mem::read(hit + 44, pos)) {
+    return false;
+  }
+  if (type != 0) return false; // Tile (block); Entity/NoHit не перекрывают.
+  const float abx = to.x - from.x;
+  const float aby = to.y - from.y;
+  const float abz = to.z - from.z;
+  const float len2 = abx * abx + aby * aby + abz * abz;
+  if (len2 < 1e-4f) return false;
+  const float t =
+      ((pos.x - from.x) * abx + (pos.y - from.y) * aby +
+       (pos.z - from.z) * abz) / len2;
+  if (t <= 0.02f || t >= 0.98f) return false;
+  const float px = from.x + abx * t;
+  const float py = from.y + aby * t;
+  const float pz = from.z + abz * t;
+  const float dx = pos.x - px;
+  const float dy = pos.y - py;
+  const float dz = pos.z - pz;
+  // Точка блока должна лежать на луче, а не сбоку (кроссхэйр смотрит
+  // в другую сторону).
+  return dx * dx + dy * dy + dz * dz <= 0.49f;
+}
+
 bool ClientBridge::hasLineOfSight(void *player, const Vec3 &from,
                                   const Vec3 &to) const {
   if (!player) return true;
@@ -2177,46 +2218,11 @@ bool ClientBridge::hasLineOfSight(void *player, const Vec3 &from,
   }
   const uintptr_t fnAddress =
       discoverSolidBlockFn(reinterpret_cast<void *>(region));
-  if (!fnAddress) {
-    // Fallback: сохранённый в Level результат трассировки прицела.
-    // Для TriggerBot этого достаточно: его луч почти совпадает с прицелом,
-    // а блок на пути даёт HitResult с типом Tile.
-    uintptr_t level = 0;
-    uintptr_t wrapper = 0;
-    uintptr_t hit = 0;
-    if (!safeRead(reinterpret_cast<uintptr_t>(player) + 0x1F0, level) ||
-        !isPlausiblePointer(level) ||
-        !safeRead(level + 0x1D0, wrapper) ||
-        !isPlausiblePointer(wrapper) || !safeRead(wrapper, hit) ||
-        !isPlausiblePointer(hit)) {
-      return true;
-    }
-    int32_t type = -1;
-    Vec3 hitStart{};
-    Vec3 hitPos{};
-    if (!mem::read(hit + 24, type) ||
-        !mem::read(hit + 0, hitStart) ||
-        !mem::read(hit + 44, hitPos)) {
-      return true;
-    }
-    if (type != 0) return true; // Tile; Entity/NoHit не блокируют.
-    const float abx = to.x - from.x;
-    const float aby = to.y - from.y;
-    const float abz = to.z - from.z;
-    const float abLen2 = abx * abx + aby * aby + abz * abz;
-    if (abLen2 < 1e-4f) return true;
-    const float t =
-        ((hitPos.x - from.x) * abx + (hitPos.y - from.y) * aby +
-         (hitPos.z - from.z) * abz) / abLen2;
-    if (t <= 0.02f || t >= 0.98f) return true;
-    const float px = from.x + abx * t;
-    const float py = from.y + aby * t;
-    const float pz = from.z + abz * t;
-    const float dx = hitPos.x - px;
-    const float dy = hitPos.y - py;
-    const float dz = hitPos.z - pz;
-    return dx * dx + dy * dy + dz * dz > 0.36f; // 0.6 блока
-  }
+  if (!fnAddress) return !storedHitBlocksLine(player, from, to);
+  // Даже если vtable-probe вернул «чисто», сохранённый Tile перед целью
+  // жёстко запрещает удар/доводку (независимая проверка).
+  const bool storedBlocked = storedHitBlocksLine(player, from, to);
+  if (storedBlocked) return false;
 
   const float dx = to.x - from.x;
   const float dy = to.y - from.y;
