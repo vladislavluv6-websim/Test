@@ -2137,18 +2137,35 @@ uintptr_t discoverSolidBlockFn(void *region) {
       !mem::isGameAddress(reinterpret_cast<const void *>(vtable))) {
     return 0;
   }
+  auto matches = [](uintptr_t candidate) {
+    uint32_t prologue[4]{};
+    return mem::read(candidate, prologue, sizeof(prologue)) &&
+           prologue[0] == 0xD10103FFu && prologue[1] == 0xA9027BFDu &&
+           prologue[2] == 0xF9001BF3u;
+  };
   for (size_t slot = 0; slot < 96; ++slot) {
     uintptr_t candidate = 0;
     if (!safeRead(vtable + slot * sizeof(uintptr_t), candidate) ||
         !mem::isGameAddress(reinterpret_cast<const void *>(candidate))) {
       continue;
     }
-    uint32_t prologue[4]{};
-    if (!mem::read(candidate, prologue, sizeof(prologue))) continue;
-    if (prologue[0] == 0xD10103FFu && prologue[1] == 0xA9027BFDu &&
-        prologue[2] == 0xF9001BF3u) {
+    if (matches(candidate)) {
       g_isSolidBlockingBlock.store(candidate, std::memory_order_release);
       aimbot::diagLog(kTag, "LOS probe discovered slot=%zu fn=%p", slot,
+                      reinterpret_cast<void *>(candidate));
+      return candidate;
+    }
+  }
+  // Объект BlockSource может отдавать secondary vtable/thunk. Пробуем
+  // RTTI-таблицу по имени класса и всем слотам.
+  for (size_t slot = 0; slot < 96; ++slot) {
+    const uintptr_t candidate = pl::memory::resolveVtableFunction(
+        "11BlockSource", slot, offsets::kMinecraftLibrary);
+    if (candidate &&
+        mem::isGameAddress(reinterpret_cast<const void *>(candidate)) &&
+        matches(candidate)) {
+      g_isSolidBlockingBlock.store(candidate, std::memory_order_release);
+      aimbot::diagLog(kTag, "LOS probe found by RTTI slot=%zu fn=%p", slot,
                       reinterpret_cast<void *>(candidate));
       return candidate;
     }

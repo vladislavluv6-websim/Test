@@ -82,7 +82,9 @@ bool isEmptyStack(const void *stack) {
 
 void *validInventory(void *candidate) {
   if (!candidate) return nullptr;
-  if (!virtualFunction(candidate, 8)) return nullptr;
+  // Не требуем конкретный vtable-индекс getItem: он уже сдвигался между
+  // ревизиями. Проверяем сам FillingContainer: валидный вектор 36–64
+  // ItemStack по смещению mItems.
   uintptr_t begin = 0;
   uintptr_t end = 0;
   if (!inventoryItems(candidate, begin, end)) return nullptr;
@@ -116,7 +118,7 @@ void *playerInventory(void *player) {
       return valid;
     }
   }
-  if (void *valid = scanForInventory(player, 0x400, 0x900)) return valid;
+  if (void *valid = scanForInventory(player, 0x100, 0x900)) return valid;
   return validInventory(gameecs::handItemContainer(player));
 }
 
