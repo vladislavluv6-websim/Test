@@ -162,31 +162,11 @@ bool setInventorySlot(void *inventory, int slot, const void *item) {
   return true;
 }
 
-void *itemObject(void *stack) {
-  if (!stack) return nullptr;
-  uintptr_t counter = 0;
-  uintptr_t item = 0;
-  if (!readPointer(reinterpret_cast<uintptr_t>(stack) + 0x8, counter) ||
-      !aimbot::mem::read(counter, item)) {
-    return nullptr;
-  }
-  return reinterpret_cast<void *>(item);
-}
-
 std::string itemIdentifier(void *stack) {
-  std::string identifier;
-  if (void *item = itemObject(stack)) {
-    const uintptr_t fn = virtualFunction(item, kItemGetDescriptionIdVtableIndex);
-    if (fn) {
-      const auto &value =
-          *reinterpret_cast<const std::string *(*)(void *)>(fn)(item);
-      if (value.size() < 256) identifier = value;
-    }
-  }
-  if (identifier.empty()) {
-    identifier = gameecs::stackItemName(reinterpret_cast<uintptr_t>(stack));
-  }
-  return identifier;
+  // Никаких прямых вызовов Item::getDescriptionId: неверный слот/ABI
+  // ронял игру (SIGSEGV в libminecraftpe из AutoSwap). Читатель GameEcs
+  // проверяет ItemStack/Item и читает имя только после safeRead.
+  return gameecs::stackItemName(reinterpret_cast<uintptr_t>(stack));
 }
 
 bool isTotemName(std::string identifier) {

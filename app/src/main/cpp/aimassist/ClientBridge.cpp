@@ -2157,6 +2157,22 @@ uintptr_t discoverSolidBlockFn(void *region) {
   return 0;
 }
 
+bool crosshairHitsTile(void *player) {
+  uintptr_t level = 0;
+  uintptr_t wrapper = 0;
+  uintptr_t hit = 0;
+  if (!player ||
+      !safeRead(reinterpret_cast<uintptr_t>(player) + 0x1F0, level) ||
+      !isPlausiblePointer(level) ||
+      !safeRead(level + 0x1D0, wrapper) ||
+      !isPlausiblePointer(wrapper) || !safeRead(wrapper, hit) ||
+      !isPlausiblePointer(hit)) {
+    return false;
+  }
+  int32_t type = -1;
+  return mem::read(hit + 24, type) && type == 0;
+}
+
 bool storedHitBlocksLine(void *player, const Vec3 &from, const Vec3 &to) {
   // Level::mHitResultWrapper -> HitResult. HitResultType::Tile == 0.
   uintptr_t level = 0;
@@ -2229,6 +2245,12 @@ bool ClientBridge::hasLineOfSight(void *player, const Vec3 &from,
   const float dz = to.z - from.z;
   const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
   if (!std::isfinite(distance) || distance < 0.05f) return true;
+
+  // Локальный радиус 6 блоков: если прицел сейчас упирается в Tile,
+  // считаем цель за блоком невидимой, даже если vtable-probe недоступен.
+  if (distance <= 6.0f && crosshairHitsTile(player)) {
+    return false;
+  }
 
   // 0.35 блока: компромисс между точностью для полублоков и ценой вызова.
   int steps = static_cast<int>(std::ceil(distance / 0.35f));
