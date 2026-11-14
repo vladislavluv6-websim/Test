@@ -35,6 +35,8 @@ float readHealth(void *actor);
 std::string offhandItemName(void *actor);
 // Безопасный способ чтения идентификатора из ItemStack, тот же что у ESP.
 std::string stackItemName(uintptr_t stack);
+// Основной контейнер руки/инвентаря из ActorEquipmentComponent::hand.
+void *handItemContainer(void *actor);
 bool isInvisible(void *actor);
 bool setSprintingFlag(void *actor, bool value);
 

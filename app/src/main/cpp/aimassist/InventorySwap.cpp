@@ -57,19 +57,51 @@ uintptr_t virtualFunction(void *object, size_t index) {
   return aimbot::mem::isGameAddress(reinterpret_cast<void *>(fn)) ? fn : 0;
 }
 
+bool inventoryItems(void *inventory, uintptr_t &begin, uintptr_t &end);
+
+void *validInventory(void *candidate) {
+  if (!candidate) return nullptr;
+  if (!virtualFunction(candidate, 8)) return nullptr;
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!inventoryItems(candidate, begin, end)) return nullptr;
+  return candidate;
+}
+
+void *scanForInventory(void *object, uintptr_t first, uintptr_t last) {
+  if (!object) return nullptr;
+  const uintptr_t base = reinterpret_cast<uintptr_t>(object);
+  for (uintptr_t offset = first; offset <= last; offset += sizeof(uintptr_t)) {
+    uintptr_t candidate = 0;
+    if (!readPointer(base + offset, candidate)) continue;
+    if (void *valid = validInventory(reinterpret_cast<void *>(candidate))) {
+      return valid;
+    }
+  }
+  return nullptr;
+}
+
 void *playerInventory(void *player) {
   uintptr_t proxy = 0;
   uintptr_t container = 0;
-  if (!readPointer(reinterpret_cast<uintptr_t>(player) + kPlayerInventory,
-                   proxy) ||
-      !readPointer(proxy + kPlayerInventoryContainer, container)) {
-    return nullptr;
+  if (readPointer(reinterpret_cast<uintptr_t>(player) + kPlayerInventory,
+                  proxy) &&
+      readPointer(proxy + kPlayerInventoryContainer, container)) {
+    if (void *valid = validInventory(reinterpret_cast<void *>(container))) {
+      return valid;
+    }
+    // Offset прокси мог измениться, контейнер ищем рядом с известным полем.
+    if (void *valid = scanForInventory(reinterpret_cast<void *>(proxy), 0x20,
+                                       0x300)) {
+      return valid;
+    }
   }
-  // Важно: проверяем vtable *внутри* контейнера. Сам контейнер живёт
-  // в куче, а vtable его конкретного класса — в libminecraftpe.so.
-  return virtualFunction(reinterpret_cast<void *>(container), 8)
-             ? reinterpret_cast<void *>(container)
-             : nullptr;
+  // Последний независимый путь: найти в объекте игрока указатель на
+  // контейнер с 36–64 ItemStack. На клиенте PlayerInventoryProxy является
+  // владельцем FillingContainer.
+  if (void *valid = scanForInventory(player, 0x400, 0x900)) return valid;
+  // ActorEquipmentComponent.hand как ещё один валидный контейнер.
+  return validInventory(gameecs::handItemContainer(player));
 }
 
 bool inventoryItems(void *inventory, uintptr_t &begin, uintptr_t &end) {
@@ -149,15 +181,20 @@ std::string itemIdentifier(void *stack) {
   return identifier;
 }
 
-bool isTotem(void *stack) {
-  std::string identifier = itemIdentifier(stack);
+bool isTotemName(std::string identifier) {
   std::replace(identifier.begin(), identifier.end(), ' ', '_');
   for (char &ch : identifier) {
     if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
   }
-  // getDescriptionId у разных типов предметов может вернуть полный
-  // идентификатор, короткое имя или локализованное "Totem of Undying".
   return identifier.find("totem_of_undying") != std::string::npos;
+}
+
+bool isTotem(void *stack) {
+  // Оба способа проверяются всегда: getDescriptionId на некоторых ItemStack
+  // может вернуть непустой, но не тот identifier (descriptor/локализацию).
+  if (isTotemName(itemIdentifier(stack))) return true;
+  return isTotemName(gameecs::stackItemName(
+      reinterpret_cast<uintptr_t>(stack)));
 }
 
 void dumpInventory(void *player, void *inventory) {

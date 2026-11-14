@@ -543,4 +543,17 @@ std::string stackItemName(uintptr_t stack) {
   return name;
 }
 
+void *handItemContainer(void *actor) {
+  void *equipment = componentFor(actor, kHashEquipment);
+  if (!equipment) return nullptr;
+  uintptr_t container = 0;
+  if (!readValue(reinterpret_cast<uintptr_t>(equipment) +
+                     kEquipmentOffhandContainer,
+                 container) ||
+      container < 0x1000) {
+    return nullptr;
+  }
+  return reinterpret_cast<void *>(container);
+}
+
 } // namespace gameecs
