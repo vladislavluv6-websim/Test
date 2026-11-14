@@ -8,6 +8,7 @@ import android.widget.ImageButton;
 import android.widget.Toast;
 
 import org.levimc.launcher.R;
+import org.levimc.launcher.core.minecraft.MinecraftActivity;
 import org.levimc.launcher.core.mods.ModManager;
 import org.levimc.launcher.core.mods.inbuilt.manager.InbuiltModManager;
 import org.levimc.launcher.core.mods.inbuilt.model.ModIds;
@@ -43,6 +44,23 @@ public class TriggerBotOverlay extends BaseOverlayButton {
     private boolean onlyCrit = false;
     private float triggerRange = 3.0f;
     private float triggerTolerance = 0.03f;
+
+    // Native trigger решает, когда бить (цель/LOS/тайминг). Финальный удар
+    // выполняется настоящим touch/кликом, чтобы сервер видел input игрока.
+    private final Runnable attackTapRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!isActive) return;
+            if (AimAssistMod.consumeTapRequest() > 0 &&
+                    activity instanceof MinecraftActivity) {
+                try {
+                    ((MinecraftActivity) activity).performTriggerBotAttack();
+                } catch (Throwable ignored) {
+                }
+            }
+            triggerHandler.postDelayed(this, 12L);
+        }
+    };
 
     private final Runnable triggerRunnable = new Runnable() {
         @Override
@@ -125,6 +143,7 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         AimAssistMod.setAttackMissChance(skipChancePercent / 100.0f);
         AimAssistMod.setAntiBot(manager.isTriggerBotAntiBot());
         AimAssistMod.setRandomAimPoint(manager.isTriggerBotRandomPoint());
+        AimAssistMod.setExternalAttack(true);
         AimAssistMod.setTriggerBot(true);
         EspMod.setFriendNames(manager.isFriendModuleEnabled()
                 ? manager.getFriendNames() : "");
@@ -188,13 +207,17 @@ public class TriggerBotOverlay extends BaseOverlayButton {
         // и без видимых нажатий). Java-цикл только разрешает/запрещает его по
         // состоянию экрана (геймплей vs меню/пауза).
         triggerHandler.removeCallbacks(triggerRunnable);
+        triggerHandler.removeCallbacks(attackTapRunnable);
         targetSince = 0L;
         nextAttackAt = 0L;
         triggerHandler.post(triggerRunnable);
+        triggerHandler.post(attackTapRunnable);
     }
 
     private void stopLoop() {
         triggerHandler.removeCallbacks(triggerRunnable);
+        triggerHandler.removeCallbacks(attackTapRunnable);
+        AimAssistMod.setExternalAttack(false);
         targetSince = 0L;
         nextAttackAt = 0L;
     }

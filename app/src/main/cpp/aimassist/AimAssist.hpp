@@ -291,6 +291,10 @@ public:
   void setTouchActive(bool active);
   void notifyCameraLook();
   void setActivationHeld(bool held);
+  // Touched attack path: final hit is sent as a real screen tap by Java,
+  // native trigger still performs target/LOS/timing checks.
+  void setExternalAttack(bool enabled);
+  uint32_t consumeTapRequest();
   bool isOnTarget() const;
 
   Settings getSettings() const;
@@ -357,6 +361,8 @@ private:
   std::atomic<float> m_networkYaw{0.0f};
   std::atomic<float> m_networkPitch{0.0f};
   std::atomic<bool> m_onTarget{false};
+  std::atomic<bool> m_externalAttack{false};
+  std::atomic<uint32_t> m_tapRequests{0};
 
   // Цель под прицелом (ray-vs-hitbox), независимая от aim assist.
   std::atomic<void *> m_triggerActor{nullptr};

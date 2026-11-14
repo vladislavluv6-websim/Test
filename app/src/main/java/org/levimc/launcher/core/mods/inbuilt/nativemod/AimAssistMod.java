@@ -269,6 +269,14 @@ public final class AimAssistMod {
         if (initialized) nativeSetTouchActive(active);
     }
 
+    public static void setExternalAttack(boolean enabled) {
+        if (initialized) nativeSetExternalAttack(enabled);
+    }
+
+    public static int consumeTapRequest() {
+        return initialized ? nativeConsumeTapRequest() : 0;
+    }
+
     public static void notifyCameraLook() {
         if (initialized) nativeNotifyCameraLook();
     }
@@ -341,6 +349,8 @@ public final class AimAssistMod {
     private static native void nativeSetRandomAimPoint(boolean enabled);
     private static native boolean nativeIsOnTarget();
     private static native void nativeSetTouchActive(boolean active);
+    private static native void nativeSetExternalAttack(boolean enabled);
+    private static native int nativeConsumeTapRequest();
     private static native void nativeNotifyCameraLook();
     private static native void nativeSetActivationHeld(boolean held);
 }

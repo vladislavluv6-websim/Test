@@ -552,6 +552,14 @@ void AimAssist::loadRotationPattern() {
   m_rotPlayIndex = 0;
 }
 
+void AimAssist::setExternalAttack(bool enabled) {
+  m_externalAttack.store(enabled, std::memory_order_release);
+}
+
+uint32_t AimAssist::consumeTapRequest() {
+  return m_tapRequests.exchange(0, std::memory_order_acq_rel);
+}
+
 void AimAssist::setTouchActive(bool) {
   // Ручной look больше не ставит наведение на паузу. View всё равно
   // перечитывается каждый кадр, поэтому цель не теряется.
@@ -1865,7 +1873,16 @@ void AimAssist::updateTrigger(void *player, const Settings &settings,
     }
   }
 
-  if (m_bridge.attackActor(bestActor, hitPoint)) {
+  bool attacked = false;
+  if (m_externalAttack.load(std::memory_order_acquire)) {
+    // Java отправит настоящий touch/клик по кнопке атаки. Сервер видит
+    // обычное нажатие, а не только синтезированный GameMode::attack.
+    m_tapRequests.fetch_add(1, std::memory_order_release);
+    attacked = true;
+  } else {
+    attacked = m_bridge.attackActor(bestActor, hitPoint);
+  }
+  if (attacked) {
     // Target ESP появляется только на факте удара TriggerBot.
     Esp::instance().markTargetEspHit(bestActor);
     // Анимация взмаха применяется только к удару TriggerBot.

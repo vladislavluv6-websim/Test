@@ -361,6 +361,19 @@ Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeIsOnTarg
 
 // Дополнительные точки входа для input-слоя клиента.
 extern "C" JNIEXPORT void JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetExternalAttack(
+    JNIEnv *, jclass, jboolean enabled) {
+  aimbot::AimAssist::instance().setExternalAttack(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeConsumeTapRequest(
+    JNIEnv *, jclass) {
+  return static_cast<jint>(
+      aimbot::AimAssist::instance().consumeTapRequest());
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_org_levimc_launcher_core_mods_inbuilt_nativemod_AimAssistMod_nativeSetTouchActive(
     JNIEnv *, jclass, jboolean active) {
   aimbot::AimAssist::instance().setTouchActive(active == JNI_TRUE);
