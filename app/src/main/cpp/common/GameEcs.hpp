@@ -33,6 +33,8 @@ int armorPieceCount(void *actor);
 std::uint32_t armorMaterialMask(void *actor);
 float readHealth(void *actor);
 std::string offhandItemName(void *actor);
+// Безопасный способ чтения идентификатора из ItemStack, тот же что у ESP.
+std::string stackItemName(uintptr_t stack);
 bool isInvisible(void *actor);
 bool setSprintingFlag(void *actor, bool value);
 

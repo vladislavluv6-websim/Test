@@ -73,14 +73,19 @@ void *playerInventory(void *player) {
 }
 
 bool inventoryItems(void *inventory, uintptr_t &begin, uintptr_t &end) {
-  return inventory && readPointer(reinterpret_cast<uintptr_t>(inventory) +
-                                      kContainerItems,
-                                  begin) &&
-         readPointer(reinterpret_cast<uintptr_t>(inventory) + kContainerItems +
-                         sizeof(uintptr_t),
-                     end) &&
-         end >= begin && (end - begin) % kItemStackSize == 0 &&
-         (end - begin) / kItemStackSize == kMaxSlots;
+  if (!inventory) return false;
+  if (!readPointer(reinterpret_cast<uintptr_t>(inventory) + kContainerItems,
+                   begin) ||
+      !readPointer(reinterpret_cast<uintptr_t>(inventory) + kContainerItems +
+                       sizeof(uintptr_t),
+                   end)) {
+    return false;
+  }
+  if (end < begin || (end - begin) % kItemStackSize != 0) return false;
+  const size_t count = (end - begin) / kItemStackSize;
+  // В некоторых состояниях список содержит больше фиксированных 36: в релизе
+  // BedrockTools читают до 64 slots, а не режут проверку по size==36.
+  return count >= kMaxSlots && count <= 64;
 }
 
 void *itemAt(void *inventory, int slot) {
@@ -125,15 +130,51 @@ void *itemObject(void *stack) {
   return reinterpret_cast<void *>(item);
 }
 
+std::string itemIdentifier(void *stack) {
+  std::string identifier;
+  if (void *item = itemObject(stack)) {
+    const uintptr_t fn = virtualFunction(item, kItemGetDescriptionIdVtableIndex);
+    if (fn) {
+      const auto &value =
+          *reinterpret_cast<const std::string *(*)(void *)>(fn)(item);
+      if (value.size() < 256) identifier = value;
+    }
+  }
+  // На части внутренних ItemStack vtable counter совпадает с основным
+  // инвентарём, поэтому сначала пытаемся getDescriptionId, а пустое или
+  // неполное имя дополняем уже проверенным читателем стека из ESP.
+  if (identifier.empty()) {
+    identifier = gameecs::stackItemName(reinterpret_cast<uintptr_t>(stack));
+  }
+  return identifier;
+}
+
 bool isTotem(void *stack) {
-  void *item = itemObject(stack);
-  if (!item) return false;
-  const uintptr_t fn = virtualFunction(item, kItemGetDescriptionIdVtableIndex);
-  if (!fn) return false;
-  const auto &identifier =
-      *reinterpret_cast<const std::string *(*)(void *)>(fn)(item);
+  const std::string identifier = itemIdentifier(stack);
   return identifier == kTargetIdentifier ||
          identifier.find("totem_of_undying") != std::string::npos;
+}
+
+void dumpInventory(void *player, void *inventory) {
+  uintptr_t begin = 0;
+  uintptr_t end = 0;
+  if (!inventory) {
+    diagLog(kTag, "inventory read failed: player=%p", player);
+    return;
+  }
+  if (!inventoryItems(inventory, begin, end)) {
+    diagLog(kTag, "invalid container begin=%p end=%p (player=%p inventory=%p)",
+            reinterpret_cast<void *>(begin), reinterpret_cast<void *>(end),
+            player, inventory);
+    return;
+  }
+  const int count = static_cast<int>((end - begin) / kItemStackSize);
+  diagLog(kTag, "inventory slots=%d", count);
+  for (int slot = 0; slot < count && slot < 64; ++slot) {
+    const std::string name = itemIdentifier(
+        reinterpret_cast<void *>(begin + slot * kItemStackSize));
+    if (!name.empty()) diagLog(kTag, "slot %d = %s", slot, name.c_str());
+  }
 }
 
 bool equippedTotemIsExpected(void *player) {
@@ -192,19 +233,23 @@ void InventorySwap::update() {
     int source = -1;
     if (inventory) {
       for (int slot = 0; slot < static_cast<int>(kMaxSlots); ++slot) {
-        if (isTotem(itemAt(inventory, slot))) {
+        void *stack = itemAt(inventory, slot);
+        if (isTotem(stack)) {
           source = slot;
           break;
         }
       }
     }
     if (source < 0) {
+      dumpInventory(player, inventory);
       m_armed = false;
       g_armed.store(false, std::memory_order_relaxed);
       g_originalSlot.store(-1, std::memory_order_relaxed);
-      g_lastResult.store(static_cast<int>(Outcome::NoItem),
+      g_lastResult.store(static_cast<int>(inventory ? Outcome::NoItem
+                                                   : Outcome::NoContainer),
                          std::memory_order_relaxed);
-      g_status.store(static_cast<int>(Outcome::NoItem),
+      g_status.store(static_cast<int>(inventory ? Outcome::NoItem
+                                                : Outcome::NoContainer),
                      std::memory_order_relaxed);
       return;
     }

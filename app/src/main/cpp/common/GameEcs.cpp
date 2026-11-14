@@ -537,4 +537,10 @@ bool setSprintingFlag(void *actor, bool value) {
          static_cast<ssize_t>(sizeof(flags));
 }
 
+std::string stackItemName(uintptr_t stack) {
+  std::string name;
+  if (!readStackItemName(stack, name)) return {};
+  return name;
+}
+
 } // namespace gameecs
